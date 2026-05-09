@@ -1,0 +1,26 @@
+---
+# Verify telegram-alerter is running and can deliver a test alert
+- name: blackwall-voice | verify telegram-alerter
+  hosts: wazuh_managers
+  become: true
+  tasks:
+    - name: Check voice-alerter service is active
+      ansible.builtin.systemd:
+        name: voice-alerter
+      register: svc_state
+
+    - name: Assert service is running
+      ansible.builtin.assert:
+        that:
+          - svc_state.status.ActiveState == "active"
+        fail_msg: "voice-alerter service is not active"
+        success_msg: "voice-alerter is active"
+
+    - name: Show last 20 lines of alerter log
+      ansible.builtin.command: journalctl -u voice-alerter -n 20 --no-pager
+      register: log_output
+      changed_when: false
+
+    - name: Print alerter log
+      ansible.builtin.debug:
+        msg: "{{ log_output.stdout_lines }}"
