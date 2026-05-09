@@ -44,6 +44,7 @@ blackwall-eye/
 │   ├── roles/
 │   │   ├── wazuh-manager/
 │   │   ├── wazuh-agent/
+│   │   ├── auditd/
 │   │   ├── suricata/
 │   │   └── zeek/
 │   ├── playbooks/
@@ -70,6 +71,7 @@ blackwall-eye/
 
 - Read `STATUS.md` before starting any work to understand current progress.
 - Update `STATUS.md` after completing each task.
+- `STATUS.md` lives at `blackwall-eye/STATUS.md`. Fields: `module`, `status`, `stage`, `last_updated`, `last_task`, `next_task`, `blockers`. See root `docs/superpowers/specs/2026-05-09-blackwall-orchestrator-design.md` for full format.
 - Follow Ansible role structure — one role per component.
 - Test Ansible roles with Molecule before marking a task complete.
 - Commit after each working increment on the `claude-dev` branch.
