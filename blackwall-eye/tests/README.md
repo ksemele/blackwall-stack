@@ -6,6 +6,9 @@ production hosts.
 
 ## Quick Start
 
+> All Ansible commands run from `blackwall-eye/ansible/` — `ansible.cfg` lives there and sets `roles_path`.
+> Docker Compose commands run from the repo root.
+
 ### Bring up (Ubuntu 22.04, full topology: manager + 2 agents)
 
 ```bash
@@ -30,66 +33,58 @@ docker compose -f blackwall-eye/tests/docker/docker-compose.yml \
 ### Wait for SSH to be ready
 
 ```bash
-ansible all -i blackwall-eye/tests/inventory/hosts.yml -m wait_for_connection
-```
-
-Or poll manually:
-
-```bash
-until ssh -p 2200 -o StrictHostKeyChecking=no -o ConnectTimeout=2 root@localhost echo ok 2>/dev/null; do
-  echo "Waiting for black-00..."; sleep 2
-done
+cd blackwall-eye/ansible
+ansible all -i ../tests/inventory/hosts.yml -m wait_for_connection
 ```
 
 ### Run a playbook
 
 ```bash
+cd blackwall-eye/ansible
+
 # Full topology (manager + agents)
-ansible-playbook -i blackwall-eye/tests/inventory/hosts.yml \
-  blackwall-eye/ansible/playbooks/site.yml
+ansible-playbook -i ../tests/inventory/hosts.yml playbooks/site.yml
 
 # Monitored hosts only (wazuh-agent, auditd)
-ansible-playbook -i blackwall-eye/tests/inventory/hosts.yml \
-  blackwall-eye/ansible/playbooks/monitored-host.yml
+ansible-playbook -i ../tests/inventory/hosts.yml playbooks/monitored-host.yml
 
 # Single host (isolated role test)
-ansible-playbook -i blackwall-eye/tests/inventory/hosts.single.yml \
-  blackwall-eye/ansible/playbooks/monitored-host.yml
+ansible-playbook -i ../tests/inventory/hosts.single.yml playbooks/monitored-host.yml
 ```
 
 ### Test a specific role
 
 ```bash
+cd blackwall-eye/ansible
+
 # wazuh-agent on all agent hosts
-ansible-playbook -i blackwall-eye/tests/inventory/hosts.yml \
-  blackwall-eye/ansible/playbooks/monitored-host.yml \
-  -e "wazuh_manager_host=black-00" \
-  --tags wazuh-agent
+ansible-playbook -i ../tests/inventory/hosts.yml playbooks/monitored-host.yml \
+  -e "wazuh_manager_host=black-00" --tags wazuh-agent
 
 # auditd on a single host
-ansible-playbook -i blackwall-eye/tests/inventory/hosts.single.yml \
-  blackwall-eye/ansible/playbooks/monitored-host.yml \
+ansible-playbook -i ../tests/inventory/hosts.single.yml playbooks/monitored-host.yml \
   --tags auditd
 
 # Dry-run (check mode, no changes applied)
-ansible-playbook -i blackwall-eye/tests/inventory/hosts.yml \
-  blackwall-eye/ansible/playbooks/monitored-host.yml \
+ansible-playbook -i ../tests/inventory/hosts.yml playbooks/monitored-host.yml \
   --check --diff
 ```
 
 ### Verify services on hosts
 
 ```bash
+cd blackwall-eye/ansible
+
 # Check wazuh-agent status on all agent hosts
-ansible wazuh_agents -i blackwall-eye/tests/inventory/hosts.yml \
+ansible wazuh_agents -i ../tests/inventory/hosts.yml \
   -m command -a "systemctl status wazuh-agent" --become
 
 # Check auditd
-ansible wazuh_agents -i blackwall-eye/tests/inventory/hosts.yml \
+ansible wazuh_agents -i ../tests/inventory/hosts.yml \
   -m command -a "systemctl status auditd" --become
 
 # Ad-hoc: run any command
-ansible black-01 -i blackwall-eye/tests/inventory/hosts.yml \
+ansible black-01 -i ../tests/inventory/hosts.yml \
   -m command -a "wazuh-agent --version" --become
 ```
 
