@@ -3,8 +3,8 @@ module: blackwall-eye
 status: in_progress
 stage: 1
 last_updated: 2026-05-09
-last_task: "Создан ARCHITECTURE.md и базовая структура документации"
-next_task: "Создать Ansible роль wazuh-agent: установка пакетов, базовый ossec.conf, systemd unit"
+last_task: "Спроектировано Docker-окружение для тестирования Ansible-ролей"
+next_task: "Реализовать docker-compose.yml и скрипт up/down для тестового окружения"
 blockers: []
 ---
 
