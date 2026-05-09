@@ -35,6 +35,7 @@ Each module is an independent, deployable unit with a single security responsibi
 - **Isolation:** each module must remain independently deployable.
 - **Config as code:** no manual steps that can't be reproduced from version-controlled files.
 - **Signal over noise:** high-confidence detections before broad coverage.
+- **Keep docs in sync:** when adding or changing playbooks, roles, inventory files, CLI commands, or tooling — update the relevant README and any scripts that reference those commands in the same commit. Stale docs are bugs.
 
 ## Orchestrator
 
