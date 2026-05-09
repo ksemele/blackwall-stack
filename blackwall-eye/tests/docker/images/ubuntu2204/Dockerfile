@@ -1,4 +1,4 @@
-FROM ghcr.io/geerlingguy/docker-ubuntu2204-ansible:latest
+FROM geerlingguy/docker-ubuntu2204-ansible:latest
 
 # Add openssh-server on top of the geerlingguy base image, which already ships:
 #   - Ubuntu 22.04 with systemd as PID 1
