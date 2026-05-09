@@ -48,9 +48,49 @@ done
 ansible-playbook -i blackwall-eye/tests/inventory/hosts.yml \
   blackwall-eye/ansible/playbooks/site.yml
 
+# Monitored hosts only (wazuh-agent, auditd)
+ansible-playbook -i blackwall-eye/tests/inventory/hosts.yml \
+  blackwall-eye/ansible/playbooks/monitored-host.yml
+
 # Single host (isolated role test)
 ansible-playbook -i blackwall-eye/tests/inventory/hosts.single.yml \
   blackwall-eye/ansible/playbooks/monitored-host.yml
+```
+
+### Test a specific role
+
+```bash
+# wazuh-agent on all agent hosts
+ansible-playbook -i blackwall-eye/tests/inventory/hosts.yml \
+  blackwall-eye/ansible/playbooks/monitored-host.yml \
+  -e "wazuh_manager_host=black-00" \
+  --tags wazuh-agent
+
+# auditd on a single host
+ansible-playbook -i blackwall-eye/tests/inventory/hosts.single.yml \
+  blackwall-eye/ansible/playbooks/monitored-host.yml \
+  --tags auditd
+
+# Dry-run (check mode, no changes applied)
+ansible-playbook -i blackwall-eye/tests/inventory/hosts.yml \
+  blackwall-eye/ansible/playbooks/monitored-host.yml \
+  --check --diff
+```
+
+### Verify services on hosts
+
+```bash
+# Check wazuh-agent status on all agent hosts
+ansible wazuh_agents -i blackwall-eye/tests/inventory/hosts.yml \
+  -m command -a "systemctl status wazuh-agent" --become
+
+# Check auditd
+ansible wazuh_agents -i blackwall-eye/tests/inventory/hosts.yml \
+  -m command -a "systemctl status auditd" --become
+
+# Ad-hoc: run any command
+ansible black-01 -i blackwall-eye/tests/inventory/hosts.yml \
+  -m command -a "wazuh-agent --version" --become
 ```
 
 ## SSH Access
