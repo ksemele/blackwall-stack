@@ -3,12 +3,20 @@ module: blackwall-eye
 status: in_progress
 stage: 1
 last_updated: 2026-05-09
-last_task: "Создана роль wazuh-agent: GPG key, apt repo, пакет, ossec.conf (FIM + log collection), systemd. Протестировано на black-01/02 — все 7 задач пройдены, сервис active."
-next_task: "Создать Ansible роль wazuh-manager: установка manager, базовый ossec.conf с enrollment, API, проверка регистрации агентов"
+last_task: "Создана роль wazuh-manager: GPG key, apt repo, пакет (pinned 4.14.5), ossec.conf (authd/enrollment, API 55000, remote 1514/tcp, syscheck, log collection), systemd. Обновлён security-node.yml. Создан playbooks/verify-agents.yml."
+next_task: "Запустить wazuh-manager плейбук на black-00, затем wazuh-agent на black-01/02 с wazuh_manager_host=172.28.0.10, проверить регистрацию агентов через verify-agents.yml"
 blockers: []
 ---
 
 ## Что сделано
+
+- `ansible/roles/wazuh-manager/` — полная Ansible роль: defaults, tasks, handlers, templates/ossec.conf.j2
+  - Устанавливает wazuh-manager из официального apt репозитория (pinned 4.14.5)
+  - ossec.conf: authd (enrollment, port 1515), API (port 55000), remote listener (tcp:1514), FIM на /etc/{passwd,shadow,sudoers,ssh/sshd_config}, log collection из auth.log и syslog
+  - systemd: enabled + started, handler для restart при изменении конфига
+  - Active response и vulnerability detection отключены для Stage 1
+- `ansible/playbooks/security-node.yml` — обновлён: подключена роль wazuh-manager для wazuh_managers группы
+- `ansible/playbooks/verify-agents.yml` — плейбук для проверки регистрации агентов: `agent_control -l`, assert Active status
 
 - `ansible/roles/wazuh-agent/` — полная Ansible роль: defaults, tasks, handlers, templates/ossec.conf.j2
   - Устанавливает wazuh-agent из официального apt репозитория packages.wazuh.com
