@@ -21,6 +21,9 @@ RUN sed -i 's|http://ports.ubuntu.com/ubuntu-ports|http://ftp.uni-erlangen.de/ub
 
 EXPOSE 22
 
-# SIGRTMIN+3 = graceful systemd shutdown
+# entrypoint mounts real cgroup2 before systemd starts
+# (OrbStack/Docker Desktop mount btrfs/ext4 at /sys/fs/cgroup instead of cgroup2)
+COPY entrypoint.sh /entrypoint.sh
+
 STOPSIGNAL SIGRTMIN+3
-CMD ["/lib/systemd/systemd"]
+ENTRYPOINT ["/entrypoint.sh"]
