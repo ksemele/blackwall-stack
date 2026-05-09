@@ -1,0 +1,19 @@
+---
+wazuh_version: "4.14.5"
+wazuh_apt_key_url: "https://packages.wazuh.com/key/GPG-KEY-WAZUH"
+wazuh_apt_repo: "deb https://packages.wazuh.com/4.x/apt/ stable main"
+
+# Manager network settings
+wazuh_manager_port: 1514
+wazuh_manager_protocol: tcp
+
+# Enrollment (authd) settings
+wazuh_authd_port: 1515
+wazuh_authd_enabled: "yes"
+
+# API settings
+wazuh_api_port: 55000
+wazuh_api_enabled: "yes"
+
+# Syscheck settings
+wazuh_syscheck_frequency: 43200

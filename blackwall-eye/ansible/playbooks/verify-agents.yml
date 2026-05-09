@@ -1,0 +1,31 @@
+---
+# verify-agents.yml — Check which agents are registered and connected to the manager.
+#
+# Usage (from blackwall-eye/ansible/):
+#   ansible-playbook -i ../tests/inventory/hosts.yml playbooks/verify-agents.yml
+#
+# Output: prints agent list from `agent_control -l` and asserts at least one is connected.
+
+- name: Verify Wazuh agent registration and connectivity
+  hosts: wazuh_managers
+  become: true
+
+  tasks:
+    - name: List all registered agents
+      command: /var/ossec/bin/agent_control -l
+      register: agent_list
+      changed_when: false
+
+    - name: Show agent list
+      debug:
+        msg: "{{ agent_list.stdout_lines }}"
+
+    - name: Assert at least one agent is connected (Active status)
+      assert:
+        that:
+          - "'Active' in agent_list.stdout"
+        fail_msg: >
+          No agents are in 'Active' state. Make sure wazuh-agent is installed and
+          running on the monitored hosts (black-01, black-02) and that they can
+          reach the manager on port 1514/tcp and 1515/tcp.
+        success_msg: "At least one agent is Active — enrollment and connectivity verified."
