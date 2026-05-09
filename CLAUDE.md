@@ -1,0 +1,41 @@
+# Blackwall
+
+Blackwall is a modular security platform — a suite of "combat AIs" providing layered,
+autonomous defense of systems. Inspired by the Blackwall AI from Cyberpunk 2077.
+
+## Vision
+
+Not just monitoring: perceive → alert → analyze → deceive → strike back.
+Each module is an independent, deployable unit with a single security responsibility.
+
+## Modules
+
+| Directory | Codename | Purpose | Status |
+|---|---|---|---|
+| `blackwall-eye/` | Eye | Host monitoring core (Wazuh, auditd, Suricata, Zeek) | Stage 1 |
+| `blackwall-voice/` | Voice | Alerts, dashboards, notification layer | Planned |
+| `blackwall-brain/` | Brain | AI agents for automated log/event analysis | Planned |
+| `blackwall-trap/` | Trap | Honeypots and canary infrastructure | Planned |
+| `blackwall-fang/` | Fang | Active countermeasures (research context only) | Planned |
+
+## Roadmap
+
+| Stage | Module | Delivers |
+|---|---|---|
+| 1 | Eye | Wazuh + auditd on 1–3 hosts, first alerts firing |
+| 2 | Voice | Standardized alerts, dashboards, Telegram/Slack/webhook |
+| 3 | Brain | AI agents for anomaly explanation and threat classification |
+| 4 | Trap | Decoy services, fake credentials, canary tokens |
+| 5 | Fang | Counterattack research tooling |
+
+## Agent Rules
+
+- **Before touching any module:** read its `STATUS.md` to understand current state.
+- **Naming:** keep the Blackwall/Cyberpunk thematic naming (eye, voice, brain, trap, fang).
+- **Isolation:** each module must remain independently deployable.
+- **Config as code:** no manual steps that can't be reproduced from version-controlled files.
+- **Signal over noise:** high-confidence detections before broad coverage.
+
+## Orchestrator
+
+Run `/blackwall` to see module status and dispatch development work.
