@@ -3,8 +3,8 @@ module: blackwall-eye
 status: in_progress
 stage: 1
 last_updated: 2026-05-09
-last_task: "Создана роль auditd: install auditd+audispd-plugins, rules для execve/sudo/priv_esc/sensitive files/ssh, log_format=ENRICHED, systemd. Подключена в monitored-host.yml с тегом [auditd]."
-next_task: "Протестировать роль auditd на test env, добавить verify-playbook для проверки auditd rules, затем начать blackwall-voice (Stage 2: алёрты)"
+last_task: "Создан verify-auditd.yml: проверка пакета, правил, ключей, log_format=ENRICHED, статус сервиса (с Docker-skip). Обновлён tests/README.md."
+next_task: "Начать blackwall-voice — Stage 2: стандартизированные алёрты (Telegram/Slack/webhook)"
 blockers: []
 ---
 
