@@ -6,41 +6,40 @@ production hosts.
 
 ## Quick Start
 
-> All Ansible commands run from `blackwall-eye/ansible/` — `ansible.cfg` lives there and sets `roles_path`.
-> Docker Compose commands run from the repo root.
+> **Working directory: `blackwall-eye/`** — run all commands below from there.
 
 ### Bring up (Ubuntu 22.04, full topology: manager + 2 agents)
 
 ```bash
-docker compose -f blackwall-eye/tests/docker/docker-compose.yml \
+docker compose -f tests/docker/docker-compose.yml \
   --profile ubuntu2204 up -d --build
 ```
 
 ### Bring up (single host, for testing one role in isolation)
 
 ```bash
-docker compose -f blackwall-eye/tests/docker/docker-compose.yml \
+docker compose -f tests/docker/docker-compose.yml \
   --profile ubuntu2204 up -d --build black-00
 ```
 
 ### Tear down and remove volumes
 
 ```bash
-docker compose -f blackwall-eye/tests/docker/docker-compose.yml \
+docker compose -f tests/docker/docker-compose.yml \
   --profile ubuntu2204 down -v
 ```
 
 ### Wait for SSH to be ready
 
 ```bash
-cd blackwall-eye/ansible
+cd ansible
 ansible all -i ../tests/inventory/hosts.yml -m wait_for_connection
 ```
 
 ### Run a playbook
 
 ```bash
-cd blackwall-eye/ansible
+cd ansible
 
 # Full topology (manager + agents)
 ansible-playbook -i ../tests/inventory/hosts.yml playbooks/site.yml
@@ -55,7 +54,7 @@ ansible-playbook -i ../tests/inventory/hosts.single.yml playbooks/monitored-host
 ### Test a specific role
 
 ```bash
-cd blackwall-eye/ansible
+cd ansible
 
 # wazuh-agent on all agent hosts
 ansible-playbook -i ../tests/inventory/hosts.yml playbooks/monitored-host.yml \
@@ -73,7 +72,7 @@ ansible-playbook -i ../tests/inventory/hosts.yml playbooks/monitored-host.yml \
 ### Verify services on hosts
 
 ```bash
-cd blackwall-eye/ansible
+cd ansible
 
 # Check wazuh-agent status on all agent hosts
 ansible wazuh_agents -i ../tests/inventory/hosts.yml \
@@ -93,13 +92,13 @@ ansible black-01 -i ../tests/inventory/hosts.yml \
 Use the bundled `ssh_config` for convenient manual access:
 
 ```bash
-ssh -F blackwall-eye/tests/docker/ssh_config black-00
+ssh -F tests/docker/ssh_config black-00
 ```
 
 Or append to your personal SSH config:
 
 ```bash
-cat blackwall-eye/tests/docker/ssh_config >> ~/.ssh/config
+cat tests/docker/ssh_config >> ~/.ssh/config
 ```
 
 ## Multi-Distro Support
