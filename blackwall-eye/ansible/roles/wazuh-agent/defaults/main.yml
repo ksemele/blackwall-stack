@@ -1,5 +1,5 @@
 ---
-wazuh_version: "4.x"
+wazuh_version: "4.14.5"
 wazuh_manager_host: "127.0.0.1"
 wazuh_agent_name: "{{ inventory_hostname }}"
 wazuh_apt_key_url: "https://packages.wazuh.com/key/GPG-KEY-WAZUH"
