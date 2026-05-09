@@ -5,9 +5,15 @@ development status across all modules and dispatch subagents to continue work.
 
 ## Step 1: Discover modules
 
-Scan the root of the repository (`/Users/akrugliak/coding/blackwall/`) for
+Scan the root of the repository (the directory containing this `.claude/` folder) for
 subdirectories that contain a `STATUS.md` file. Each such directory is a
 Blackwall module. Read every `STATUS.md` found.
+
+**Edge case:** If no subdirectories with `STATUS.md` are found, display:
+```
+BLACKWALL — нет модулей. Создайте директорию модуля с файлом STATUS.md (status: pending).
+```
+and stop.
 
 ## Step 2: Display status summary
 
@@ -18,6 +24,8 @@ BLACKWALL — статус модулей
 ──────────────────────────
 [<badge>] <module>    Stage <stage> | <next_task>
 ```
+
+**Note on pending modules:** For modules with `status: pending`, the `next_task` field may be empty — display `Не начат` instead.
 
 Status badge format:
 - `pending`     → `[·····]`
@@ -52,9 +60,17 @@ Rules:
 - If multiple modules are `in_progress`, each gets its own numbered option
 - Always include options 3 and 4
 
-## Step 4: Dispatch subagent (only if user chose action 1, 2, or 3)
+**Edge case — all modules done:** If all modules have `status: done`, display:
+```
+✅ Все модули завершены.
+```
+and only offer options 3 and 4.
 
-If the user selects an action (not option 4), use the Agent tool to spawn a subagent.
+## Step 4: Dispatch subagent (only if user chose action 1 or 2)
+
+If the user selects action 1 or 2, use the Agent tool to spawn a subagent.
+
+**Special handling for option 3 (показать детали):** If user chose option 3, read and display the full content of `<module>/STATUS.md` inline — do not dispatch a subagent.
 
 Construct the subagent prompt as follows:
 1. Include full content of `<module>/CLAUDE.md`
