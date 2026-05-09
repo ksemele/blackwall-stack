@@ -31,11 +31,10 @@ networks:
 # Override 'build.context' in each service to point at the right image directory.
 x-black-node: &black-node
   privileged: true
+  cgroupns: host      # cgroup v2 (Docker Desktop macOS) — systemd needs host cgroup ns
   tmpfs:
     - /run
     - /run/lock
-  volumes:
-    - /sys/fs/cgroup:/sys/fs/cgroup:ro
   networks:
     - blackwall-test
   restart: "no"
