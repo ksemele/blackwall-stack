@@ -10,13 +10,13 @@ Each module is an independent, deployable unit with a single security responsibi
 
 ## Modules
 
-| Directory | Codename | Purpose | Status |
+| Directory | Codename | Purpose | Stage |
 |---|---|---|---|
-| `blackwall-eye/` | Eye | Host monitoring core (Wazuh, auditd, Suricata, Zeek) | Stage 1 |
-| `blackwall-voice/` | Voice | Alerts, dashboards, notification layer | Planned |
-| `blackwall-brain/` | Brain | AI agents for automated log/event analysis | Planned |
-| `blackwall-trap/` | Trap | Honeypots and canary infrastructure | Planned |
-| `blackwall-fang/` | Fang | Active countermeasures (research context only) | Planned |
+| `blackwall-eye/` | Eye | Host monitoring core (Wazuh, auditd, Suricata, Zeek) | 1 |
+| `blackwall-voice/` | Voice | Alerts, dashboards, notification layer | 2 |
+| `blackwall-brain/` | Brain | AI agents for automated log/event analysis | 3 |
+| `blackwall-trap/` | Trap | Honeypots and canary infrastructure | 4 |
+| `blackwall-fang/` | Fang | Active countermeasures (research context only) | 5 |
 
 ## Roadmap
 
@@ -30,7 +30,7 @@ Each module is an independent, deployable unit with a single security responsibi
 
 ## Agent Rules
 
-- **Before touching any module:** read its `STATUS.md` to understand current state.
+- **Before touching any module:** read its `STATUS.md` to understand current state. If `STATUS.md` doesn't exist, the module hasn't been started — create it with `status: pending` before doing anything else.
 - **Naming:** keep the Blackwall/Cyberpunk thematic naming (eye, voice, brain, trap, fang).
 - **Isolation:** each module must remain independently deployable.
 - **Config as code:** no manual steps that can't be reproduced from version-controlled files.
@@ -38,4 +38,4 @@ Each module is an independent, deployable unit with a single security responsibi
 
 ## Orchestrator
 
-Run `/blackwall` to see module status and dispatch development work.
+Run `/blackwall` (Claude Code slash command) to see module status and dispatch development work.
