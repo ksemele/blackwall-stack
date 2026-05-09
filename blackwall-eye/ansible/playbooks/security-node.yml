@@ -1,0 +1,5 @@
+---
+- name: Configure security node (Wazuh Manager)
+  hosts: wazuh_managers
+  become: true
+  roles: []  # wazuh-manager role added here when implemented
