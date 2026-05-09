@@ -89,20 +89,26 @@ ansible-playbook -i tests/inventory/hosts.single.yml ansible/playbooks/monitored
 
 ---
 
-## 5. Verify agent registration (tests)
-
-Checks that agents are registered and in Active state on the manager. Prints pass/fail assertion.
+## 5. Verify deployments
 
 ```bash
+# Agent registration
 ansible-playbook ansible/playbooks/verify-agents.yml
+
+# auditd rules and config (note: service check skipped in Docker)
+ansible-playbook ansible/playbooks/verify-auditd.yml
 ```
 
-**Successful output:**
+**verify-agents.yml successful output:**
 - `TASK [Show agent list]` — prints connected agents table
 - `TASK [Assert at least one agent is connected (Active status)]` — `ok: [black-00]` with success message
 
-**Failure output:**
+**verify-agents.yml failure output:**
 - `TASK [Assert...]` — `FAILED!` with message: `No external agents are in 'Active' state. Make sure wazuh-agent is installed and running...`
+
+**verify-auditd.yml successful output:**
+- Package, rules file, rule keys, log_format — all `ok`
+- `TASK [Assert auditd is active]` — skipped in Docker (expected), asserts on real hosts
 
 ---
 
@@ -196,7 +202,8 @@ blackwall-eye/
 │   │   ├── all.yml                        # full stack: manager + agents
 │   │   ├── security-node.yml               # wazuh-manager role
 │   │   ├── monitored-host.yml              # wazuh-agent + auditd roles
-│   │   └── verify-agents.yml               # registration test
+│   │   ├── verify-agents.yml               # registration test
+│   │   └── verify-auditd.yml               # auditd rules and config test
 │   └── roles/
 │       ├── wazuh-manager/
 │       ├── wazuh-agent/
