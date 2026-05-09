@@ -3,3 +3,4 @@
   systemd:
     name: auditd
     state: restarted
+  ignore_errors: "{{ _dockerenv.stat.exists | default(false) }}"
