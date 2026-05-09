@@ -3,12 +3,20 @@ module: blackwall-eye
 status: in_progress
 stage: 1
 last_updated: 2026-05-09
-last_task: "Отлажено Docker тестовое окружение — Ansible подключается ко всем 3 хостам (black-00/01/02)"
-next_task: "Создать Ansible роль wazuh-agent: установка пакетов, базовый ossec.conf, systemd unit"
+last_task: "Создана роль wazuh-agent: GPG key, apt repo, пакет, ossec.conf (FIM + log collection), systemd. Протестировано на black-01/02 — все 7 задач пройдены, сервис active."
+next_task: "Создать Ansible роль wazuh-manager: установка manager, базовый ossec.conf с enrollment, API, проверка регистрации агентов"
 blockers: []
 ---
 
 ## Что сделано
+
+- `ansible/roles/wazuh-agent/` — полная Ansible роль: defaults, tasks, handlers, templates/ossec.conf.j2
+  - Устанавливает wazuh-agent из официального apt репозитория packages.wazuh.com
+  - ossec.conf: подключение к manager (tcp:1514), auto-enrollment, FIM на /etc/{passwd,shadow,sudoers,ssh/sshd_config}, log collection из auth.log и syslog
+  - systemd: enabled + started, handler для restart при изменении конфига
+- `ansible/playbooks/monitored-host.yml` — плейбук для wazuh_agents группы
+- `ansible/ansible.cfg` — roles_path настроен, inventory по умолчанию
+- Тест: `ansible-playbook` на black-01/02 — 7/7 tasks ok, 0 failed, сервис active на обоих хостах
 
 - `docs/ARCHITECTURE.md` — полная архитектура, компоненты, detection coverage, deployment model
 - Структура репозитория спроектирована (см. ARCHITECTURE.md → Repository Layout)
@@ -27,6 +35,8 @@ blockers: []
 
 ## Решения
 
+- packages.wazuh.com доступен из контейнеров напрямую (CDN не заблокирован, в отличие от Canonical)
+- Порядок задач в роли: gnupg/curl → GPG key → apt repo → install package → template → systemd (template после install, т.к. группа wazuh создаётся пакетом)
 - Target OS: Ubuntu 22.04 LTS / Debian 12 (primary), Rocky Linux 9 (secondary)
 - Deployment: Ansible only, без Terraform на первом этапе
 - Alerting: Telegram/Slack/webhook (реализуется в blackwall-voice, не здесь)
