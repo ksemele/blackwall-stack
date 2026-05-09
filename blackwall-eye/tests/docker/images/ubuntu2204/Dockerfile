@@ -9,7 +9,8 @@ FROM geerlingguy/docker-ubuntu2204-ansible:latest
 # for this LOCAL TEST ENVIRONMENT ONLY. Never use this image in production or expose
 # these containers outside localhost.
 
-RUN apt-get update && apt-get install -y openssh-server \
+RUN sed -i 's|http://ports.ubuntu.com/ubuntu-ports|http://ftp.uni-erlangen.de/ubuntu-ports|g' /etc/apt/sources.list \
+  && apt-get update && apt-get install -y openssh-server \
   && apt-get clean \
   && rm -rf /var/lib/apt/lists/* \
   && mkdir -p /var/run/sshd \
