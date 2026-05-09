@@ -1,0 +1,58 @@
+<ossec_config>
+
+  <client>
+    <server>
+      <address>{{ wazuh_manager_host }}</address>
+      <port>1514</port>
+      <protocol>tcp</protocol>
+    </server>
+    <crypto_method>aes</crypto_method>
+    <notify_time>10</notify_time>
+    <time-reconnect>60</time-reconnect>
+    <auto_restart>yes</auto_restart>
+    <enrollment>
+      <enabled>yes</enabled>
+      <manager_address>{{ wazuh_manager_host }}</manager_address>
+      <agent_name>{{ wazuh_agent_name }}</agent_name>
+    </enrollment>
+  </client>
+
+  <client_buffer>
+    <disabled>no</disabled>
+    <queue_size>5000</queue_size>
+    <events_per_second>500</events_per_second>
+  </client_buffer>
+
+  <!-- Log collection -->
+  <localfile>
+    <log_format>syslog</log_format>
+    <location>/var/log/auth.log</location>
+  </localfile>
+
+  <localfile>
+    <log_format>syslog</log_format>
+    <location>/var/log/syslog</location>
+  </localfile>
+
+  <!-- File Integrity Monitoring -->
+  <syscheck>
+    <disabled>no</disabled>
+    <frequency>43200</frequency>
+    <scan_on_start>yes</scan_on_start>
+
+    <directories realtime="yes">/etc/passwd</directories>
+    <directories realtime="yes">/etc/shadow</directories>
+    <directories realtime="yes">/etc/sudoers</directories>
+    <directories realtime="yes">/etc/ssh/sshd_config</directories>
+  </syscheck>
+
+  <!-- Active response disabled for Stage 1 -->
+  <active-response>
+    <disabled>yes</disabled>
+  </active-response>
+
+  <logging>
+    <log_format>plain</log_format>
+  </logging>
+
+</ossec_config>

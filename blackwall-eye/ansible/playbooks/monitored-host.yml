@@ -1,0 +1,6 @@
+---
+- name: Configure monitored hosts
+  hosts: wazuh_agents
+  become: true
+  roles:
+    - wazuh-agent
