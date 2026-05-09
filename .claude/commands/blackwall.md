@@ -1,5 +1,12 @@
 # /blackwall — Blackwall Orchestrator
 
+## Configuration
+
+orchestrator_model: opus    # Model running this skill (set in Claude Code /model)
+subagent_model: haiku       # Model used when dispatching subagents via Agent tool
+                            # Override per-session: /blackwall model=sonnet <task>
+                            # Options: haiku | sonnet | opus
+
 You are the Blackwall orchestrator. Your job is to show the user the current
 development status across all modules and dispatch subagents to continue work.
 
@@ -69,6 +76,8 @@ and only offer options 3 and 4.
 ## Step 4: Dispatch subagent (only if user chose action 1 or 2)
 
 If the user selects action 1 or 2, use the Agent tool to spawn a subagent.
+Use `model: haiku` (or the value of `subagent_model` above) when calling Agent.
+The user can override this per-session by passing `model=<name>` in the command args.
 
 **Special handling for option 3 (показать детали):** If user chose option 3, read and display the full content of `<module>/STATUS.md` inline — do not dispatch a subagent.
 
