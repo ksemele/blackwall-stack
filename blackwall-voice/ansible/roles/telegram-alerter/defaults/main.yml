@@ -1,0 +1,24 @@
+---
+# Severity threshold: only forward alerts with rule.level >= this value
+severity_threshold: 5
+
+# Seconds between reads of the alert log tail
+poll_interval: 5
+
+# Alert log source on manager host (line-buffered JSON, one event per line)
+alerter_alert_log: /var/ossec/logs/alerts/alerts.json
+
+# State file: tracks sent alert IDs for deduplication across restarts
+alerter_state_dir: /var/lib/voice-alerter
+alerter_state_file: "{{ alerter_state_dir }}/sent_ids.txt"
+
+# Log directory for the alerter service itself
+alerter_log_dir: /var/log/voice-alerter
+alerter_log_file: "{{ alerter_log_dir }}/alerter.log"
+
+# Install directory for the alerter script
+alerter_install_dir: /opt/voice-alerter
+
+# Telegram credentials — MUST be overridden (use ansible-vault in production)
+telegram_bot_token: ""
+telegram_chat_id: ""
