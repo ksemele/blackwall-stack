@@ -3,8 +3,8 @@ module: blackwall-eye
 status: in_progress
 stage: 1
 last_updated: 2026-05-09
-last_task: "Создана роль wazuh-manager: GPG key, apt repo, пакет (pinned 4.14.5), ossec.conf (authd/enrollment, API 55000, remote 1514/tcp, syscheck, log collection), systemd. Обновлён security-node.yml. Создан playbooks/verify-agents.yml."
-next_task: "Запустить wazuh-manager плейбук на black-00, затем wazuh-agent на black-01/02 с wazuh_manager_host=172.28.0.10, проверить регистрацию агентов через verify-agents.yml"
+last_task: "Создана роль auditd: install auditd+audispd-plugins, rules для execve/sudo/priv_esc/sensitive files/ssh, log_format=ENRICHED, systemd. Подключена в monitored-host.yml с тегом [auditd]."
+next_task: "Протестировать роль auditd на test env, добавить verify-playbook для проверки auditd rules, затем начать blackwall-voice (Stage 2: алёрты)"
 blockers: []
 ---
 

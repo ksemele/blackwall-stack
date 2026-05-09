@@ -3,4 +3,7 @@
   hosts: wazuh_agents
   become: true
   roles:
-    - wazuh-agent
+    - role: wazuh-agent
+      tags: [wazuh-agent]
+    - role: auditd
+      tags: [auditd]

@@ -48,7 +48,7 @@ blackwall-eye/
 │   │   ├── suricata/
 │   │   └── zeek/
 │   ├── playbooks/
-│   │   ├── site.yml
+│   │   ├── all.yml
 │   │   ├── security-node.yml
 │   │   └── monitored-host.yml
 │   └── inventory/
@@ -75,3 +75,4 @@ blackwall-eye/
 - Follow Ansible role structure — one role per component.
 - Test Ansible roles with Molecule before marking a task complete.
 - Commit after each working increment on the `claude-dev` branch.
+- **Keep docs in sync:** when adding playbooks, roles, inventory files, or CLI commands — update `tests/README.md` (and any other docs or scripts that reference those commands) in the same commit. Stale docs are bugs.

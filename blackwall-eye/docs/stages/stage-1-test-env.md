@@ -382,7 +382,7 @@ all:
 ```bash
 # Full topology
 ansible-playbook -i blackwall-eye/tests/inventory/hosts.yml \
-  blackwall-eye/ansible/playbooks/site.yml
+  blackwall-eye/ansible/playbooks/all.yml
 
 # Single host (e.g. testing wazuh-agent role only)
 ansible-playbook -i blackwall-eye/tests/inventory/hosts.single.yml \

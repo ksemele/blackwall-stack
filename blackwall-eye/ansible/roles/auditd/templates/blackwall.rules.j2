@@ -1,0 +1,21 @@
+# blackwall.rules — Stage 1 syscall audit rules
+# Managed by Ansible. Do not edit manually.
+
+# execve — track all process execution
+-a always,exit -F arch=b64 -S execve -k exec
+-a always,exit -F arch=b32 -S execve -k exec
+
+# sudo — monitor sudoers changes
+-w /etc/sudoers -p wa -k sudo
+-w /etc/sudoers.d/ -p wa -k sudo
+
+# privilege escalation — setuid/setgid syscalls
+-a always,exit -F arch=b64 -S setuid -S setgid -k priv_esc
+-a always,exit -F arch=b32 -S setuid -S setgid -k priv_esc
+
+# sensitive file access
+-w /etc/shadow -p rwa -k shadow
+-w /etc/passwd -p rwa -k passwd
+
+# SSH config changes
+-w /etc/ssh/sshd_config -p wa -k sshd_config

@@ -3,4 +3,5 @@
   hosts: wazuh_managers
   become: true
   roles:
-    - wazuh-manager
+    - role: wazuh-manager
+      tags: [wazuh-manager]
