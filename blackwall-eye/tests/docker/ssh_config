@@ -1,0 +1,20 @@
+Host black-00
+  HostName localhost
+  Port 2200
+  User root
+  StrictHostKeyChecking no
+  UserKnownHostsFile /dev/null
+
+Host black-01
+  HostName localhost
+  Port 2201
+  User root
+  StrictHostKeyChecking no
+  UserKnownHostsFile /dev/null
+
+Host black-02
+  HostName localhost
+  Port 2202
+  User root
+  StrictHostKeyChecking no
+  UserKnownHostsFile /dev/null
