@@ -2,8 +2,8 @@
 module: blackwall-eye
 status: in_progress
 stage: 1
-last_updated: 2026-05-09
-last_task: "Создан verify-auditd.yml: проверка пакета, правил, ключей, log_format=ENRICHED, статус сервиса (с Docker-skip). Обновлён tests/README.md."
+last_updated: 2026-05-10
+last_task: "Полный тест верификации Stage 1: контейнеры работают, SSH ready, агенты зарегистрированы (Active), auditd полностью развёрнут, алерты генерируются (88 алертов: 52 level 9, 28 level 3, 4 level 8, 4 level 7). Тестовое событие (создание/удаление пользователя) успешно захвачено (rule 5901/5902/5903)."
 next_task: "Начать blackwall-voice — Stage 2: стандартизированные алёрты (Telegram/Slack/webhook)"
 blockers: []
 ---
