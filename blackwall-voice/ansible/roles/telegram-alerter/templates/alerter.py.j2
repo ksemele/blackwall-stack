@@ -25,8 +25,9 @@ CHAT_ID        = "{{ telegram_chat_id }}"
 TELEGRAM_URL   = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
 
 # --- Logging ---
+# Log to stdout; systemd unit captures stdout → LOG_FILE via StandardOutput=append:
 logging.basicConfig(
-    filename=LOG_FILE,
+    stream=__import__("sys").stdout,
     level=logging.INFO,
     format="%(asctime)s %(levelname)s %(message)s",
 )
@@ -82,7 +83,10 @@ def send_telegram(text: str) -> bool:
 
 
 def tail_alerts(sent_ids: set) -> None:
-    """Open alert log and follow new lines, processing each JSON alert."""
+    """Open alert log and follow new lines, processing each JSON alert.
+
+    Handles log rotation / file replacement by detecting inode changes.
+    """
     try:
         fh = open(ALERT_LOG)
     except OSError as exc:
@@ -92,9 +96,22 @@ def tail_alerts(sent_ids: set) -> None:
 
     # Seek to end so we only process new alerts after startup
     fh.seek(0, 2)
-    log.info("Tailing %s (severity >= %d)", ALERT_LOG, SEVERITY_THRESHOLD)
+    current_inode = os.fstat(fh.fileno()).st_ino
+    log.info("Tailing %s (severity >= %d, inode=%d)", ALERT_LOG, SEVERITY_THRESHOLD, current_inode)
 
     while True:
+        # Detect file replacement (log rotation / lineinfile recreate)
+        try:
+            disk_inode = os.stat(ALERT_LOG).st_ino
+        except OSError:
+            disk_inode = current_inode  # file temporarily gone, keep reading
+
+        if disk_inode != current_inode:
+            log.info("Alert log replaced (old inode=%d, new inode=%d) — reopening",
+                     current_inode, disk_inode)
+            fh.close()
+            return  # caller will reopen on next iteration
+
         line = fh.readline()
         if not line:
             time.sleep(POLL_INTERVAL)

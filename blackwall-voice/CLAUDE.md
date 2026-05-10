@@ -102,7 +102,7 @@ blackwall-voice/
 Voice shares the inventory with blackwall-eye. The `ansible.cfg` in this module points to:
 
 ```
-inventory = ../blackwall-eye/tests/inventory/hosts.yml
+inventory = ../tests/inventory/hosts.yml
 ```
 
 Do NOT duplicate inventory files. If a new environment is needed, add a host file

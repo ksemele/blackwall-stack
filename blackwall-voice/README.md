@@ -10,6 +10,23 @@ as a systemd service on the Wazuh manager host.
 - Wazuh alert log: `/var/ossec/logs/alerts/alerts.json`
 - Ansible role `telegram-alerter` deploys to `wazuh_managers` group
 
+## Test Environment
+
+Shared with blackwall-eye. Start containers from the **repo root**:
+
+```bash
+docker compose -f tests/docker/docker-compose.yml --profile ubuntu2204 up -d --build
+```
+
+Wait for SSH before running Ansible:
+
+```bash
+cd blackwall-voice
+ansible all -m wait_for_connection
+```
+
+See [tests/README.md](../tests/README.md) for full environment documentation.
+
 ## Configure
 
 Set these vars before deploying (use Ansible vault for secrets):
