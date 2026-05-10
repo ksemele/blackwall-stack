@@ -3,8 +3,8 @@ module: blackwall-eye
 status: in_progress
 stage: 1
 last_updated: 2026-05-10
-last_task: "Полный тест верификации Stage 1: контейнеры работают, SSH ready, агенты зарегистрированы (Active), auditd полностью развёрнут, алерты генерируются (88 алертов: 52 level 9, 28 level 3, 4 level 8, 4 level 7). Тестовое событие (создание/удаление пользователя) успешно захвачено (rule 5901/5902/5903)."
-next_task: "Начать blackwall-voice — Stage 2: стандартизированные алёрты (Telegram/Slack/webhook)"
+last_task: "Added bw-status CLI tool — Wazuh agent status dashboard via REST API (blackwall-eye/tools/bw-status). Stdlib-only Python 3 script: authenticates with Wazuh JWT, fetches agents, prints status table with ANSI colors. Tested against live Docker env (3 agents, all active)."
+next_task: "Stage 1 complete — mark done or add Suricata/Zeek for Stage 2 network layer"
 blockers: []
 ---
 
