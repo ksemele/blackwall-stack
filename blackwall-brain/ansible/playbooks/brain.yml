@@ -1,0 +1,7 @@
+---
+# Deploy brain-analyst to all Wazuh manager hosts
+- name: blackwall-brain | deploy brain-analyst
+  hosts: wazuh_managers
+  become: true
+  roles:
+    - brain-analyst

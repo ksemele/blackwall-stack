@@ -1,0 +1,9 @@
+---
+- name: Reload systemd daemon
+  ansible.builtin.systemd:
+    daemon_reload: true
+
+- name: Restart brain-analyst service
+  ansible.builtin.systemd:
+    name: brain-analyst
+    state: restarted
