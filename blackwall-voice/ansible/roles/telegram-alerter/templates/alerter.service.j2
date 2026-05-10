@@ -6,7 +6,8 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-ExecStart=/usr/bin/python3 {{ alerter_install_dir }}/alerter.py
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/usr/bin/python3 -u {{ alerter_install_dir }}/alerter.py
 Restart=on-failure
 RestartSec=10s
 StandardOutput=append:{{ alerter_log_file }}
