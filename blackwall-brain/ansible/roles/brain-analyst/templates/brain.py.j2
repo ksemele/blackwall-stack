@@ -1,0 +1,243 @@
+#!/usr/bin/env python3
+"""
+blackwall-brain — AI Alert Analyst
+Tails /var/ossec/logs/alerts/alerts.json, calls Claude API for high-severity
+alerts, and forwards enriched AI analysis to a Telegram chat.
+
+Config baked in at deploy time by Ansible.
+"""
+
+import json
+import logging
+import os
+import time
+import urllib.request
+import urllib.error
+
+# --- Config (set by Ansible) ---
+ALERT_LOG          = "{{ brain_alert_log }}"
+STATE_FILE         = "{{ brain_state_file }}"
+LOG_FILE           = "{{ brain_log_file }}"
+ANALYSIS_THRESHOLD = {{ analysis_threshold }}
+POLL_INTERVAL      = {{ poll_interval }}
+CLAUDE_API_KEY     = "{{ claude_api_key }}"
+CLAUDE_MODEL       = "{{ claude_model }}"
+MAX_TOKENS         = {{ max_tokens }}
+BOT_TOKEN          = "{{ telegram_bot_token }}"
+CHAT_ID            = "{{ telegram_chat_id }}"
+TELEGRAM_URL       = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
+CLAUDE_URL         = "https://api.anthropic.com/v1/messages"
+
+# --- Logging ---
+logging.basicConfig(
+    stream=__import__("sys").stdout,
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s %(message)s",
+)
+log = logging.getLogger("brain-analyst")
+
+
+def load_sent_ids() -> set:
+    if not os.path.exists(STATE_FILE):
+        return set()
+    with open(STATE_FILE) as f:
+        return {line.strip() for line in f if line.strip()}
+
+
+def save_sent_id(alert_id: str) -> None:
+    with open(STATE_FILE, "a") as f:
+        f.write(alert_id + "\n")
+
+
+def call_claude(alert: dict) -> str | None:
+    """Call Claude API to analyze the alert. Returns analysis string or None on failure."""
+    rule   = alert.get("rule", {})
+    agent  = alert.get("agent", {})
+    level  = rule.get("level", "?")
+    desc   = rule.get("description", "no description")
+    host   = agent.get("name", alert.get("manager", {}).get("name", "unknown"))
+    ts     = alert.get("timestamp", "")[:19].replace("T", " ")
+    full   = alert.get("full_log", "")[:500]
+    mitre  = rule.get("mitre", {})
+    mitre_info = ""
+    if mitre:
+        techniques = mitre.get("technique", [])
+        tactics    = mitre.get("tactic", [])
+        if techniques or tactics:
+            mitre_info = f"MITRE ATT&CK — Tactics: {', '.join(tactics)}; Techniques: {', '.join(techniques)}"
+
+    alert_context = {
+        "host": host,
+        "rule_level": level,
+        "rule_description": desc,
+        "timestamp": ts,
+        "mitre": mitre_info or "none",
+        "full_log_excerpt": full,
+    }
+
+    prompt = (
+        "You are a cybersecurity analyst reviewing a Wazuh SIEM alert. "
+        "Analyze the alert and respond ONLY in this exact format:\n"
+        "CATEGORY: <threat_category> | CONFIDENCE: <high/medium/low> | ACTION: <recommended_action>\n\n"
+        "Keep ACTION to one short sentence. Threat categories: lateral_movement, privilege_escalation, "
+        "persistence, credential_access, defense_evasion, discovery, collection, exfiltration, "
+        "command_and_control, impact, false_positive, unknown.\n\n"
+        f"Alert details:\n{json.dumps(alert_context, indent=2)}"
+    )
+
+    payload = json.dumps({
+        "model": CLAUDE_MODEL,
+        "max_tokens": MAX_TOKENS,
+        "messages": [
+            {"role": "user", "content": prompt}
+        ],
+    }).encode()
+
+    req = urllib.request.Request(
+        CLAUDE_URL,
+        data=payload,
+        headers={
+            "x-api-key": CLAUDE_API_KEY,
+            "anthropic-version": "2023-06-01",
+            "content-type": "application/json",
+        },
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            body = json.loads(resp.read())
+            return body["content"][0]["text"].strip()
+    except urllib.error.HTTPError as exc:
+        log.error("Claude API HTTP error %d: %s", exc.code, exc.read()[:200])
+        return None
+    except urllib.error.URLError as exc:
+        log.error("Claude API request failed: %s", exc)
+        return None
+    except (KeyError, IndexError, json.JSONDecodeError) as exc:
+        log.error("Claude API response parse error: %s", exc)
+        return None
+
+
+def format_brain_message(alert: dict, claude_response: str) -> str:
+    rule  = alert.get("rule", {})
+    agent = alert.get("agent", {})
+    level = rule.get("level", "?")
+    desc  = rule.get("description", "no description")
+    host  = agent.get("name", alert.get("manager", {}).get("name", "unknown"))
+    ts    = alert.get("timestamp", "")[:19].replace("T", " ")
+    return (
+        f"*[BLACKWALL BRAIN]* level {level}\n"
+        f"Host: `{host}`\n"
+        f"Rule: {desc}\n"
+        f"Time: {ts}\n"
+        f"---\n"
+        f"AI Analysis:\n"
+        f"{claude_response}"
+    )
+
+
+def send_telegram(text: str) -> bool:
+    payload = json.dumps({
+        "chat_id": CHAT_ID,
+        "text": text,
+        "parse_mode": "Markdown",
+    }).encode()
+    req = urllib.request.Request(
+        TELEGRAM_URL,
+        data=payload,
+        headers={"Content-Type": "application/json"},
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            return resp.status == 200
+    except urllib.error.URLError as exc:
+        log.error("Telegram send failed: %s", exc)
+        return False
+
+
+def tail_alerts(sent_ids: set) -> None:
+    """Open alert log and follow new lines, processing each JSON alert.
+
+    Handles log rotation / file replacement by detecting inode changes.
+    """
+    try:
+        fh = open(ALERT_LOG)
+    except OSError as exc:
+        log.error("Cannot open alert log %s: %s", ALERT_LOG, exc)
+        time.sleep(POLL_INTERVAL)
+        return
+
+    fh.seek(0, 2)
+    current_inode = os.fstat(fh.fileno()).st_ino
+    log.info("Tailing %s (level >= %d, inode=%d)", ALERT_LOG, ANALYSIS_THRESHOLD, current_inode)
+
+    while True:
+        try:
+            disk_inode = os.stat(ALERT_LOG).st_ino
+        except OSError:
+            disk_inode = current_inode
+
+        if disk_inode != current_inode:
+            log.info("Alert log replaced (old inode=%d, new inode=%d) — reopening",
+                     current_inode, disk_inode)
+            fh.close()
+            return
+
+        line = fh.readline()
+        if not line:
+            time.sleep(POLL_INTERVAL)
+            continue
+
+        line = line.strip()
+        if not line:
+            continue
+
+        try:
+            alert = json.loads(line)
+        except json.JSONDecodeError:
+            log.warning("Non-JSON line skipped: %s", line[:80])
+            continue
+
+        level = alert.get("rule", {}).get("level", 0)
+        if level < ANALYSIS_THRESHOLD:
+            continue
+
+        alert_id = alert.get("id") or alert.get("_id", "")
+        if not alert_id:
+            alert_id = f"{alert.get('timestamp','')}-{alert.get('rule',{}).get('id','')}"
+
+        if alert_id in sent_ids:
+            continue
+
+        log.info("Analyzing alert %s (level %d) with Claude", alert_id, level)
+        claude_response = call_claude(alert)
+        if claude_response is None:
+            log.warning("Claude analysis failed for alert %s — skipping (will retry next restart)", alert_id)
+            # Do NOT write ID to state file — allow retry on next run
+            continue
+
+        msg = format_brain_message(alert, claude_response)
+        ok  = send_telegram(msg)
+        if ok:
+            sent_ids.add(alert_id)
+            save_sent_id(alert_id)
+            log.info("Sent brain analysis for alert %s (level %d)", alert_id, level)
+        else:
+            log.warning("Telegram send failed for alert %s — will retry next cycle", alert_id)
+
+
+def main() -> None:
+    log.info("brain-analyst starting (threshold=%d, poll=%ds, model=%s)",
+             ANALYSIS_THRESHOLD, POLL_INTERVAL, CLAUDE_MODEL)
+    sent_ids = load_sent_ids()
+    log.info("Loaded %d already-processed IDs from state file", len(sent_ids))
+
+    while True:
+        try:
+            tail_alerts(sent_ids)
+        except Exception as exc:
+            log.exception("Unexpected error in tail loop: %s — sleeping %ds", exc, POLL_INTERVAL)
+            time.sleep(POLL_INTERVAL)
+
+
+if __name__ == "__main__":
+    main()
