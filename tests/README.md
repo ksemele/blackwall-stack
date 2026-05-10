@@ -1,10 +1,11 @@
-# blackwall-eye — Test Environment
+# Blackwall — Test Environment
 
-Docker-based test environment for iterating on Ansible roles before deploying to real hosts.
-Uses privileged containers with systemd as PID 1 so service management works identically to production hosts.
+Shared Docker test environment for all Blackwall modules.
+Privileged containers with systemd as PID 1 — service management works identically to production hosts.
 
-> **Working directory: `blackwall-eye/`** — run all commands from there.
-> `ansible.cfg` in this directory sets inventory and roles path automatically.
+> **Docker commands:** run from **repo root** (`blackwall/`)
+> **Ansible commands:** run from the **module directory** (`blackwall-eye/`, `blackwall-voice/`, etc.)
+> Each module has `ansible.cfg` at its root pointing to `../tests/inventory/`.
 
 ---
 
@@ -30,7 +31,7 @@ docker compose -f tests/docker/docker-compose.yml --profile ubuntu2204 down -v
 
 ### Wait for SSH to be ready
 
-Run after `up` before any Ansible commands:
+Run from module directory after `up`, before any Ansible commands:
 
 ```bash
 ansible all -m wait_for_connection
