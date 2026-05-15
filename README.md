@@ -12,19 +12,33 @@ deployable via Infrastructure-as-Code with no vendor lock-in.
 | Module | Purpose | Stage |
 |---|---|---|
 | [blackwall-eye](./blackwall-eye/) | Host monitoring core | 1 — Active |
-| blackwall-voice | Alerts & dashboards | 2 — Planned |
+| [blackwall-voice](./blackwall-voice/) | Alerts & dashboards | 2 — Active |
 | blackwall-brain | AI analysis agents | 3 — Planned |
 | blackwall-trap | Honeypots | 4 — Planned |
 | blackwall-fang | Active countermeasures (research) | 5 — Planned |
 
 ## Getting Started
 
-Each module is independently deployable. Start with `blackwall-eye`:
+Each module is independently deployable. Shared Docker test environment lives in `tests/`.
+
+### 1. Start the test environment
+
+Run from repo root:
+
+```bash
+docker compose -f tests/docker/docker-compose.yml --profile ubuntu2204 up -d --build
+```
+
+### 2. Deploy a module
 
 ```bash
 cd blackwall-eye
-# See blackwall-eye/docs/ARCHITECTURE.md for deployment guide
+ansible all -m wait_for_connection   # wait for SSH
+ansible-playbook ansible/playbooks/all.yml
 ```
+
+See [tests/README.md](./tests/README.md) for full test environment docs.
+See each module's `README.md` for module-specific deploy and verify commands.
 
 ## Development
 
@@ -33,4 +47,4 @@ Run `/blackwall` (Claude Code slash command) in Claude Code to see module status
 
 ## License
 
-See [blackwall-eye/LICENSE](./blackwall-eye/LICENSE).
+See [LICENSE](./LICENSE).
