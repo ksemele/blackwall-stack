@@ -26,7 +26,7 @@
           - agent_list.stdout_lines | select('search', 'Active') | reject('search', 'server') | list | length > 0
         fail_msg: >
           No external agents are in 'Active' state. Make sure wazuh-agent is installed and
-          running on the monitored hosts (black-01, black-02) and that they can
-          reach the manager on port 1514/tcp and 1515/tcp.
+          running on black-host-01 and that it can reach the manager on port 1514/tcp
+          and 1515/tcp.
         success_msg: "At least one external agent is Active — enrollment and connectivity verified."
 
