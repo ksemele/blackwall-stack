@@ -9,6 +9,10 @@ path.logs: /var/log/wazuh-indexer
 
 bootstrap.memory_lock: true
 
+# ES 7.x compatibility — required for filebeat 7.10.2 (Wazuh-shipped) to write
+# alerts. OpenSearch otherwise rejects bulk requests containing `_type: _doc`.
+compatibility.override_main_response_version: true
+
 plugins.security.ssl.http.pemcert_filepath: certs/{{ wazuh_indexer_node_name }}.pem
 plugins.security.ssl.http.pemkey_filepath: certs/{{ wazuh_indexer_node_name }}-key.pem
 plugins.security.ssl.http.pemtrustedcas_filepath: certs/root-ca.pem
