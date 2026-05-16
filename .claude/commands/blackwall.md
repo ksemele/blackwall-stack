@@ -92,15 +92,50 @@ Construct the subagent prompt as follows:
 > The current module state is in the STATUS.md content above.
 > Your task: `<task>`
 >
-> When you finish:
-> 1. Update `<module>/STATUS.md`:
+> ## Git rules (apply to every subagent invocation)
+> - Commit your work as you go, on the current branch (`claude-dev`). Multiple small commits are fine.
+> - Commit messages must be super-brief: one line, conventional-commit style (`feat(scope): …`, `fix(scope): …`, `docs: …`), under ~70 characters. No body, no co-author trailer, no HEREDOC. Example: `feat(eye): add wazuh-indexer install task`.
+> - NEVER push. No `git push` under any circumstances. No `--no-verify`, no `--amend` of pushed commits, no force-push.
+> - Never create a new branch. Stay on `claude-dev`.
+>
+> ## Completion artifact (mandatory)
+> When you finish (DONE, DONE_WITH_CONCERNS, BLOCKED, or NEEDS_CONTEXT — any terminal status), write a markdown artifact at:
+>
+>     docs/superpowers/artifacts/<YYYY-MM-DD>-<module-or-plan-slug>/<task-slug>.md
+>
+> (Create the directory if it doesn't exist. The orchestrator reads these to learn what was done.)
+> Artifact format:
+>
+>     # <task title>
+>     **Status:** DONE | DONE_WITH_CONCERNS | BLOCKED | NEEDS_CONTEXT
+>     **Module:** <module>
+>     **Date:** <YYYY-MM-DD>
+>     **Commits:** <list of SHAs created>
+>
+>     ## What was done
+>     - bullet
+>     - bullet
+>
+>     ## Verification
+>     - command + expected output / actual output
+>
+>     ## Deviations from plan (if any)
+>     - what you changed and why
+>
+>     ## Open questions / concerns
+>     - or "none"
+>
+> ## When you finish
+> 1. Write the artifact md (above).
+> 2. Update `<module>/STATUS.md`:
 >    - Set `last_task` to what you just completed
 >    - Set `next_task` to the logical next step
 >    - Set `last_updated` to today's date
 >    - Update `status` if appropriate (e.g. set to `blocked` if stuck)
-> 2. Return a brief report in this format:
+> 3. Return a brief report in this format:
 >    ✓ Выполнено: <what was done>
 >    → Следующее: <next_task you wrote>
+>    📄 Артефакт: <path to artifact md>
 >    ⚠ Вопросы: <open questions, or "нет">
 
 ## Step 5: Display report and stop
