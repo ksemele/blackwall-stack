@@ -1,0 +1,109 @@
+---
+- name: Wait for dpkg lock to be released
+  shell: while fuser /var/lib/dpkg/lock-frontend /var/lib/dpkg/lock >/dev/null 2>&1; do sleep 2; done
+  changed_when: false
+
+- name: Install prerequisites (gnupg, curl, debconf, adduser)
+  apt:
+    name:
+      - gnupg
+      - curl
+      - debconf
+      - adduser
+    state: present
+    update_cache: true
+
+- name: Add Wazuh GPG key
+  apt_key:
+    url: "{{ wazuh_apt_key_url }}"
+    state: present
+
+- name: Add Wazuh apt repository
+  apt_repository:
+    repo: "{{ wazuh_apt_repo }}"
+    state: present
+    filename: wazuh
+
+- name: Install wazuh-indexer package
+  apt:
+    name: "wazuh-indexer={{ wazuh_version }}-*"
+    state: present
+    update_cache: true
+
+- name: Unpack cert bundle on master
+  unarchive:
+    src: "{{ wazuh_certs_local_dir }}/wazuh-certificates.tar"
+    dest: /tmp/
+    remote_src: false
+  changed_when: false
+
+- name: Ensure /etc/wazuh-indexer/certs directory exists
+  file:
+    path: /etc/wazuh-indexer/certs
+    state: directory
+    owner: wazuh-indexer
+    group: wazuh-indexer
+    mode: "0500"
+
+- name: Copy indexer node certificate
+  copy:
+    src: "/tmp/wazuh-certificates/{{ item.src }}"
+    dest: "/etc/wazuh-indexer/certs/{{ item.dest }}"
+    owner: wazuh-indexer
+    group: wazuh-indexer
+    mode: "0400"
+    remote_src: true
+  loop:
+    - { src: "root-ca.pem",                              dest: "root-ca.pem" }
+    - { src: "{{ wazuh_indexer_node_name }}.pem",        dest: "{{ wazuh_indexer_node_name }}.pem" }
+    - { src: "{{ wazuh_indexer_node_name }}-key.pem",    dest: "{{ wazuh_indexer_node_name }}-key.pem" }
+    - { src: "admin.pem",                                dest: "admin.pem" }
+    - { src: "admin-key.pem",                            dest: "admin-key.pem" }
+  notify: Restart wazuh-indexer
+
+- name: Deploy opensearch.yml
+  template:
+    src: opensearch.yml.j2
+    dest: /etc/wazuh-indexer/opensearch.yml
+    owner: wazuh-indexer
+    group: wazuh-indexer
+    mode: "0640"
+  notify: Restart wazuh-indexer
+
+- name: Enable and start wazuh-indexer service
+  systemd:
+    name: wazuh-indexer
+    enabled: true
+    state: started
+    daemon_reload: true
+
+- name: Wait for indexer HTTPS port (9200) to accept connections
+  wait_for:
+    host: "{{ wazuh_indexer_network_host }}"
+    port: 9200
+    timeout: 120
+
+- name: Deploy internal_users.yml
+  template:
+    src: internal_users.yml.j2
+    dest: /etc/wazuh-indexer/opensearch-security/internal_users.yml
+    owner: wazuh-indexer
+    group: wazuh-indexer
+    mode: "0640"
+  register: _internal_users
+
+- name: Push security config via securityadmin.sh
+  command: >
+    bash /usr/share/wazuh-indexer/plugins/opensearch-security/tools/securityadmin.sh
+    -cd /etc/wazuh-indexer/opensearch-security/
+    -nhnv
+    -cacert /etc/wazuh-indexer/certs/root-ca.pem
+    -cert /etc/wazuh-indexer/certs/admin.pem
+    -key /etc/wazuh-indexer/certs/admin-key.pem
+    -h 172.28.0.10
+    -p 9200
+    -icl
+  environment:
+    JAVA_HOME: /usr/share/wazuh-indexer/jdk
+  when: _internal_users.changed
+  changed_when: true
