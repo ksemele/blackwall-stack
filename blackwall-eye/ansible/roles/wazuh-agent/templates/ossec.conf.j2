@@ -3,8 +3,8 @@
   <client>
     <server>
       <address>{{ wazuh_manager_host }}</address>
-      <port>1514</port>
-      <protocol>tcp</protocol>
+      <port>{{ wazuh_manager_port }}</port>
+      <protocol>{{ wazuh_manager_protocol }}</protocol>
     </server>
     <crypto_method>aes</crypto_method>
     <notify_time>10</notify_time>
@@ -12,8 +12,13 @@
     <auto_restart>yes</auto_restart>
     <enrollment>
       <enabled>yes</enabled>
-      <manager_address>{{ wazuh_manager_host }}</manager_address>
+      <manager_address>{{ wazuh_enrollment_host }}</manager_address>
+      <port>{{ wazuh_enrollment_port }}</port>
       <agent_name>{{ wazuh_agent_name }}</agent_name>
+      <groups>{{ wazuh_agent_groups }}</groups>
+{% if wazuh_enrollment_password | length > 0 %}
+      <authorization_pass_path>/var/ossec/etc/authd.pass</authorization_pass_path>
+{% endif %}
     </enrollment>
   </client>
 

@@ -37,6 +37,23 @@
     mode: "0640"
   notify: Restart wazuh-agent
 
+- name: Write authd.pass when enrollment password set
+  copy:
+    content: "{{ wazuh_enrollment_password }}"
+    dest: /var/ossec/etc/authd.pass
+    owner: root
+    group: wazuh
+    mode: "0640"
+  when: wazuh_enrollment_password | length > 0
+  notify: Restart wazuh-agent
+
+- name: Remove authd.pass when enrollment password unset
+  file:
+    path: /var/ossec/etc/authd.pass
+    state: absent
+  when: wazuh_enrollment_password | length == 0
+  notify: Restart wazuh-agent
+
 - name: Enable and start wazuh-agent service
   systemd:
     name: wazuh-agent
