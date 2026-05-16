@@ -100,6 +100,16 @@
     mode: "0640"
   notify: Restart wazuh-dashboard
 
+# Flush any pending Restart handlers BEFORE we (re)start the service.
+# This avoids a race where:
+#   1. dashboard service starts, begins .kibana_1 migration
+#   2. handlers fire later in the play, restart dashboard mid-migration
+#   3. fresh dashboard instance finds .kibana_1 in-flight, gets stuck on
+#      "Another OpenSearch Dashboards instance appears to be migrating".
+# By flushing first, all config-induced restarts happen before initial start.
+- name: Flush handlers before dashboard start
+  meta: flush_handlers
+
 - name: Enable and start wazuh-dashboard service
   systemd:
     name: wazuh-dashboard
@@ -107,8 +117,14 @@
     state: started
     daemon_reload: true
 
-- name: Wait for dashboard HTTPS port (443) to accept connections
-  wait_for:
-    host: 127.0.0.1
-    port: 443
-    timeout: 180
+- name: Wait for dashboard HTTPS to return 302 (full init)
+  uri:
+    url: "https://127.0.0.1:443/"
+    method: GET
+    status_code: 302
+    validate_certs: false
+    follow_redirects: none
+  register: _dash_check
+  until: _dash_check.status == 302
+  retries: 60
+  delay: 5
