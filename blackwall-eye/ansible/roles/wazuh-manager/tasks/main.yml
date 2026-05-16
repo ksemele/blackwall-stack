@@ -52,16 +52,21 @@
 
 - name: Download Wazuh filebeat module for v4.x
   get_url:
-    url: "https://packages.wazuh.com/4.x/filebeat/wazuh-filebeat-0.4.tar.gz"
-    dest: /tmp/wazuh-filebeat-0.4.tar.gz
+    url: "https://packages.wazuh.com/4.x/filebeat/wazuh-filebeat-0.5.tar.gz"
+    dest: /tmp/wazuh-filebeat-0.5.tar.gz
     mode: "0644"
 
-- name: Unpack Wazuh filebeat module
+- name: Remove old wazuh filebeat module (if any) to allow 0.5 overwrite
+  file:
+    path: /usr/share/filebeat/module/wazuh
+    state: absent
+
+- name: Unpack Wazuh filebeat module 0.5
   unarchive:
-    src: /tmp/wazuh-filebeat-0.4.tar.gz
+    src: /tmp/wazuh-filebeat-0.5.tar.gz
     dest: /usr/share/filebeat/module/
     remote_src: true
-    creates: /usr/share/filebeat/module/wazuh
+    creates: /usr/share/filebeat/module/wazuh/_meta/config.yml
 
 - name: Download Wazuh filebeat template
   get_url:
