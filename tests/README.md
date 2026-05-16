@@ -262,6 +262,27 @@ open https://localhost:5601    # admin / Blackwall1!
 
 ---
 
+## 6b. Trigger synthetic alerts (`bw-trigger`)
+
+Drive Wazuh detections on `black-host-01` to verify the stack is wired end-to-end and to see real alerts in the dashboard.
+
+```bash
+tests/triggers/bw-trigger list           # show available events
+tests/triggers/bw-trigger user           # fire one
+tests/triggers/bw-trigger all            # fire everything (~60s)
+tests/triggers/bw-trigger clean          # undo persistent side effects
+```
+
+Events range from harmless (`useradd`/`userdel`, FIM touches) to attacker-flavoured (web-shell drop, sudoers tampering, log clearing). Full event list and Wazuh-rule expectations: [tests/triggers/README.md](triggers/README.md).
+
+Live tail the manager while triggering:
+
+```bash
+ansible black-master-00 -m shell -a 'tail -f /var/ossec/logs/alerts/alerts.json' --become
+```
+
+---
+
 ## 7. Service status (ad-hoc)
 
 ```bash
