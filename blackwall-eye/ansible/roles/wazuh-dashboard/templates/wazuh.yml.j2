@@ -1,0 +1,7 @@
+hosts:
+  - default:
+      url: "{{ wazuh_manager_api_url | regex_replace(':[0-9]+$', '') }}"
+      port: {{ wazuh_manager_api_url | regex_search(':[0-9]+$') | regex_replace(':', '') | default('55000') }}
+      username: "{{ wazuh_manager_api_user }}"
+      password: "{{ wazuh_manager_api_password }}"
+      run_as: false

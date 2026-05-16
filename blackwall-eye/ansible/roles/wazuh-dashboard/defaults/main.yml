@@ -1,0 +1,20 @@
+---
+wazuh_version: "4.14.5"
+wazuh_apt_key_url: "https://packages.wazuh.com/key/GPG-KEY-WAZUH"
+wazuh_apt_repo: "deb https://packages.wazuh.com/4.x/apt/ stable main"
+
+wazuh_dashboard_node_name: "{{ inventory_hostname }}"
+wazuh_dashboard_listen_host: "0.0.0.0"
+wazuh_dashboard_listen_port: 443
+
+wazuh_indexer_url: "https://172.28.0.10:9200"
+wazuh_manager_api_url: "https://172.28.0.10:55000"
+
+# Credentials default to those in group_vars/wazuh_managers.yml.
+# Listed here so the role works standalone if invoked without that group_vars.
+wazuh_indexer_admin_user: "admin"
+wazuh_indexer_admin_password: "Blackwall1!"
+wazuh_manager_api_user: "wazuh"
+wazuh_manager_api_password: "wazuh"
+
+wazuh_certs_local_dir: "{{ playbook_dir }}/../../../tests/.wazuh-certs"
