@@ -8,7 +8,7 @@
     synthetic_alert_json: >-
       {"id":"{{ synthetic_alert_id }}","timestamp":"{{ ansible_date_time.iso8601 }}",
       "rule":{"level":10,"description":"Synthetic verify-voice test alert","id":"99999"},
-      "agent":{"name":"verify-bot"},"manager":{"name":"black-00"},
+      "agent":{"name":"verify-bot"},"manager":{"name":"black-master-00"},
       "full_log":"synthetic alert injected by verify-voice.yml"}
 
   tasks:

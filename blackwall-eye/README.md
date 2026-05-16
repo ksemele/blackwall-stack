@@ -31,7 +31,7 @@ See [tests/README.md](../tests/README.md) for full environment documentation (to
 Run from `blackwall-eye/`:
 
 ```bash
-# Full stack: manager (black-00) + all agents (black-01, black-02)
+# Full stack: master (black-master-00) + agent (black-host-01)
 ansible-playbook ansible/playbooks/all.yml
 
 # Manager only
@@ -59,7 +59,7 @@ Query the Wazuh Manager API and print all agents with their status and last hear
 
 ```bash
 # Via SSH tunnel to Docker test manager:
-ssh -F tests/docker/ssh_config -L 55000:172.28.0.10:55000 black-00 -N &
+ssh -F tests/docker/ssh_config -L 55000:172.28.0.10:55000 black-master-00 -N &
 ./blackwall-eye/tools/bw-status --host localhost
 
 # Direct (if Wazuh API port is accessible from your machine):
