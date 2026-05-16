@@ -43,154 +43,71 @@ services:
 
   # ── Ubuntu 22.04 ───────────────────────────────────────────────────────────
   # Profile: ubuntu2204
-  # Base:    ghcr.io/geerlingguy/docker-ubuntu2204-ansible (systemd + Python pre-installed)
-  # Ports:   2200–2202
+  # Base:    geerlingguy/docker-ubuntu2204-ansible (systemd + Python pre-installed)
+  # Ports:
+  #   black-master-00:  2200 (SSH), 5601 (Wazuh dashboard, container :443)
+  #   black-host-01:    2201 (SSH)
 
-  black-00:
+  black-master-00:
     <<: *black-node
     profiles: [ubuntu2204]
     build:
       context: ./images/ubuntu2204
-    container_name: black-00
-    hostname: black-00
+    container_name: black-master-00
+    hostname: black-master-00
     ports:
       - "2200:22"
+      - "5601:443"
     networks:
       blackwall-test:
         ipv4_address: 172.28.0.10
 
-  black-01:
+  black-host-01:
     <<: *black-node
     profiles: [ubuntu2204]
     build:
       context: ./images/ubuntu2204
-    container_name: black-01
-    hostname: black-01
+    container_name: black-host-01
+    hostname: black-host-01
     ports:
       - "2201:22"
     networks:
       blackwall-test:
         ipv4_address: 172.28.0.11
 
-  black-02:
-    <<: *black-node
-    profiles: [ubuntu2204]
-    build:
-      context: ./images/ubuntu2204
-    container_name: black-02
-    hostname: black-02
-    ports:
-      - "2202:22"
-    networks:
-      blackwall-test:
-        ipv4_address: 172.28.0.12
-
   # ── Debian 12 (future) ────────────────────────────────────────────────────
-  # Profile: debian12
-  # Base:    ghcr.io/geerlingguy/docker-debian12-ansible (when available) or custom
-  # Ports:   2210–2212
-  # Steps:   Create tests/docker/images/debian12/Dockerfile, then uncomment below.
+  # Profile: debian12 — uncomment when tests/docker/images/debian12/Dockerfile exists.
+  # Ports: 2210 (SSH), 5611 (dashboard) for master; 2211 (SSH) for host.
   #
-  # black-00-debian:
+  # black-master-00-debian:
   #   <<: *black-node
   #   profiles: [debian12]
   #   build:
   #     context: ./images/debian12
-  #   container_name: black-00-debian
-  #   hostname: black-00-debian
+  #   container_name: black-master-00-debian
+  #   hostname: black-master-00-debian
   #   ports:
   #     - "2210:22"
+  #     - "5611:443"
   #   networks:
   #     blackwall-test:
   #       ipv4_address: 172.28.0.20
   #
-  # black-01-debian:
+  # black-host-01-debian:
   #   <<: *black-node
   #   profiles: [debian12]
   #   build:
   #     context: ./images/debian12
-  #   container_name: black-01-debian
-  #   hostname: black-01-debian
+  #   container_name: black-host-01-debian
+  #   hostname: black-host-01-debian
   #   ports:
   #     - "2211:22"
   #   networks:
   #     blackwall-test:
   #       ipv4_address: 172.28.0.21
-  #
-  # black-02-debian:
-  #   <<: *black-node
-  #   profiles: [debian12]
-  #   build:
-  #     context: ./images/debian12
-  #   container_name: black-02-debian
-  #   hostname: black-02-debian
-  #   ports:
-  #     - "2212:22"
-  #   networks:
-  #     blackwall-test:
-  #       ipv4_address: 172.28.0.22
 
   # ── CentOS Stream 9 (future) ──────────────────────────────────────────────
-  # Profile: centos9
-  # Base:    ghcr.io/geerlingguy/docker-centos9-ansible or custom
-  # Ports:   2220–2222
-  # Steps:   Create tests/docker/images/centos9/Dockerfile, then uncomment below.
-  #
-  # black-00-centos:
-  #   <<: *black-node
-  #   profiles: [centos9]
-  #   build:
-  #     context: ./images/centos9
-  #   container_name: black-00-centos
-  #   hostname: black-00-centos
-  #   ports:
-  #     - "2220:22"
-  #   networks:
-  #     blackwall-test:
-  #       ipv4_address: 172.28.0.30
-  #
-  # black-01-centos:
-  #   <<: *black-node
-  #   profiles: [centos9]
-  #   build:
-  #     context: ./images/centos9
-  #   container_name: black-01-centos
-  #   hostname: black-01-centos
-  #   ports:
-  #     - "2221:22"
-  #   networks:
-  #     blackwall-test:
-  #       ipv4_address: 172.28.0.31
-  #
-  # black-02-centos:
-  #   <<: *black-node
-  #   profiles: [centos9]
-  #   build:
-  #     context: ./images/centos9
-  #   container_name: black-02-centos
-  #   hostname: black-02-centos
-  #   ports:
-  #     - "2222:22"
-  #   networks:
-  #     blackwall-test:
-  #       ipv4_address: 172.28.0.32
+  # Profile: centos9 — same shape as debian12, ports 2220/5621 (master), 2221 (host).
+  # Add when tests/docker/images/centos9/Dockerfile exists.
 
-  # ── Alpine (future — WARNING: OpenRC only, no systemd) ────────────────────
-  # Profile: alpine
-  # Alpine uses OpenRC instead of systemd. Roles that require systemd services
-  # (Wazuh, auditd) CANNOT be tested on Alpine. Only suitable for roles with no
-  # service dependencies (e.g., pure config file management, package installation
-  # without service start).
-  #
-  # black-00-alpine:
-  #   <<: *black-node
-  #   profiles: [alpine]
-  #   build:
-  #     context: ./images/alpine
-  #   container_name: black-00-alpine
-  #   hostname: black-00-alpine
-  #   ports:
-  #     - "2230:22"
-  #   networks:
-  #     blackwall-test:
-  #       ipv4_address: 172.28.0.40
+  # ── Alpine: not supported (OpenRC, no systemd) ─────────────────────────────
