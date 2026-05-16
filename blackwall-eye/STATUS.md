@@ -2,13 +2,15 @@
 module: blackwall-eye
 status: in_progress
 stage: 1
-last_updated: 2026-05-10
-last_task: "Added bw-status CLI tool — Wazuh agent status dashboard via REST API (blackwall-eye/tools/bw-status). Stdlib-only Python 3 script: authenticates with Wazuh JWT, fetches agents, prints status table with ANSI colors. Tested against live Docker env (3 agents, all active)."
+last_updated: 2026-05-16
+last_task: "Test env redesign: 2-container topology (black-master-00 + black-host-01), Wazuh all-in-one master (manager + indexer + dashboard via Ansible roles, TLS via wazuh-certs-tool), dashboard on https://localhost:5601 (admin/Blackwall1!), agent endpoint/enrollment fully parameterized for any master."
 next_task: "Stage 1 complete — mark done or add Suricata/Zeek for Stage 2 network layer"
 blockers: []
 ---
 
 ## Что сделано
+
+- 2026-05-16: переработана тестовая среда — `black-master-00` (manager + indexer + dashboard) + `black-host-01` (agent). Добавлены роли `wazuh-indexer`, `wazuh-dashboard`. Manager научен шипить алерты в indexer через filebeat. Сертификаты генерируются разово через `wazuh-certificates.yml`. Дашборд доступен на `https://localhost:5601` (admin / Blackwall1!). Агент полностью параметризован: `wazuh_manager_host`/`port`/`protocol`/`enrollment_*` — позволяет указать любого мастера через `-e` или group_vars. Spec: `docs/superpowers/specs/2026-05-15-test-env-master-host-dashboard-design.md`. Plan: `docs/superpowers/plans/2026-05-15-test-env-master-host-dashboard.md`.
 
 - `ansible/roles/wazuh-manager/` — полная Ansible роль: defaults, tasks, handlers, templates/ossec.conf.j2
   - Устанавливает wazuh-manager из официального apt репозитория (pinned 4.14.5)
