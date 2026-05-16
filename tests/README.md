@@ -1,157 +1,284 @@
 # Blackwall — Test Environment
 
-Shared Docker test environment for all Blackwall modules.
-Privileged containers with systemd as PID 1 — service management works identically to production hosts.
+Two-container Docker environment for all Blackwall modules:
+- `black-master-00` — Wazuh manager + indexer + dashboard (all-in-one)
+- `black-host-01`   — Wazuh agent + auditd target
+
+Containers are privileged with systemd as PID 1, so service management
+works identically to production hosts.
 
 > **Docker commands:** run from **repo root** (`blackwall/`)
-> **Ansible commands:** run from the **module directory** (`blackwall-eye/`, `blackwall-voice/`, etc.)
-> Each module has `ansible.cfg` at its root pointing to `../tests/inventory/`.
+> **Ansible commands:** run from the **module directory** (`blackwall-eye/`, etc.)
+> Each module has `ansible.cfg` pointing at `../tests/inventory/`.
 
 ---
 
-## 1. Containers: up / down
-
-### Full topology (manager + 2 agents)
+## 1. Quick start
 
 ```bash
+# Up
 docker compose -f tests/docker/docker-compose.yml --profile ubuntu2204 up -d --build
-```
+cd blackwall-eye
+ansible all -m wait_for_connection -T 60
+ansible-playbook ansible/playbooks/all.yml
 
-### Single container (isolated role test — black-00 only)
+# Dashboard
+open https://localhost:5601                # admin / Blackwall1!
 
-```bash
-docker compose -f tests/docker/docker-compose.yml --profile ubuntu2204 up -d --build black-00
-```
-
-### Tear down
-
-```bash
+# Down
+cd ..
 docker compose -f tests/docker/docker-compose.yml --profile ubuntu2204 down -v
 ```
 
-### Wait for SSH to be ready
+`all.yml` runs three sub-playbooks: certificates → security-node (indexer + manager + dashboard) → monitored-host (agent + auditd).
 
-Run from module directory after `up`, before any Ansible commands:
+---
+
+## 2. Connect to the Wazuh dashboard
+
+| | |
+|---|---|
+| URL | `https://localhost:5601` |
+| Username | `admin` |
+| Password | `Blackwall1!` |
+| Cert | self-signed; click through the browser warning |
+
+To change credentials, edit `blackwall-eye/ansible/group_vars/wazuh_managers.yml` and re-run `ansible-playbook ansible/playbooks/security-node.yml --tags wazuh-indexer,wazuh-dashboard`.
+
+---
+
+## 3. Point agents at a different master
+
+The `wazuh-agent` role reads endpoint and enrollment params from variables;
+the test-env defaults (in `wazuh-agent/defaults/main.yml`) point at the local
+master `172.28.0.10`. Override per run:
 
 ```bash
-ansible all -m wait_for_connection
+ansible-playbook ansible/playbooks/monitored-host.yml \
+  -e wazuh_manager_host=wazuh.prod.example.com \
+  -e wazuh_enrollment_password=<secret>
+```
+
+For durable multi-host overrides, write your own inventory file:
+
+```yaml
+# inventory/prod.yml
+all:
+  vars:
+    ansible_user: deploy
+    ansible_ssh_private_key_file: ~/.ssh/id_ed25519
+  children:
+    wazuh_agents:
+      vars:
+        wazuh_manager_host: wazuh.prod.example.com
+        wazuh_enrollment_password: "{{ lookup('community.general.passwordstore', 'wazuh/enrollment') }}"
+      hosts:
+        web-01.prod.example.com:
+        web-02.prod.example.com:
+```
+
+```bash
+ansible-playbook -i inventory/prod.yml ansible/playbooks/monitored-host.yml
+```
+
+Available variables (full list in `roles/wazuh-agent/defaults/main.yml`):
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `wazuh_manager_host` | `172.28.0.10` | Manager IP or hostname |
+| `wazuh_manager_port` | `1514` | Manager listener port (TCP) |
+| `wazuh_manager_protocol` | `tcp` | `tcp` or `udp` |
+| `wazuh_enrollment_host` | `wazuh_manager_host` | Enrollment server (usually same) |
+| `wazuh_enrollment_port` | `1515` | authd port |
+| `wazuh_enrollment_password` | `""` | Shared secret; empty = no password |
+| `wazuh_agent_name` | `inventory_hostname` | Agent name registered with manager |
+| `wazuh_agent_groups` | `default` | Comma-separated Wazuh agent groups |
+
+---
+
+## 4. Run a playbook on a specific host
+
+```bash
+# Manager only
+ansible-playbook ansible/playbooks/security-node.yml --limit black-master-00
+
+# Agent only
+ansible-playbook ansible/playbooks/monitored-host.yml --limit black-host-01
 ```
 
 ---
 
-## 2. Full deployment — all hosts
-
-Deploys manager first, then all agents. One command for the complete blackwall-eye stack.
+## 5. Run a single role
 
 ```bash
-ansible-playbook ansible/playbooks/all.yml
-```
+# wazuh-indexer
+ansible-playbook ansible/playbooks/security-node.yml --tags wazuh-indexer
 
----
-
-## 3. Run a playbook on a specific host
-
-```bash
-# Manager only (black-00)
-ansible-playbook ansible/playbooks/security-node.yml --limit black-00
-
-# One agent only (e.g. black-01)
-ansible-playbook ansible/playbooks/monitored-host.yml --limit black-01
-```
-
----
-
-## 4. Run a single role
-
-Uses `--tags` to apply only one role. Combine with `--limit` to target one host.
-
-```bash
-# wazuh-agent role — all agent hosts
-ansible-playbook ansible/playbooks/monitored-host.yml --tags wazuh-agent
-
-# wazuh-agent role — single host
-ansible-playbook ansible/playbooks/monitored-host.yml --tags wazuh-agent --limit black-01
-
-# wazuh-manager role — manager
+# wazuh-manager
 ansible-playbook ansible/playbooks/security-node.yml --tags wazuh-manager
 
-# auditd role — all agent hosts
+# wazuh-dashboard
+ansible-playbook ansible/playbooks/security-node.yml --tags wazuh-dashboard
+
+# wazuh-agent on the lone host
+ansible-playbook ansible/playbooks/monitored-host.yml --tags wazuh-agent
+
+# auditd on the lone host
 ansible-playbook ansible/playbooks/monitored-host.yml --tags auditd
-
-# auditd role — single host
-ansible-playbook ansible/playbooks/monitored-host.yml --tags auditd --limit black-01
-```
-
-**Single-container test** (only `black-00` is running, test agent role on it):
-
-```bash
-ansible-playbook -i tests/inventory/hosts.single.yml ansible/playbooks/monitored-host.yml
 ```
 
 ---
 
-## 5. Verify deployments
+## 6. Verify (high-level)
 
 ```bash
 # Agent registration
 ansible-playbook ansible/playbooks/verify-agents.yml
 
-# auditd rules and config (note: service check skipped in Docker)
+# Live agent status via REST API
+ansible-playbook ansible/playbooks/verify-api.yml
+
+# auditd rules and config (service check skipped in Docker)
 ansible-playbook ansible/playbooks/verify-auditd.yml
 ```
 
-**verify-agents.yml successful output:**
-- `TASK [Show agent list]` — prints connected agents table
-- `TASK [Assert at least one agent is connected (Active status)]` — `ok: [black-00]` with success message
-
-**verify-agents.yml failure output:**
-- `TASK [Assert...]` — `FAILED!` with message: `No external agents are in 'Active' state. Make sure wazuh-agent is installed and running...`
-
-**verify-auditd.yml successful output:**
-- Package, rules file, rule keys, log_format — all `ok`
-- `TASK [Assert auditd is active]` — skipped in Docker (expected), asserts on real hosts
-
 ---
 
-## 6. Check service status
+## 6a. Verify (per-component cookbook)
 
-> No `-i` needed — `ansible.cfg` sets the default inventory.
+Run any subset of these to debug a specific piece. All `ansible` commands run from `blackwall-eye/`; `docker` and `curl` from the repo root.
 
-### Wazuh Manager
-
+### Containers
 ```bash
-# Service status
-ansible wazuh_managers -m command -a "systemctl status wazuh-manager" --become
+docker ps --format '{{.Names}}' | sort
+# Expect:
+#   black-host-01
+#   black-master-00
 
-# List registered agents
+docker compose -f tests/docker/docker-compose.yml --profile ubuntu2204 config --quiet
+# Expect: exit 0, no output
+```
+
+### SSH / Ansible reachability
+```bash
+ssh -F tests/docker/ssh_config black-master-00 hostname    # → black-master-00
+ssh -F tests/docker/ssh_config black-host-01 hostname      # → black-host-01
+
+ansible all -m wait_for_connection -T 30
+# Expect: SUCCESS for both hosts
+```
+
+### Wazuh indexer
+```bash
+ansible black-master-00 -m command -a "systemctl is-active wazuh-indexer" --become
+# Expect: active
+
+ansible black-master-00 -m shell -a \
+  "curl -sk -u admin:Blackwall1! https://172.28.0.10:9200/_cluster/health" --become
+# Expect: JSON with "status":"green" or "yellow"
+
+ansible black-master-00 -m shell -a \
+  "curl -sk -u admin:admin https://172.28.0.10:9200/_cluster/health" --become
+# Expect: Unauthorized / 401
+```
+
+### Wazuh manager + filebeat
+```bash
+ansible black-master-00 -m command -a "systemctl is-active wazuh-manager" --become
+# Expect: active
+
+ansible black-master-00 -m command -a "systemctl is-active filebeat" --become
+# Expect: active
+
+ansible black-master-00 -m command -a "filebeat test output" --become
+# Expect: lines ending in "OK" for connection / TLS / talk to server
+```
+
+### Wazuh dashboard
+```bash
+ansible black-master-00 -m command -a "systemctl is-active wazuh-dashboard" --become
+# Expect: active
+
+ansible black-master-00 -m shell -a \
+  "curl -sk https://127.0.0.1/ -o /dev/null -w '%{http_code}'" --become
+# Expect: 302
+
+curl -sk https://localhost:5601/ -o /dev/null -w '%{http_code}\n'
+# Expect: 302
+```
+
+### Wazuh agent
+```bash
+ansible black-host-01 -m command -a "systemctl status wazuh-agent" --become
+
+ansible black-host-01 -m command -a "tail -20 /var/ossec/logs/ossec.log" --become
+
 ansible wazuh_managers -m command -a "/var/ossec/bin/agent_control -l" --become
+# Expect: at least one Active entry for black-host-01
 ```
 
-### Wazuh Agent
-
+### Agent endpoint override (point at a different master)
 ```bash
-# Service status — all agents
-ansible wazuh_agents -m command -a "systemctl status wazuh-agent" --become
+ansible-playbook ansible/playbooks/monitored-host.yml \
+  -e wazuh_manager_host=192.0.2.1 \
+  -e wazuh_enrollment_password=hunter2 \
+  --tags wazuh-agent
 
-# Service status — single agent
-ansible black-01 -m command -a "systemctl status wazuh-agent" --become
+ansible black-host-01 -m shell -a \
+  "grep -E '<address>|<authorization_pass_path>' /var/ossec/etc/ossec.conf" --become
+# Expect: <address>192.0.2.1</address> and <authorization_pass_path>... lines
 
-# Check agent log (last 20 lines)
-ansible black-01 -m command -a "tail -20 /var/ossec/logs/ossec.log" --become
+ansible black-host-01 -m shell -a "cat /var/ossec/etc/authd.pass" --become
+# Expect: hunter2
+
+# Revert
+ansible-playbook ansible/playbooks/monitored-host.yml --tags wazuh-agent
+ansible black-host-01 -m stat -a "path=/var/ossec/etc/authd.pass" --become | grep '"exists":'
+# Expect: "exists": false
 ```
 
-### Version info
-
+### Version + build
 ```bash
-ansible all -m command -a "/var/ossec/bin/wazuh-control info" --become
+ansible all -m command -a "/var/ossec/bin/wazuh-control info" --become 2>/dev/null || true
+
+ansible black-master-00 -m command -a "dpkg -l wazuh-manager wazuh-indexer wazuh-dashboard filebeat" --become
+# Expect: 'ii' status for all four
+```
+
+### Full clean-room acceptance
+```bash
+docker compose -f tests/docker/docker-compose.yml --profile ubuntu2204 down -v
+rm -rf tests/.wazuh-certs/wazuh-certificates*
+
+docker compose -f tests/docker/docker-compose.yml --profile ubuntu2204 up -d --build
+cd blackwall-eye
+ansible all -m wait_for_connection -T 60
+ansible-playbook ansible/playbooks/all.yml
+
+ansible-playbook ansible/playbooks/verify-agents.yml
+
+open https://localhost:5601    # admin / Blackwall1!
 ```
 
 ---
 
-## SSH Access
+## 7. Service status (ad-hoc)
 
 ```bash
-ssh -F tests/docker/ssh_config black-00
+ansible wazuh_managers -m command -a "systemctl status wazuh-manager" --become
+ansible wazuh_managers -m command -a "systemctl status wazuh-indexer" --become
+ansible wazuh_managers -m command -a "systemctl status wazuh-dashboard" --become
+ansible wazuh_managers -m command -a "systemctl status filebeat" --become
+ansible wazuh_agents -m command -a "systemctl status wazuh-agent" --become
+```
+
+---
+
+## 8. SSH access
+
+```bash
+ssh -F tests/docker/ssh_config black-master-00
+ssh -F tests/docker/ssh_config black-host-01
 ```
 
 Or append to your personal SSH config:
@@ -162,70 +289,106 @@ cat tests/docker/ssh_config >> ~/.ssh/config
 
 ---
 
-## Multi-Distro Support
+## 9. Host topology
 
-The compose file uses [Compose profiles](https://docs.docker.com/compose/profiles/) to select the target distro.
-
-| Profile | Base image | systemd | Ports | Status |
+| Container | Role | SSH port | Dashboard port | Static IP |
 |---|---|---|---|---|
-| `ubuntu2204` | geerlingguy/docker-ubuntu2204-ansible | yes | 2200–2202 | Active |
-| `debian12` | (planned) | yes | 2210–2212 | Not implemented |
-| `centos9` | (planned) | yes | 2220–2222 | Not implemented |
-| `alpine` | (planned) | **no** — OpenRC | 2230+ | Not implemented |
-
-> **Alpine note:** Alpine uses OpenRC instead of systemd. Roles that require systemd services (Wazuh, auditd) **cannot** be tested on Alpine.
-
-### Adding a new distro
-
-1. Create `tests/docker/images/<distro>/Dockerfile`
-2. Uncomment the corresponding service block in `tests/docker/docker-compose.yml`
-3. Add host entries to `tests/inventory/hosts.yml`
+| `black-master-00` | manager + indexer + dashboard | `2200→22` | `5601→443` | `172.28.0.10` |
+| `black-host-01`   | agent + auditd target | `2201→22` | — | `172.28.0.11` |
 
 ---
 
-## Host Topology
+## 10. Certificates
 
-| Container | Role | SSH port | Static IP |
-|---|---|---|---|
-| `black-00` | Wazuh Manager (security-node) | 2200 | 172.28.0.10 |
-| `black-01` | Wazuh Agent (monitored-host) | 2201 | 172.28.0.11 |
-| `black-02` | Wazuh Agent (monitored-host) | 2202 | 172.28.0.12 |
+`tests/.wazuh-certs/wazuh-certificates.tar` is generated by
+`wazuh-certificates.yml` and consumed by indexer, manager (filebeat),
+and dashboard roles. It's per-environment and gitignored.
 
----
+To rotate certs:
 
-## File Layout
-
-```
-blackwall-eye/
-├── ansible.cfg                             # ansible config (roles path, default inventory)
-├── ansible/
-│   ├── playbooks/
-│   │   ├── all.yml                        # full stack: manager + agents
-│   │   ├── security-node.yml               # wazuh-manager role
-│   │   ├── monitored-host.yml              # wazuh-agent + auditd roles
-│   │   ├── verify-agents.yml               # registration test
-│   │   └── verify-auditd.yml               # auditd rules and config test
-│   └── roles/
-│       ├── wazuh-manager/
-│       ├── wazuh-agent/
-│       └── auditd/
-└── tests/
-    ├── docker/
-    │   ├── docker-compose.yml
-    │   ├── images/ubuntu2204/Dockerfile
-    │   └── ssh_config
-    └── inventory/
-        ├── hosts.yml                       # full topology (manager + 2 agents)
-        └── hosts.single.yml                # single-host for isolated role tests
+```bash
+rm -rf tests/.wazuh-certs/wazuh-certificates*
+ansible-playbook ansible/playbooks/wazuh-certificates.yml
+# then re-run security-node.yml
 ```
 
-## Known Limitations
+---
 
-**auditd:** The kernel audit subsystem (netlink socket) is not accessible inside Docker containers — it belongs to the host kernel exclusively. The auditd role installs the package and deploys rules correctly, but the service will not start in test containers. The role detects `/.dockerenv` and skips the failure — expect `ignore_errors` warnings on the systemd task. On real hosts auditd starts normally.
+## 11. Multi-distro support
+
+The compose file uses [Compose profiles](https://docs.docker.com/compose/profiles/) to select a distro.
+
+| Profile | Base image | systemd | SSH ports | Dashboard | Status |
+|---|---|---|---|---|---|
+| `ubuntu2204` | geerlingguy/docker-ubuntu2204-ansible | yes | 2200, 2201 | 5601 | Active |
+| `debian12` | (planned) | yes | 2210, 2211 | 5611 | Not implemented |
+| `centos9` | (planned) | yes | 2220, 2221 | 5621 | Not implemented |
+| `alpine` | n/a — OpenRC | **no** | n/a | n/a | Not supported |
+
+To add a new distro:
+
+1. Create `tests/docker/images/<distro>/Dockerfile`.
+2. Uncomment the corresponding service block in `tests/docker/docker-compose.yml`.
+3. Add host entries to `tests/inventory/hosts.yml`.
 
 ---
 
-## Security Note
+## 12. Controller prerequisites
 
-The containers use `root` with password `blackwall` and `PermitRootLogin yes`.
-This is intentional for local test environments. Do not expose these containers to any network outside `localhost`.
+`password_hash('bcrypt')` filter (used by `wazuh-indexer` role) needs `passlib` on the Ansible controller. For pipx-installed Ansible:
+
+```bash
+pipx inject ansible 'passlib' 'bcrypt<5.0.0'
+```
+
+(bcrypt 5.0 has a known incompatibility with passlib 1.7.4; pin until upstream fixes.)
+
+---
+
+## 13. Known limitations
+
+**auditd:** kernel audit netlink is not accessible inside Docker. The role installs rules correctly, but the service won't start in containers (detected via `/.dockerenv`). On real hosts auditd starts normally.
+
+**Dashboard cert:** self-signed; browsers show "Not Secure". Acceptable for `localhost` only. Never expose port 5601 beyond `localhost`.
+
+**Indexer/dashboard re-template:** Because bcrypt salts are random, the `internal_users.yml` template renders a new hash every run, so the indexer security config is re-pushed on every `security-node.yml` execution. Functionally idempotent (same password verifies) but not byte-idempotent. Acceptable.
+
+---
+
+## 14. File layout
+
+```
+blackwall/                                  # repo root
+├── tests/
+│   ├── docker/
+│   │   ├── docker-compose.yml
+│   │   ├── images/ubuntu2204/Dockerfile
+│   │   └── ssh_config
+│   ├── inventory/
+│   │   └── hosts.yml
+│   └── .wazuh-certs/                       # gitignored TLS bundle
+└── blackwall-eye/
+    ├── ansible.cfg
+    └── ansible/
+        ├── group_vars/wazuh_managers.yml
+        ├── playbooks/
+        │   ├── all.yml
+        │   ├── wazuh-certificates.yml
+        │   ├── security-node.yml           # indexer + manager + dashboard
+        │   ├── monitored-host.yml          # agent + auditd
+        │   ├── verify-agents.yml
+        │   ├── verify-api.yml
+        │   └── verify-auditd.yml
+        └── roles/
+            ├── wazuh-indexer/
+            ├── wazuh-manager/              # includes filebeat output
+            ├── wazuh-dashboard/
+            ├── wazuh-agent/
+            └── auditd/
+```
+
+---
+
+## Security note
+
+Containers run `root:blackwall` over SSH with `PermitRootLogin yes`. Indexer/dashboard credentials default to `admin / Blackwall1!`. **This is intentional for the local test environment. Do not expose any of these containers or ports beyond `localhost`.**
