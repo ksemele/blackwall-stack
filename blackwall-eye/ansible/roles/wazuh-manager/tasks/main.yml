@@ -43,3 +43,66 @@
     enabled: true
     state: started
     daemon_reload: true
+
+- name: Install filebeat (Wazuh-shipped variant)
+  apt:
+    name: "filebeat={{ wazuh_filebeat_version | default('7.10.2-2') }}"
+    state: present
+    update_cache: true
+
+- name: Download Wazuh filebeat module for v4.x
+  get_url:
+    url: "https://packages.wazuh.com/4.x/filebeat/wazuh-filebeat-0.4.tar.gz"
+    dest: /tmp/wazuh-filebeat-0.4.tar.gz
+    mode: "0644"
+
+- name: Unpack Wazuh filebeat module
+  unarchive:
+    src: /tmp/wazuh-filebeat-0.4.tar.gz
+    dest: /usr/share/filebeat/module/
+    remote_src: true
+    creates: /usr/share/filebeat/module/wazuh
+
+- name: Download Wazuh filebeat template
+  get_url:
+    url: "https://raw.githubusercontent.com/wazuh/wazuh/v{{ wazuh_version }}/extensions/elasticsearch/7.x/wazuh-template.json"
+    dest: /etc/filebeat/wazuh-template.json
+    mode: "0644"
+
+- name: Ensure /etc/filebeat/certs dir exists
+  file:
+    path: /etc/filebeat/certs
+    state: directory
+    owner: root
+    group: root
+    mode: "0500"
+
+- name: Copy filebeat TLS certs (reuse master node bundle)
+  copy:
+    src: "/tmp/wazuh-certificates/{{ item.src }}"
+    dest: "/etc/filebeat/certs/{{ item.dest }}"
+    owner: root
+    group: root
+    mode: "0400"
+    remote_src: true
+  loop:
+    - { src: "root-ca.pem",            dest: "root-ca.pem" }
+    - { src: "black-master-00.pem",    dest: "black-master-00.pem" }
+    - { src: "black-master-00-key.pem", dest: "black-master-00-key.pem" }
+  notify: Restart filebeat
+
+- name: Deploy filebeat.yml
+  template:
+    src: filebeat.yml.j2
+    dest: /etc/filebeat/filebeat.yml
+    owner: root
+    group: root
+    mode: "0640"
+  notify: Restart filebeat
+
+- name: Enable and start filebeat
+  systemd:
+    name: filebeat
+    enabled: true
+    state: started
+    daemon_reload: true
