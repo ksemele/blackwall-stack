@@ -1,0 +1,9 @@
+---
+# Shared credentials for the all-in-one master.
+# Indexer / dashboard / filebeat (one OpenSearch admin account):
+wazuh_indexer_admin_user: "admin"
+wazuh_indexer_admin_password: "Blackwall1!"
+
+# Manager REST API (separate user system, on the manager process):
+wazuh_manager_api_user: "wazuh"
+wazuh_manager_api_password: "wazuh"
