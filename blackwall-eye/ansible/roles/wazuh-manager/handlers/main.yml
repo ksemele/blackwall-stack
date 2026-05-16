@@ -3,3 +3,8 @@
   systemd:
     name: wazuh-manager
     state: restarted
+
+- name: Restart filebeat
+  systemd:
+    name: filebeat
+    state: restarted
