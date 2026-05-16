@@ -1,0 +1,17 @@
+server.host: "{{ wazuh_dashboard_listen_host }}"
+server.port: {{ wazuh_dashboard_listen_port }}
+opensearch.hosts: ["{{ wazuh_indexer_url }}"]
+opensearch.ssl.verificationMode: none
+opensearch.username: "{{ wazuh_indexer_admin_user }}"
+opensearch.password: "{{ wazuh_indexer_admin_password }}"
+opensearch.requestHeadersWhitelist: ["securitytenant","Authorization"]
+
+opensearch_security.multitenancy.enabled: false
+opensearch_security.readonly_mode.roles: ["kibana_read_only"]
+
+server.ssl.enabled: true
+server.ssl.certificate: /etc/wazuh-dashboard/certs/{{ wazuh_dashboard_node_name }}.pem
+server.ssl.key: /etc/wazuh-dashboard/certs/{{ wazuh_dashboard_node_name }}-key.pem
+opensearch.ssl.certificateAuthorities: ["/etc/wazuh-dashboard/certs/root-ca.pem"]
+
+uiSettings.overrides.defaultRoute: /app/wz-home

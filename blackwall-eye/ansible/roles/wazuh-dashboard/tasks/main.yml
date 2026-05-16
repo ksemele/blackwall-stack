@@ -1,0 +1,114 @@
+---
+- name: Wait for dpkg lock to be released
+  shell: while fuser /var/lib/dpkg/lock-frontend /var/lib/dpkg/lock >/dev/null 2>&1; do sleep 2; done
+  changed_when: false
+
+- name: Install wazuh-dashboard package
+  apt:
+    name: "wazuh-dashboard={{ wazuh_version }}-*"
+    state: present
+    update_cache: true
+
+- name: Ensure /etc/wazuh-dashboard/certs dir exists
+  file:
+    path: /etc/wazuh-dashboard/certs
+    state: directory
+    owner: wazuh-dashboard
+    group: wazuh-dashboard
+    mode: "0500"
+
+- name: Copy dashboard TLS certs from bundle
+  copy:
+    src: "/tmp/wazuh-certificates/{{ item.src }}"
+    dest: "/etc/wazuh-dashboard/certs/{{ item.dest }}"
+    owner: wazuh-dashboard
+    group: wazuh-dashboard
+    mode: "0400"
+    remote_src: true
+  loop:
+    - { src: "root-ca.pem",                              dest: "root-ca.pem" }
+    - { src: "{{ wazuh_dashboard_node_name }}.pem",      dest: "{{ wazuh_dashboard_node_name }}.pem" }
+    - { src: "{{ wazuh_dashboard_node_name }}-key.pem",  dest: "{{ wazuh_dashboard_node_name }}-key.pem" }
+  notify: Restart wazuh-dashboard
+
+- name: Deploy opensearch_dashboards.yml
+  template:
+    src: opensearch_dashboards.yml.j2
+    dest: /etc/wazuh-dashboard/opensearch_dashboards.yml
+    owner: wazuh-dashboard
+    group: wazuh-dashboard
+    mode: "0640"
+  notify: Restart wazuh-dashboard
+
+- name: Compute desired keystore creds hash
+  set_fact:
+    _keystore_desired_hash: "{{ (wazuh_indexer_admin_user + ':' + wazuh_indexer_admin_password) | hash('sha256') }}"
+  no_log: true
+
+- name: Check keystore creds marker
+  stat:
+    path: /usr/share/wazuh-dashboard/data/.blackwall-keystore-hash
+  register: _keystore_marker
+
+- name: Read marker content
+  slurp:
+    src: /usr/share/wazuh-dashboard/data/.blackwall-keystore-hash
+  register: _keystore_marker_content
+  when: _keystore_marker.stat.exists
+
+- name: Set keystore creds when marker missing or stale
+  when:
+    - not _keystore_marker.stat.exists
+      or (_keystore_marker_content.content | b64decode | trim) != _keystore_desired_hash
+  notify: Restart wazuh-dashboard
+  block:
+    - name: Update keystore opensearch.username
+      shell: |
+        echo -n "{{ wazuh_indexer_admin_user }}" | \
+          su -s /bin/bash wazuh-dashboard -c \
+          "/usr/share/wazuh-dashboard/bin/opensearch-dashboards-keystore add -fx opensearch.username"
+
+    - name: Update keystore opensearch.password
+      shell: |
+        echo -n "{{ wazuh_indexer_admin_password }}" | \
+          su -s /bin/bash wazuh-dashboard -c \
+          "/usr/share/wazuh-dashboard/bin/opensearch-dashboards-keystore add -fx opensearch.password"
+      no_log: true
+
+    - name: Write keystore creds marker
+      copy:
+        content: "{{ _keystore_desired_hash }}"
+        dest: /usr/share/wazuh-dashboard/data/.blackwall-keystore-hash
+        owner: wazuh-dashboard
+        group: wazuh-dashboard
+        mode: "0600"
+
+- name: Ensure embedded Wazuh app config dir exists
+  file:
+    path: /usr/share/wazuh-dashboard/data/wazuh/config
+    state: directory
+    owner: wazuh-dashboard
+    group: wazuh-dashboard
+    mode: "0750"
+
+- name: Deploy embedded Wazuh app config (wazuh.yml)
+  template:
+    src: wazuh.yml.j2
+    dest: /usr/share/wazuh-dashboard/data/wazuh/config/wazuh.yml
+    owner: wazuh-dashboard
+    group: wazuh-dashboard
+    mode: "0640"
+  notify: Restart wazuh-dashboard
+
+- name: Enable and start wazuh-dashboard service
+  systemd:
+    name: wazuh-dashboard
+    enabled: true
+    state: started
+    daemon_reload: true
+
+- name: Wait for dashboard HTTPS port (443) to accept connections
+  wait_for:
+    host: 127.0.0.1
+    port: 443
+    timeout: 180
