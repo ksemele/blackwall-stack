@@ -1,0 +1,6 @@
+# Wazuh TLS bundle (generated per environment, do not commit)
+tests/.wazuh-certs/*
+!tests/.wazuh-certs/.gitkeep
+
+# Claude Code per-user local settings
+.claude/settings.local.json
