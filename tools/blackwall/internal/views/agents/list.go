@@ -125,8 +125,19 @@ func (m *Model) View() string {
 			a.ID, a.Name, a.IP, a.Status, lastSeen)
 		if i == m.cursor {
 			row = styles.SelectedRow.Render(row)
-		} else if a.Status != "active" {
-			row = styles.RowDown.Render(row)
+		} else {
+			switch a.Status {
+			case "active":
+				// default — no extra styling
+			case "pending":
+				row = styles.RowPending.Render(row)
+			case "disconnected":
+				row = styles.RowDown.Render(row)
+			case "never_connected":
+				row = styles.RowGhost.Render(row)
+			default:
+				row = styles.RowDown.Render(row)
+			}
 		}
 		fmt.Fprintln(&b, row)
 	}

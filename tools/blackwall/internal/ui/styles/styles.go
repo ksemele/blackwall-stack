@@ -30,6 +30,13 @@ var (
 			Padding(0, 1).
 			Bold(true)
 
-	// RowDown renders a full table row in red to signal an offline/down resource.
+	// RowDown renders a full table row in red to signal an offline/broken resource (disconnected).
 	RowDown = lipgloss.NewStyle().Foreground(lipgloss.Color("9"))
+
+	// RowPending renders a full table row in yellow for transient/recoverable states.
+	RowPending = lipgloss.NewStyle().Foreground(lipgloss.Color("11"))
+
+	// RowGhost renders a full table row in dim grey for agents that were registered
+	// but have never connected (never_connected status).
+	RowGhost = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
 )
