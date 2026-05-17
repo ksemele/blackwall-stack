@@ -45,10 +45,26 @@ func New(cfg config.Config) *Model {
 	}
 	sort.Strings(names)
 	reach := make(map[string]reachState, len(names))
-	for _, n := range names {
+	cursor := 0
+	for i, n := range names {
 		reach[n] = reachPending
+		if n == cfg.Current {
+			cursor = i
+		}
 	}
-	return &Model{cfg: cfg, order: names, reach: reach}
+	return &Model{cfg: cfg, order: names, reach: reach, cursor: cursor}
+}
+
+// UpdateCurrent refreshes the active-context pointer so the cursor
+// tracks the newly selected context on next view open.
+func (m *Model) UpdateCurrent(name string) {
+	m.cfg.Current = name
+	for i, n := range m.order {
+		if n == name {
+			m.cursor = i
+			break
+		}
+	}
 }
 
 func (m *Model) Name() string { return ":contexts" }
