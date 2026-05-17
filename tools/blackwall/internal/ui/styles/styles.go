@@ -17,4 +17,9 @@ var (
 	TabInactive = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
 
 	Error = lipgloss.NewStyle().Foreground(lipgloss.Color("9")).Bold(true)
+
+	// SelectedRow is a full-row k9s-style highlight: cyan background, black foreground.
+	SelectedRow = lipgloss.NewStyle().Bold(true).
+			Background(lipgloss.Color("14")).
+			Foreground(lipgloss.Color("0"))
 )
