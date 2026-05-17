@@ -2,7 +2,7 @@
 
 **Date:** 2026-05-17
 **Status:** Approved (pending user spec review)
-**Scope:** Design of a new k9s-style interactive TUI binary named `blackwall`, intended as the long-term operator UI for the Blackwall project. MVP delivers the first view (`:agents`) and an installation picker. The existing `bw-status` CLI is not touched.
+**Scope:** Design of a new k9s-style interactive TUI binary named `blackwall`, intended as the long-term operator UI for the Blackwall project. MVP delivers two views (`:contexts` picker and `:agents` list with detail drill-down), a tab strip, and a `:` command palette. The existing `bw-status` CLI is not touched.
 
 ---
 
@@ -24,8 +24,8 @@ The new tool is a separate binary, distinct from `bw-status`. The existing tool 
 **Goals (MVP):**
 
 - Single statically-linked binary called `blackwall`.
-- Two functional views: `:installations` (k9s-style context picker) and `:agents` (live agent table + detail screen on Enter).
-- YAML configuration at `~/.config/blackwall/config.yaml`, k9s-style "installations" model with per-subsystem sections (`wazuh:` today; `voice:`/`brain:`/... forward-compatible).
+- Two functional views: `:contexts` (k9s-style context picker) and `:agents` (live agent table + detail screen on Enter).
+- YAML configuration at `~/.config/blackwall/config.yaml`, k9s-style "contexts" model with per-subsystem sections (`wazuh:` today; `voice:`/`brain:`/... forward-compatible).
 - Live refresh of the agent list at a configurable interval, with pause/resume.
 - Vim-style and arrow-key navigation, `:` command palette, `/` filter, `?` help overlay.
 - Resilient runtime: network errors do not crash the app; auth failures are surfaced clearly.
@@ -78,14 +78,15 @@ tools/blackwall/
 │   │   └── app.go                      # root tea.Model: view router, command palette
 │   ├── views/
 │   │   ├── view.go                     # View interface + registry
-│   │   ├── installations/
+│   │   ├── contexts/
 │   │   │   └── list.go                 # picker view
 │   │   └── agents/
 │   │       ├── list.go                 # agents table view + auto-refresh
 │   │       └── detail.go               # agent detail view
 │   ├── ui/
 │   │   ├── styles/styles.go            # lipgloss styles (dark theme)
-│   │   ├── statusbar/statusbar.go      # top: installation, subsystem, refresh state
+│   │   ├── tabbar/tabbar.go            # top: tab strip of registered views (`:contexts`, `:agents`, ...)
+│   │   ├── statusbar/statusbar.go      # under tabs: context, subsystem, refresh state
 │   │   └── footer/footer.go            # bottom: keymap hints
 │   └── tickcmd/tickcmd.go              # tea.Cmd helper for periodic ticks
 └── docs/
@@ -115,9 +116,10 @@ Standard Go layout: `cmd/` for entry points, `internal/` for non-exported packag
 ```yaml
 # ~/.config/blackwall/config.yaml
 
-current: master-00                  # active installation at startup
+current: master-00                  # active context at startup
+select_context_on_start: true       # show :contexts picker on startup (skipped if --context/-c CLI is set)
 
-installations:
+contexts:
 
   master-00:
     description: "Test env (docker) — black-master-00"
@@ -146,7 +148,6 @@ ui:
   refresh_interval:  3s              # time.Duration: "500ms", "2s", "1m"
   theme:             dark            # only dark is implemented in MVP
   vim_keys:          true
-  start_with_picker: true            # show :installations on startup
 
 logging:
   level: warn                        # debug | info | warn | error
@@ -155,30 +156,30 @@ logging:
 
 ### 6.3 Semantics
 
-- An **installation** is a named Blackwall deployment. It contains one section per subsystem (`wazuh:`, future `voice:`, `brain:`, `trap:`, `fang:`).
-- `current` is the default installation at startup (overridable by CLI/env).
-- Views declare which subsystem they read from. `:agents` reads `wazuh:`. If the current installation lacks the required subsystem, the view renders a placeholder explaining how to add it — does not crash.
-- All string values inside `installations.*` are processed by `os.ExpandEnv`, so `${BW_FOO}` is substituted from environment. Useful for keeping passwords out of the file.
-- Empty post-expansion values fail validation at startup with a precise message (`installations.master-00.wazuh.password resolves to empty: BW_MASTER_00_WAZUH_PASSWORD not set`).
+- A **context** is a named Blackwall deployment. It contains one section per subsystem (`wazuh:`, future `voice:`, `brain:`, `trap:`, `fang:`).
+- `current` is the default context at startup (overridable by CLI/env).
+- Views declare which subsystem they read from. `:agents` reads `wazuh:`. If the current context lacks the required subsystem, the view renders a placeholder explaining how to add it — does not crash.
+- All string values inside `contexts.*` are processed by `os.ExpandEnv`, so `${BW_FOO}` is substituted from environment. Useful for keeping passwords out of the file.
+- Empty post-expansion values fail validation at startup with a precise message (`contexts.master-00.wazuh.password resolves to empty: BW_MASTER_00_WAZUH_PASSWORD not set`).
 - If a password is stored verbatim and file permissions are not `0600`, a warning is printed to stderr at startup.
 
 ### 6.4 Source priority
 
 Resolved by `internal/config.Resolve(args, env)` at startup. Highest wins:
 
-1. Built-in defaults (`refresh_interval: 3s`, `theme: dark`, `vim_keys: true`, `start_with_picker: true`, `logging.level: warn`).
-2. Config file `ui:` / `logging:` blocks.
-3. Environment variables: `BW_INSTALLATION`, `BW_REFRESH`, `BW_CONFIG`.
+1. Built-in defaults (`select_context_on_start: true`, `refresh_interval: 3s`, `theme: dark`, `vim_keys: true`, `logging.level: warn`).
+2. Config file top-level / `ui:` / `logging:` blocks.
+3. Environment variables: `BW_CONTEXT`, `BW_REFRESH`, `BW_CONFIG`, `BW_SELECT_CONTEXT_ON_START` (`true`/`false`).
 4. CLI flags (see §6.6).
 
-The `installations` block itself is read only from the config file. Environment affects only which installation is active and `${VAR}` expansion inside values.
+The `contexts` block itself is read only from the config file. Environment affects only which context is active and `${VAR}` expansion inside values.
 
 ### 6.5 First-run UX
 
 If the config file does not exist:
 
 1. Create `~/.config/blackwall/` if missing.
-2. Write a template file (embedded via `go:embed`) containing one `example-master` installation, all `ui:` / `logging:` defaults made explicit, and inline comments.
+2. Write a template file (embedded via `go:embed`) containing one `example-master` context, all `ui:` / `logging:` defaults made explicit, and inline comments.
 3. Print to stderr:
 
    ```
@@ -195,15 +196,19 @@ The app does **not** attempt to start with the example template — the example 
 ```
 blackwall [flags]
 
-  -i, --installation NAME    override `current`
-      --config PATH          override config file path
-      --refresh DURATION     override ui.refresh_interval
-      --once                 print agents table once to stdout and exit (no TUI)
+      --context NAME             override `current`; also implies select_context_on_start=false
+      --config PATH              override config file path
+      --refresh DURATION         override ui.refresh_interval
+      --select-context-on-start  force-enable the startup picker (overrides config)
+      --no-select-context        force-disable the startup picker (overrides config)
+      --once                     print agents table once to stdout and exit (no TUI)
       --version
       --help
 ```
 
-Per-subsystem overrides (`--host`, `--user`, `--password`) are intentionally absent — in the installation model there is no "default subsystem" to override, and adding a new installation in the config (5 lines) is the canonical workflow.
+`--context` is long-only (no short flag, matches `kubectl`/k9s convention; `-c` is reserved for `--config` in the future if shortened).
+
+Per-subsystem overrides (`--host`, `--user`, `--password`) are intentionally absent — in the context model there is no "default subsystem" to override, and adding a new context in the config (5 lines) is the canonical workflow.
 
 ## 7. Startup flow
 
@@ -214,14 +219,14 @@ parse CLI / env / config
 validate (subsystem references, env expansion, TLS files, file perms)
        │
        ▼
-construct app.Model with all installations, mark which one is "current"
+construct app.Model with all contexts, mark which one is "current"
        │
        ▼
 decide startup view:
-  ├── if --installation or BW_INSTALLATION provided
-  │      → go directly to :agents of that installation
-  ├── else if ui.start_with_picker == true
-  │      → start in :installations picker
+  ├── if --context or BW_CONTEXT provided
+  │      → go directly to :agents of that context
+  ├── else if select_context_on_start == true
+  │      → start in :contexts picker
   └── else
          → go to :agents of `current`
        │
@@ -247,7 +252,7 @@ Bubbletea is Elm in Go:
 `internal/app/app.go` holds:
 
 - the active view (one of the registered views);
-- a reference to the resolved config and a `wazuh.Client` for the current installation;
+- a reference to the resolved config and a `wazuh.Client` for the current context;
 - the command palette state (`:` open/closed, current input);
 - the status-bar widget and footer widget.
 
@@ -255,7 +260,7 @@ Root `Update` does only:
 
 - global hotkeys: `q` / `Ctrl+C` quit, `:` open palette, `?` toggle help, `Ctrl+R` force refresh, `p` pause/resume;
 - delivers all other messages to the active view;
-- handles routing messages (`SwitchViewMsg`, `InstallationChangedMsg`, `BackToPreviousViewMsg`).
+- handles routing messages (`SwitchViewMsg`, `ContextChangedMsg`, `BackToPreviousViewMsg`).
 
 ### 8.3 View interface
 
@@ -264,7 +269,7 @@ Root `Update` does only:
 
 type View interface {
     tea.Model                            // Init / Update / View
-    Name() string                        // ":agents", ":installations", ...
+    Name() string                        // ":agents", ":contexts", ...
     KeyBindings() []key.Binding          // for the footer / help overlay
 }
 ```
@@ -275,9 +280,48 @@ Registration is a simple map in `app.Model.views`. Adding a new view is:
 2. Implement `View`.
 3. One line in the registry.
 
-### 8.4 `:installations` view
+### 8.4 Tab bar and view navigation
 
-`internal/views/installations/list.go`. Reads from `app.Model.config.Installations`. Background goroutine pings each installation's Wazuh server (`GET /`, no auth) on entry to populate the `STATUS` column. Pings are throttled (one per 5s) and cancelled on view exit.
+In addition to the `:` command palette, top-level views are reachable through a **tab strip** at the top of the screen — the same idiom as `lazygit`, `btop`, browser tabs. The two mechanisms coexist intentionally so we can test both UX paths in practice and decide which one the operator actually prefers.
+
+**Render:**
+
+```
+┌ [1] :contexts │ [2] :agents ───────────────────────────────────────────┐
+│ context: master-00 · wazuh: 172.28.0.10:55000 · ↻ live (3s)            │
+├────────────────────────────────────────────────────────────────────────┤
+│ <active view content>                                                   │
+│                                                                         │
+├────────────────────────────────────────────────────────────────────────┤
+│ [↑↓] nav  [↵] open  [/] filter  [Tab] next view  [:] cmd  [?] help     │
+└────────────────────────────────────────────────────────────────────────┘
+```
+
+- Tab strip lives in `internal/ui/tabbar/`. Active tab is bold + underlined; inactive tabs are dim.
+- Tabs are built from the **registered view order** in `app.Model.views`. MVP order: `:contexts` → `:agents`. Adding a view in the future means one entry in the registry — the tab appears automatically.
+- Only **top-level views** are tabs. Sub-screens (e.g. agent detail) are not separate tabs; they live inside their parent view and are navigated via Enter/Esc.
+
+**Hotkeys (global, handled by `app.Model.Update`):**
+
+| Key | Action |
+|---|---|
+| `1`–`9` | jump directly to tab N (no-op if out of range) |
+| `Tab` | next tab (wraps) |
+| `Shift+Tab` | previous tab (wraps) |
+
+Number keys do not conflict with view-local input because any `/` filter or `:` palette is modal — while a text input is focused, all keys go to that input.
+
+**Visibility:** the tab bar is always rendered, even when only one view exists, so the user discovers tabs early. Configurable hiding can be added later if it becomes noise; **not** in MVP.
+
+**Coexistence with `:` palette:**
+- `Tab` / numbers — fast switch between known views.
+- `:contexts` / `:agents` — discoverability, scriptability, switching when you don't remember the index, and the only way to do non-tab actions (`:q`, `:ctx prod-eu-1`).
+
+Both produce the same internal `SwitchViewMsg{name}` — there is one code path for view switching, two input paths.
+
+### 8.5 `:contexts` view
+
+`internal/views/contexts/list.go`. Reads from `app.Model.config.Contexts`. Background goroutine pings each context's Wazuh server (`GET /`, no auth) on entry to populate the `STATUS` column. Pings are throttled (one per 5s) and cancelled on view exit.
 
 Columns: `NAME | DESCRIPTION | WAZUH SERVER | STATUS`.
 
@@ -285,11 +329,11 @@ Keys:
 
 - `↑↓` / `jk` — move cursor.
 - `/` — filter by name/description substring.
-- `Enter` — switch to `:agents` of the selected installation; `current` in the config file is **not** modified.
+- `Enter` — switch to `:agents` of the selected context; `current` in the config file is **not** modified.
 - `c` — "set current and select": persist the choice to the config file (with file lock and atomic rename) **and** switch.
 - `Esc` — return to previous view (no-op if this was the startup view).
 
-### 8.5 `:agents` view
+### 8.6 `:agents` view
 
 Two sub-screens — list and detail — implemented as separate models inside `internal/views/agents/`. The list owns the auto-refresh loop; the detail is a transient screen entered via Enter.
 
@@ -307,14 +351,14 @@ Two sub-screens — list and detail — implemented as separate models inside `i
 - On `agentDetailLoadedMsg{detail, err}`: render grid (ID, name, status, IP, version, OS, last seen, registered, group(s), manager, key config values).
 - Hotkeys: `Esc` / `←` back to list, `r` re-fetch, `y` yank ID to clipboard (if `OSC 52` write succeeds; otherwise no-op + footer message).
 
-### 8.6 `wazuh.Client`
+### 8.7 `wazuh.Client`
 
 ```go
 // internal/wazuh/client.go
 
 type Client struct {
     baseURL    string
-    httpClient *http.Client            // configured for TLS per installation
+    httpClient *http.Client            // configured for TLS per context
     user       string
     password   string
     token      string
@@ -328,11 +372,11 @@ func (c *Client) GetAgent(ctx context.Context, id string) (AgentDetail, error)
 ```
 
 - Authenticates on first call; auto-refreshes JWT on `401` (Wazuh tokens live ~15min).
-- All methods take `context.Context` — in-flight requests are cancelled when the user leaves a screen or switches installations.
-- TLS: per-installation `http.Transport` honouring `insecure_skip_verify` and `ca_file`.
+- All methods take `context.Context` — in-flight requests are cancelled when the user leaves a screen or switches contexts.
+- TLS: per-context `http.Transport` honouring `insecure_skip_verify` and `ca_file`.
 - No global state; `Client` is owned by `app.Model` and passed to views as a dependency.
 
-### 8.7 Data flow example (Enter on an agent row)
+### 8.8 Data flow example (Enter on an agent row)
 
 ```
 keypress "Enter"
@@ -364,7 +408,7 @@ detail.Update applies data; View() renders the grid
 
 The UI remains responsive throughout — network calls run in goroutines, rendering happens after the message returns.
 
-### 8.8 Refresh loop
+### 8.9 Refresh loop
 
 `internal/tickcmd/tickcmd.go`:
 
@@ -389,15 +433,18 @@ Concurrent fetches are reconciled via monotonic `reqID`; stale responses are dro
 |---|---|---|
 | Global | `q`, `Ctrl+C` | quit |
 | Global | `?` | toggle help overlay (lists all bindings for active view) |
-| Global | `:` | open command palette (`:agents`, `:installations`, `:i prod-eu-1`, `:q`) |
+| Global | `:` | open command palette (`:agents`, `:contexts`, `:ctx prod-eu-1`, `:q`) |
 | Global | `Ctrl+R` | force refresh now |
 | Global | `p` | pause / resume auto-refresh |
-| `:installations` | `↑↓` / `jk` | move cursor |
-| `:installations` | `g` / `G` | top / bottom |
-| `:installations` | `/` | filter by name/description |
-| `:installations` | `Enter` | open `:agents` of selected installation |
-| `:installations` | `c` | persist as `current` and open |
-| `:installations` | `Esc` | back to previous view |
+| Global | `Tab` | next view (tab bar) |
+| Global | `Shift+Tab` | previous view (tab bar) |
+| Global | `1`–`9` | jump to view by tab index |
+| `:contexts` | `↑↓` / `jk` | move cursor |
+| `:contexts` | `g` / `G` | top / bottom |
+| `:contexts` | `/` | filter by name/description |
+| `:contexts` | `Enter` | open `:agents` of selected context |
+| `:contexts` | `c` | persist as `current` and open |
+| `:contexts` | `Esc` | back to previous view |
 | `:agents` list | `↑↓` / `jk` | move cursor |
 | `:agents` list | `g` / `G` | top / bottom |
 | `:agents` list | `/` | filter by id/name/ip substring |
@@ -418,9 +465,9 @@ TUI rules differ from CLI — no "crash and print." Categories:
 
 | Class | Behaviour |
 |---|---|
-| Fatal at startup (unreadable config, undefined installation, missing required subsystem for default view, empty post-expansion env, missing `ca_file`) | Print precise message to stderr, exit non-zero, before `tea.NewProgram` runs |
+| Fatal at startup (unreadable config, undefined context, missing required subsystem for default view, empty post-expansion env, missing `ca_file`) | Print precise message to stderr, exit non-zero, before `tea.NewProgram` runs |
 | Connection refused / timeout | Status-bar: `⚠ unreachable (retry in 3s)`; table keeps previous data, dimmed; consecutive failures counted (`⚠ unreachable ×3`) |
-| `401 Unauthorized` | Immediate re-authenticate (token might have expired early). If second attempt also `401` → modal: `Authentication failed for installation "X". Check wazuh.user / wazuh.password.` with options `:installations` or `q` |
+| `401 Unauthorized` | Immediate re-authenticate (token might have expired early). If second attempt also `401` → modal: `Authentication failed for context "X". Check wazuh.user / wazuh.password.` with options `:contexts` or `q` |
 | `5xx` | Same UX as unreachable, with `⚠ manager error (HTTP 503)`. Body logged at debug level |
 | TLS verification failure | Modal with explicit guidance: `TLS verification failed. Set tls.insecure_skip_verify: true or provide tls.ca_file.` No silent fallback to insecure |
 | Detail view: agent removed between fetches (`404`) | Inline notice `Agent no longer exists`; `Esc` returns to list, which refreshes on next tick |
@@ -434,7 +481,7 @@ Modals use a bubbletea overlay widget: dim background, centered message, `Esc` t
 - Format: line-based JSON via `slog.NewJSONHandler` for easy `jq` consumption.
 - Levels:
   - `debug` — HTTP request/response bodies, tea message trace.
-  - `info` — startup/shutdown, installation switch, successful auth.
+  - `info` — startup/shutdown, context switch, successful auth.
   - `warn` — recoverable errors.
   - `error` — fatal errors that exit the app.
 - `stderr` is used **only** for startup-fatal errors. During TUI runtime, all logs go to the file; writing to stderr would corrupt the render.
@@ -448,11 +495,11 @@ Layered, each layer independent.
 **`internal/config` — pure logic:**
 
 - Parse valid YAML → expected struct.
-- `current` selection; override via `--installation` / `BW_INSTALLATION`.
+- `current` selection; override via `--context` / `BW_CONTEXT`.
 - `${VAR}` expansion; empty post-expansion → error.
 - Defaults applied for missing `ui:` / `logging:` fields.
-- Invalid YAML / missing installation / missing required subsystem → precise error.
-- `ui.start_with_picker` default = `true` when absent.
+- Invalid YAML / missing context / missing required subsystem → precise error.
+- `select_context_on_start` default = `true` when absent; `--no-select-context` flag forces off.
 
 **`internal/wazuh` — real HTTP against `httptest.Server`:**
 
@@ -468,15 +515,15 @@ Layered, each layer independent.
 - `wazuh.Client` substituted by an in-memory fake (struct with predefined `[]Agent`).
 - Cases: empty list → "No agents" notice; `tickMsg` → fetch fires; `Enter` on row → `SwitchToDetailMsg{id}`; `p` → `paused=true`, next tick skips fetch; `/foo` → table filters by substring; stale `reqID` response is ignored.
 
-**`internal/views/installations` — same approach:**
+**`internal/views/contexts` — same approach:**
 
-- Picker renders all installations from config.
-- `Enter` produces `InstallationChangedMsg`, does not touch config file.
+- Picker renders all contexts from config.
+- `Enter` produces `ContextChangedMsg`, does not touch config file.
 - `c` writes config file atomically (temp file + `rename`).
 
 **Smoke E2E:**
 
-- Script at `tools/blackwall/scripts/smoke.sh` brings up the docker test env, waits for the manager to respond, runs `blackwall --once --installation master-00`, greps for `Active`. Exits non-zero on failure. Not a TUI test, but exercises the full `config + wazuh.Client` chain against a real Wazuh API.
+- Script at `tools/blackwall/scripts/smoke.sh` brings up the docker test env, waits for the manager to respond, runs `blackwall --once --context master-00`, greps for `Active`. Exits non-zero on failure. Not a TUI test, but exercises the full `config + wazuh.Client` chain against a real Wazuh API.
 
 **Out of scope for MVP:**
 
@@ -510,5 +557,6 @@ Layered, each layer independent.
 ## 15. Open questions
 
 - Go module path (see §13).
-- Whether `:installations` should also show installations that fail YAML schema validation (with a `⚠ invalid` status) or hide them entirely. **Tentative:** hide and warn at startup; revisit if confusing in practice.
-- Whether to persist the table sort/filter state per installation across restarts. **Tentative:** no, restart returns to defaults. Cheap to add later if requested.
+- Whether `:contexts` should also show contexts that fail YAML schema validation (with a `⚠ invalid` status) or hide them entirely. **Tentative:** hide and warn at startup; revisit if confusing in practice.
+- Whether to persist the table sort/filter state per context across restarts. **Tentative:** no, restart returns to defaults. Cheap to add later if requested.
+- Tab bar vs. command palette: both ship in MVP so we can compare them in practice. After a few weeks of use, decide whether to keep both, hide the tab bar (config opt-in), or simplify the palette. **Tentative:** keep both indefinitely — they serve different ergonomics (muscle-memory tabs vs. discoverable palette).
