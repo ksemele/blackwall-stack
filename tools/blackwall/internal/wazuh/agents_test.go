@@ -61,3 +61,82 @@ func TestListAgents_ContextCancel(t *testing.T) {
 		t.Fatal("ListAgents: expected error on cancelled context")
 	}
 }
+
+func TestGetAgent_OK(t *testing.T) {
+	srv := newServer(t, func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/security/user/authenticate":
+			_ = json.NewEncoder(w).Encode(authResponse{Data: struct {
+				Token string `json:"token"`
+			}{Token: "tok"}})
+		case "/agents":
+			if r.URL.Query().Get("agents_list") != "001" {
+				t.Errorf("agents_list = %q, want 001", r.URL.Query().Get("agents_list"))
+			}
+			_ = json.NewEncoder(w).Encode(singleAgentResponse{Data: struct {
+				AffectedItems []Agent `json:"affected_items"`
+			}{AffectedItems: []Agent{
+				{ID: "001", Name: "host-01", Status: "active"},
+			}}})
+		}
+	})
+	c, _ := New(subFromServer(srv, "u", "p"))
+	c.insecureScheme = "http"
+
+	got, err := c.GetAgent(context.Background(), "001")
+	if err != nil {
+		t.Fatalf("GetAgent: %v", err)
+	}
+	if got.ID != "001" {
+		t.Errorf("ID = %q, want 001", got.ID)
+	}
+}
+
+func TestGetAgent_NotFound(t *testing.T) {
+	srv := newServer(t, func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/security/user/authenticate":
+			_ = json.NewEncoder(w).Encode(authResponse{Data: struct {
+				Token string `json:"token"`
+			}{Token: "tok"}})
+		case "/agents":
+			// Empty affected_items list = not found.
+			_ = json.NewEncoder(w).Encode(singleAgentResponse{})
+		}
+	})
+	c, _ := New(subFromServer(srv, "u", "p"))
+	c.insecureScheme = "http"
+
+	_, err := c.GetAgent(context.Background(), "999")
+	if err != ErrAgentNotFound {
+		t.Errorf("err = %v, want ErrAgentNotFound", err)
+	}
+}
+
+func TestDoAuthed_RetriesOn401(t *testing.T) {
+	calls := 0
+	srv := newServer(t, func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/security/user/authenticate":
+			_ = json.NewEncoder(w).Encode(authResponse{Data: struct {
+				Token string `json:"token"`
+			}{Token: "tok"}})
+		case "/agents":
+			calls++
+			if calls == 1 {
+				w.WriteHeader(http.StatusUnauthorized)
+				return
+			}
+			_ = json.NewEncoder(w).Encode(agentsResponse{})
+		}
+	})
+	c, _ := New(subFromServer(srv, "u", "p"))
+	c.insecureScheme = "http"
+
+	if _, err := c.ListAgents(context.Background()); err != nil {
+		t.Fatalf("ListAgents: %v", err)
+	}
+	if calls != 2 {
+		t.Errorf("agents calls = %d, want 2 (initial + retry)", calls)
+	}
+}
