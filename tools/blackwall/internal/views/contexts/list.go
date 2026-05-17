@@ -2,6 +2,7 @@
 package contexts
 
 import (
+	"context"
 	"fmt"
 	"sort"
 	"strings"
@@ -12,12 +13,29 @@ import (
 	"github.com/greengrunt/blackwall/tools/blackwall/internal/config"
 	"github.com/greengrunt/blackwall/tools/blackwall/internal/ui/footer"
 	"github.com/greengrunt/blackwall/tools/blackwall/internal/ui/styles"
+	"github.com/greengrunt/blackwall/tools/blackwall/internal/wazuh"
 )
+
+// reachability states for the circle indicator.
+type reachState int
+
+const (
+	reachPending reachState = iota // probing in progress
+	reachUp                        // responded
+	reachDown                      // unreachable
+)
+
+// ProbeResultMsg carries the result of a single context probe.
+type ProbeResultMsg struct {
+	Name  string
+	Reach reachState
+}
 
 type Model struct {
 	cfg    config.Config
 	order  []string
 	cursor int
+	reach  map[string]reachState // per-context reachability cache
 }
 
 func New(cfg config.Config) *Model {
@@ -26,7 +44,11 @@ func New(cfg config.Config) *Model {
 		names = append(names, n)
 	}
 	sort.Strings(names)
-	return &Model{cfg: cfg, order: names}
+	reach := make(map[string]reachState, len(names))
+	for _, n := range names {
+		reach[n] = reachPending
+	}
+	return &Model{cfg: cfg, order: names, reach: reach}
 }
 
 func (m *Model) Name() string { return ":contexts" }
@@ -34,17 +56,52 @@ func (m *Model) Name() string { return ":contexts" }
 func (m *Model) Hints() []footer.Hint {
 	return []footer.Hint{
 		{Key: "↑↓", Desc: "nav"},
-		{Key: "↵", Desc: "open"},
-		{Key: "c", Desc: "set current"},
-		{Key: "/", Desc: "filter"},
+		{Key: "↵", Desc: "switch"},
+		{Key: "ctrl+r", Desc: "re-probe"},
 	}
 }
 
-func (m *Model) Init() tea.Cmd { return nil }
+// Init fires async probes for every context with a Wazuh subsystem.
+func (m *Model) Init() tea.Cmd {
+	// Reset all to pending on each open/re-init.
+	for _, n := range m.order {
+		m.reach[n] = reachPending
+	}
+	return m.probeAllCmd()
+}
+
+func (m *Model) probeAllCmd() tea.Cmd {
+	cmds := make([]tea.Cmd, 0, len(m.order))
+	for _, name := range m.order {
+		ctx := m.cfg.Contexts[name]
+		if ctx.Wazuh == nil {
+			cmds = append(cmds, func() tea.Msg {
+				return ProbeResultMsg{Name: name, Reach: reachDown}
+			})
+			continue
+		}
+		sub := *ctx.Wazuh
+		n := name // capture
+		cmds = append(cmds, func() tea.Msg {
+			err := wazuh.Probe(context.Background(), sub)
+			r := reachUp
+			if err != nil {
+				r = reachDown
+			}
+			return ProbeResultMsg{Name: n, Reach: r}
+		})
+	}
+	return tea.Batch(cmds...)
+}
 
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	if km, ok := msg.(tea.KeyMsg); ok {
-		switch km.String() {
+	switch msg := msg.(type) {
+	case ProbeResultMsg:
+		m.reach[msg.Name] = msg.Reach
+		return m, nil
+
+	case tea.KeyMsg:
+		switch msg.String() {
 		case "up", "k":
 			if m.cursor > 0 {
 				m.cursor--
@@ -58,6 +115,11 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, func() tea.Msg { return app.ContextChangedMsg{Name: name} }
 		case "esc":
 			return m, func() tea.Msg { return app.BackMsg{} }
+		case "ctrl+r":
+			for _, n := range m.order {
+				m.reach[n] = reachPending
+			}
+			return m, m.probeAllCmd()
 		}
 	}
 	return m, nil
@@ -70,18 +132,31 @@ func (m *Model) contextAt(i int) string {
 	return m.order[i]
 }
 
+func (m *Model) circle(name string) string {
+	switch m.reach[name] {
+	case reachUp:
+		return styles.Active.Render("●")
+	case reachDown:
+		return styles.Disconnected.Render("●")
+	default: // reachPending
+		return styles.Pending.Render("●")
+	}
+}
+
 func (m *Model) View() string {
 	var b strings.Builder
-	b.WriteString("NAME              DESCRIPTION                       WAZUH SERVER\n")
+	b.WriteString("  NAME              DESCRIPTION                       WAZUH SERVER\n")
 	for i, name := range m.order {
 		ctx := m.cfg.Contexts[name]
 		server := ""
 		if ctx.Wazuh != nil {
 			server = fmt.Sprintf("%s:%d", ctx.Wazuh.Server, ctx.Wazuh.Port)
 		}
-		row := fmt.Sprintf("%-16s  %-32s  %s", name, ctx.Description, server)
+		circle := m.circle(name)
+		row := fmt.Sprintf("%s %-16s  %-32s  %s", circle, name, ctx.Description, server)
 		if i == m.cursor {
-			row = styles.SelectedRow.Render(row)
+			row = styles.SelectedRow.Render(fmt.Sprintf("%-16s  %-32s  %s", name, ctx.Description, server))
+			row = circle + " " + row
 		}
 		fmt.Fprintln(&b, row)
 	}
