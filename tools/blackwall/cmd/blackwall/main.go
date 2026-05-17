@@ -133,7 +133,7 @@ func run() error {
 	}
 
 	ctxView := ctxview.New(cfg)
-	agentsList := agentsview.New(client, cfg.UI.RefreshInterval)
+	agentsList := agentsview.NewView(client, cfg.UI.RefreshInterval)
 	registered := []views.View{ctxView, agentsList}
 
 	initial := ":agents"
