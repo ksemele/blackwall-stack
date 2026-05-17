@@ -8,6 +8,7 @@ import (
 
 	"github.com/greengrunt/blackwall/tools/blackwall/internal/ui/footer"
 	"github.com/greengrunt/blackwall/tools/blackwall/internal/ui/statusbar"
+	"github.com/greengrunt/blackwall/tools/blackwall/internal/ui/styles"
 	"github.com/greengrunt/blackwall/tools/blackwall/internal/ui/tabbar"
 	"github.com/greengrunt/blackwall/tools/blackwall/internal/views"
 )
@@ -29,7 +30,10 @@ type Model struct {
 	active      int
 	status      func() statusbar.State
 	pauseToggle func()
-	// palette state will be added in Task 16.
+
+	paletteOpen  bool
+	paletteInput string
+	paletteErr   string
 }
 
 func New(d Deps) *Model {
@@ -55,6 +59,45 @@ func (m *Model) Init() tea.Cmd {
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
+		if m.paletteOpen {
+			switch msg.String() {
+			case "esc":
+				m.paletteOpen = false
+				m.paletteInput = ""
+				m.paletteErr = ""
+				return m, nil
+			case "enter":
+				names := viewNames(m.views)
+				out, err := parsePalette(m.paletteInput, names)
+				if err != nil {
+					m.paletteErr = err.Error()
+					return m, nil
+				}
+				m.paletteOpen = false
+				m.paletteInput = ""
+				m.paletteErr = ""
+				if _, ok := out.(QuitMsg); ok {
+					return m, tea.Quit
+				}
+				return m.Update(out)
+			case "backspace":
+				if n := len(m.paletteInput); n > 0 {
+					m.paletteInput = m.paletteInput[:n-1]
+				}
+				return m, nil
+			default:
+				if msg.Type == tea.KeyRunes {
+					m.paletteInput += string(msg.Runes)
+				}
+				return m, nil
+			}
+		}
+		if msg.String() == ":" {
+			m.paletteOpen = true
+			m.paletteInput = ":"
+			m.paletteErr = ""
+			return m, nil
+		}
 		switch msg.String() {
 		case "q", "ctrl+c":
 			return m, tea.Quit
@@ -107,6 +150,12 @@ func (m *Model) View() string {
 		status = statusbar.Render(statusbar.State{Refresh: time.Second})
 	}
 	body := m.Active().View()
+	if m.paletteOpen {
+		body += "\n\n> " + m.paletteInput
+		if m.paletteErr != "" {
+			body += "\n" + styles.Error.Render(m.paletteErr)
+		}
+	}
 	foot := footer.Render(m.Active().Hints())
 	return strings.Join([]string{tab, status, body, foot}, "\n")
 }
@@ -120,4 +169,12 @@ func singleDigit(s string) int {
 		return 0
 	}
 	return int(c - '0')
+}
+
+func viewNames(vs []views.View) []string {
+	out := make([]string, len(vs))
+	for i, v := range vs {
+		out[i] = v.Name()
+	}
+	return out
 }
