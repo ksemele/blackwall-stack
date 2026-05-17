@@ -3,7 +3,7 @@ module: blackwall-eye
 status: in_progress
 stage: 1
 last_updated: 2026-05-17
-last_task: "TUI polish: thin header divider, right-aligned version (v0.0.1) in tab bar, help view (:help) with grouped shortcuts, ? key to open, ESC to close, [?] help hint in all view footers"
+last_task: "TUI layout polish: k9s-style flex column table helper (rows stretch to terminal width — fixes truncated selection highlight), active tab as yellow badge matching context badge, footer pinned to terminal bottom with a second divider above it"
 next_task: "Interactive smoke test against live Docker env; add filter (/) to agents and contexts lists; auto-clear error footer message after timeout"
 blockers: []
 ---
