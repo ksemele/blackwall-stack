@@ -5,6 +5,7 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 
 	"github.com/greengrunt/blackwall/tools/blackwall/internal/ui/footer"
 	"github.com/greengrunt/blackwall/tools/blackwall/internal/ui/statusbar"
@@ -42,6 +43,7 @@ type Model struct {
 	active      int
 	version     string
 	width       int
+	height      int
 	status      func() statusbar.State
 	pauseToggle func()
 	switchCtx   func(name string) tea.Cmd
@@ -86,9 +88,26 @@ func (m *Model) Init() tea.Cmd {
 }
 
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	// Track terminal width for right-aligned layout.
+	// Track terminal size for right-aligned layout and footer pinning.
+	// Broadcast the size to every view (including the help overlay) so an
+	// inactive view has the correct width on its first render after
+	// activation.
 	if ws, ok := msg.(tea.WindowSizeMsg); ok {
 		m.width = ws.Width
+		m.height = ws.Height
+		for i, v := range m.views {
+			next, _ := v.Update(ws)
+			if vv, ok := next.(views.View); ok {
+				m.views[i] = vv
+			}
+		}
+		if m.helpView != nil {
+			next, _ := m.helpView.Update(ws)
+			if vv, ok := next.(views.View); ok {
+				m.helpView = vv
+			}
+		}
+		return m, nil
 	}
 
 	switch msg := msg.(type) {
@@ -232,7 +251,8 @@ func (m *Model) View() string {
 		status = statusbar.Render(statusbar.State{Refresh: time.Second})
 	}
 
-	// Thin horizontal rule that separates header chrome from view body.
+	// Horizontal rule used to bracket the body — one above (separating from
+	// the header chrome) and one below (separating from the footer).
 	ruleWidth := m.width
 	if ruleWidth <= 0 {
 		ruleWidth = 80 // sane fallback before first WindowSizeMsg
@@ -246,13 +266,27 @@ func (m *Model) View() string {
 			body += "\n" + styles.Error.Render(m.paletteErr)
 		}
 	}
+	body = strings.TrimRight(body, "\n")
+
 	foot := footer.Render(m.Active().Hints())
-	parts := []string{tab, status, rule}
+
+	headerParts := []string{tab, status, rule}
 	if m.footerMsg != "" {
-		parts = append(parts, styles.Active.Render(m.footerMsg))
+		headerParts = append(headerParts, styles.Active.Render(m.footerMsg))
 	}
-	parts = append(parts, body, foot)
-	return strings.Join(parts, "\n")
+	header := strings.Join(headerParts, "\n")
+	bottom := rule + "\n" + foot
+
+	// Pad the body with blank lines so the bottom rule + footer sit on the
+	// last terminal row.  Skip when we have no height yet (pre-resize).
+	if m.height > 0 {
+		target := m.height - lipgloss.Height(header) - lipgloss.Height(bottom)
+		if pad := target - lipgloss.Height(body); pad > 0 {
+			body += strings.Repeat("\n", pad)
+		}
+	}
+
+	return header + "\n" + body + "\n" + bottom
 }
 
 func singleDigit(s string) int {

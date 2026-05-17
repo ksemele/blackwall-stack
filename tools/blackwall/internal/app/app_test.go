@@ -1,9 +1,11 @@
 package app
 
 import (
+	"strings"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 
 	"github.com/greengrunt/blackwall/tools/blackwall/internal/ui/footer"
 	"github.com/greengrunt/blackwall/tools/blackwall/internal/views"
@@ -58,6 +60,28 @@ func TestApp_NumberKeyJumps(t *testing.T) {
 	got, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'3'}})
 	if got.(*Model).Active().Name() != ":c" {
 		t.Errorf("after '3' active = %q, want :c", got.(*Model).Active().Name())
+	}
+}
+
+func TestApp_PinsFooterToBottomOnResize(t *testing.T) {
+	a := fakeView{name: ":a", rendered: "one\ntwo\n"}
+	m := New(Deps{Views: []views.View{&a}, InitialView: ":a"})
+
+	const height = 20
+	_, _ = m.Update(tea.WindowSizeMsg{Width: 80, Height: height})
+
+	out := m.View()
+	if h := lipgloss.Height(out); h != height {
+		t.Fatalf("rendered height = %d, want %d", h, height)
+	}
+	lines := strings.Split(out, "\n")
+	// Last line is the footer (empty here, since fakeView has no hints).
+	// Second-to-last must be the horizontal rule separating body from footer.
+	if len(lines) < 2 {
+		t.Fatalf("expected at least 2 lines, got %d", len(lines))
+	}
+	if !strings.Contains(lines[len(lines)-2], "─") {
+		t.Errorf("expected divider on line above footer, got %q", lines[len(lines)-2])
 	}
 }
 
