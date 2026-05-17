@@ -147,7 +147,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.footerMsg = "⚠ context switch failed: " + msg.Err.Error()
 			return m, nil
 		}
-		m.footerMsg = "→ context: " + msg.Name
+		m.footerMsg = ""
 		// Navigate to agents view.
 		for i, v := range m.views {
 			if v.Name() == ":agents" {
