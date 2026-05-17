@@ -36,9 +36,6 @@ func Render(viewNames []string, active int, width int, version string) string {
 	verLabel := styles.TabInactive.Render(version)
 	leftWidth := lipgloss.Width(left)
 	verWidth := lipgloss.Width(verLabel)
-	gap := width - leftWidth - verWidth
-	if gap < 1 {
-		gap = 1
-	}
+	gap := max(width - leftWidth - verWidth, 1)
 	return left + strings.Repeat(" ", gap) + verLabel
 }
