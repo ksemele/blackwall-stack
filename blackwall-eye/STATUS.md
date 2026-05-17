@@ -3,7 +3,7 @@ module: blackwall-eye
 status: in_progress
 stage: 1
 last_updated: 2026-05-17
-last_task: "Broken agent fixtures: black-ghost-99 (never_connected) + black-dead-98 (disconnected); broken-agents.yml playbook; per-status TUI row colors (active/pending/disconnected/never_connected)"
+last_task: "TUI polish: thin header divider, right-aligned version (v0.0.1) in tab bar, help view (:help) with grouped shortcuts, ? key to open, ESC to close, [?] help hint in all view footers"
 next_task: "Interactive smoke test against live Docker env; add filter (/) to agents and contexts lists; auto-clear error footer message after timeout"
 blockers: []
 ---
