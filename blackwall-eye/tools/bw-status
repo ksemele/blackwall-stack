@@ -122,12 +122,6 @@ def get_os_string(agent: dict) -> str:
     return name or "—"
 
 
-def format_status(status: str, use_color: bool) -> str:
-    padded = status.ljust(15)
-    color = STATUS_COLORS.get(status, "")
-    return colorize(padded, color, use_color)
-
-
 def count_by_status(agents: list) -> dict:
     counts: dict = {}
     for agent in agents:
@@ -138,25 +132,42 @@ def count_by_status(agents: list) -> dict:
 
 def print_table(agents: list, manager_host: str, manager_port: int, use_color: bool) -> None:
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    sep = "─" * 68
+
+    headers = ("ID", "NAME", "IP", "STATUS", "LAST SEEN", "OS")
+    rows = []
+    for agent in sorted(agents, key=lambda a: a.get("id", "999")):
+        rows.append((
+            agent.get("id", "?"),
+            agent.get("name", "?"),
+            agent.get("ip", "?") or "?",
+            agent.get("status", "unknown"),
+            parse_last_seen(agent.get("lastKeepAlive")),
+            get_os_string(agent),
+        ))
+
+    widths = [
+        max([len(headers[i])] + [len(row[i]) for row in rows])
+        for i in range(len(headers))
+    ]
+    sep = "─" * (sum(widths) + len(widths) - 1)
 
     header_label = colorize("BLACKWALL — агент статус", BOLD + CYAN, use_color)
     print(header_label)
     print(f"Manager: {manager_host}:{manager_port}   ({now})")
     print(sep)
-    print(f"{'ID':<5} {'NAME':<12} {'IP':<17} {'STATUS':<16} {'LAST SEEN':<17} OS")
+    print(" ".join(headers[i].ljust(widths[i]) for i in range(len(headers))))
     print(sep)
 
-    for agent in sorted(agents, key=lambda a: a.get("id", "999")):
-        agent_id     = agent.get("id", "?")
-        name         = agent.get("name", "?")
-        ip           = agent.get("ip", "?") or "?"
-        status       = agent.get("status", "unknown")
-        last_seen    = parse_last_seen(agent.get("lastKeepAlive"))
-        os_str       = get_os_string(agent)
-        status_col   = format_status(status, use_color)
-
-        print(f"{agent_id:<5} {name:<12} {ip:<17} {status_col} {last_seen:<17} {os_str}")
+    for agent_id, name, ip, status, last_seen, os_str in rows:
+        status_col = colorize(status.ljust(widths[3]), STATUS_COLORS.get(status, ""), use_color)
+        print(" ".join([
+            agent_id.ljust(widths[0]),
+            name.ljust(widths[1]),
+            ip.ljust(widths[2]),
+            status_col,
+            last_seen.ljust(widths[4]),
+            os_str.ljust(widths[5]),
+        ]))
 
     print(sep)
 
