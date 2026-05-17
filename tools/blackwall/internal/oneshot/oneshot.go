@@ -21,10 +21,7 @@ func Print(ctx context.Context, out io.Writer, c Lister) error {
 	}
 	fmt.Fprintf(out, "%-4s  %-20s  %-16s  %-12s  %s\n", "ID", "NAME", "IP", "STATUS", "LAST SEEN")
 	for _, a := range agents {
-		last := "—"
-		if !a.LastKeepAlive.IsZero() {
-			last = a.LastKeepAlive.Format("2006-01-02 15:04")
-		}
+		last := wazuh.FormatTimestamp(a.LastKeepAlive, "2006-01-02 15:04")
 		fmt.Fprintf(out, "%-4s  %-20s  %-16s  %-12s  %s\n", a.ID, a.Name, a.IP, a.Status, last)
 	}
 	return nil
