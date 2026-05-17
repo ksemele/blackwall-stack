@@ -125,6 +125,8 @@ var agentCols = []table.Col{
 	{Title: "NAME", Min: 20, Flex: true},
 	{Title: "IP", Min: 16},
 	{Title: "STATUS", Min: 12},
+	{Title: "WAZUH", Min: 14},
+	{Title: "OS", Min: 16, Flex: true},
 	{Title: "LAST SEEN", Min: 16, Flex: true},
 }
 
@@ -140,7 +142,15 @@ func (m *Model) View() string {
 
 	for i, a := range m.agents {
 		lastSeen := wazuh.FormatTimestamp(a.LastKeepAlive, "2006-01-02 15:04")
-		row := table.Row(widths, []string{a.ID, a.Name, a.IP, a.Status, lastSeen})
+		osStr := strings.TrimSpace(a.OS.Name + " " + a.OS.Version)
+		if osStr == "" {
+			osStr = "—"
+		}
+		version := a.Version
+		if version == "" {
+			version = "—"
+		}
+		row := table.Row(widths, []string{a.ID, a.Name, a.IP, a.Status, version, osStr, lastSeen})
 		if i == m.cursor {
 			row = styles.SelectedRow.Render(row)
 		} else {
