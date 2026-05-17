@@ -164,6 +164,7 @@ func run() error {
 			liveCtx = name
 			liveWazuh = fmt.Sprintf("%s:%d", ctx.Wazuh.Server, ctx.Wazuh.Port)
 			agentsList.ReplaceClient(newClient)
+			ctxView.UpdateCurrent(name)
 			return app.ContextSwitchedMsg{Name: name}
 		}
 	}
