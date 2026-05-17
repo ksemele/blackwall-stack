@@ -17,6 +17,9 @@ type Deps struct {
 	Views       []views.View
 	InitialView string
 
+	// Version is displayed right-aligned in the tab bar (e.g. "v0.0.1").
+	Version string
+
 	// Status returns the current statusbar.State; injected so the root
 	// model does not need to know about wazuh/config types.
 	Status func() statusbar.State
@@ -28,14 +31,24 @@ type Deps struct {
 	// It must persist the change and return a tea.Cmd that fires
 	// ContextSwitchedMsg when done.
 	SwitchContext func(name string) tea.Cmd
+
+	// HelpView is the view pushed when the user presses `?`.
+	// If nil, the `?` key is a no-op.
+	HelpView views.View
 }
 
 type Model struct {
 	views       []views.View
 	active      int
+	version     string
+	width       int
 	status      func() statusbar.State
 	pauseToggle func()
 	switchCtx   func(name string) tea.Cmd
+	helpView    views.View
+
+	// helpOpen is true while the help overlay is shown.
+	helpOpen bool
 
 	footerMsg string // transient confirmation shown in statusbar area
 
@@ -47,9 +60,11 @@ type Model struct {
 func New(d Deps) *Model {
 	m := &Model{
 		views:       d.Views,
+		version:     d.Version,
 		status:      d.Status,
 		pauseToggle: d.PauseToggle,
 		switchCtx:   d.SwitchContext,
+		helpView:    d.HelpView,
 	}
 	for i, v := range d.Views {
 		if v.Name() == d.InitialView {
@@ -59,13 +74,23 @@ func New(d Deps) *Model {
 	return m
 }
 
-func (m *Model) Active() views.View { return m.views[m.active] }
+func (m *Model) Active() views.View {
+	if m.helpOpen && m.helpView != nil {
+		return m.helpView
+	}
+	return m.views[m.active]
+}
 
 func (m *Model) Init() tea.Cmd {
 	return m.Active().Init()
 }
 
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	// Track terminal width for right-aligned layout.
+	if ws, ok := msg.(tea.WindowSizeMsg); ok {
+		m.width = ws.Width
+	}
+
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		if m.paletteOpen {
@@ -101,6 +126,17 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 		}
+
+		// While help is open, delegate all keys to the help view so it
+		// can handle its own `q` / `ESC` → BackMsg.
+		if m.helpOpen && m.helpView != nil {
+			next, cmd := m.helpView.Update(msg)
+			if v, ok := next.(views.View); ok {
+				m.helpView = v
+			}
+			return m, cmd
+		}
+
 		if msg.String() == ":" {
 			m.paletteOpen = true
 			m.paletteInput = ":"
@@ -108,6 +144,12 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		switch msg.String() {
+		case "?":
+			if m.helpView != nil {
+				m.helpOpen = true
+				return m, m.helpView.Init()
+			}
+			return m, nil
 		case "q", "ctrl+c":
 			return m, tea.Quit
 		case "tab":
@@ -125,6 +167,12 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if r := singleDigit(msg.String()); r > 0 && r <= len(m.views) {
 			m.active = r - 1
 			return m, m.Active().Init()
+		}
+
+	case BackMsg:
+		if m.helpOpen {
+			m.helpOpen = false
+			return m, nil
 		}
 
 	case SwitchViewMsg:
@@ -161,7 +209,11 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// Delegate everything else to the active view.
 	next, cmd := m.Active().Update(msg)
 	if v, ok := next.(views.View); ok {
-		m.views[m.active] = v
+		if m.helpOpen && m.helpView != nil {
+			m.helpView = v
+		} else {
+			m.views[m.active] = v
+		}
 	}
 	return m, cmd
 }
@@ -171,7 +223,7 @@ func (m *Model) View() string {
 	for i, v := range m.views {
 		names[i] = v.Name()
 	}
-	tab := tabbar.Render(names, m.active)
+	tab := tabbar.Render(names, m.active, m.width, m.version)
 
 	var status string
 	if m.status != nil {
@@ -179,6 +231,14 @@ func (m *Model) View() string {
 	} else {
 		status = statusbar.Render(statusbar.State{Refresh: time.Second})
 	}
+
+	// Thin horizontal rule that separates header chrome from view body.
+	ruleWidth := m.width
+	if ruleWidth <= 0 {
+		ruleWidth = 80 // sane fallback before first WindowSizeMsg
+	}
+	rule := styles.HRule.Render(strings.Repeat("─", ruleWidth))
+
 	body := m.Active().View()
 	if m.paletteOpen {
 		body += "\n\n> " + m.paletteInput
@@ -187,7 +247,7 @@ func (m *Model) View() string {
 		}
 	}
 	foot := footer.Render(m.Active().Hints())
-	parts := []string{tab, status}
+	parts := []string{tab, status, rule}
 	if m.footerMsg != "" {
 		parts = append(parts, styles.Active.Render(m.footerMsg))
 	}
