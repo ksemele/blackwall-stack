@@ -169,10 +169,14 @@ func (m *Model) View() string {
 			server = fmt.Sprintf("%s:%d", ctx.Wazuh.Server, ctx.Wazuh.Port)
 		}
 		circle := m.circle(name)
-		row := fmt.Sprintf("%s %-16s  %-32s  %s", circle, name, ctx.Description, server)
+		textPart := fmt.Sprintf("%-16s  %-32s  %s", name, ctx.Description, server)
+		var row string
 		if i == m.cursor {
-			row = styles.SelectedRow.Render(fmt.Sprintf("%-16s  %-32s  %s", name, ctx.Description, server))
-			row = circle + " " + row
+			row = circle + " " + styles.SelectedRow.Render(textPart)
+		} else if m.reach[name] == reachDown {
+			row = circle + " " + styles.RowDown.Render(textPart)
+		} else {
+			row = circle + " " + textPart
 		}
 		fmt.Fprintln(&b, row)
 	}
