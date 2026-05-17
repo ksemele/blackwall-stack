@@ -13,6 +13,7 @@ import (
 	"github.com/greengrunt/blackwall/tools/blackwall/internal/tickcmd"
 	"github.com/greengrunt/blackwall/tools/blackwall/internal/ui/footer"
 	"github.com/greengrunt/blackwall/tools/blackwall/internal/ui/styles"
+	"github.com/greengrunt/blackwall/tools/blackwall/internal/ui/table"
 	"github.com/greengrunt/blackwall/tools/blackwall/internal/wazuh"
 )
 
@@ -29,6 +30,7 @@ type Model struct {
 	paused          bool
 	refreshInterval time.Duration
 	lastErr         string
+	width           int
 }
 
 func New(c Client, refresh time.Duration) *Model {
@@ -74,6 +76,10 @@ func (m *Model) fetchCmd() tea.Cmd {
 
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case tea.WindowSizeMsg:
+		m.width = msg.Width
+		return m, nil
+
 	case tickcmd.TickMsg:
 		return m, tea.Batch(m.fetchCmd(), tickcmd.Every(m.refreshInterval))
 
@@ -114,16 +120,27 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+var agentCols = []table.Col{
+	{Title: "ID", Min: 4},
+	{Title: "NAME", Min: 20, Flex: true},
+	{Title: "IP", Min: 16},
+	{Title: "STATUS", Min: 12},
+	{Title: "LAST SEEN", Min: 16, Flex: true},
+}
+
 func (m *Model) View() string {
 	var b strings.Builder
 	if m.lastErr != "" {
 		fmt.Fprintf(&b, "⚠ %s\n", m.lastErr)
 	}
-	fmt.Fprintf(&b, "%-4s  %-20s  %-16s  %-12s  %s\n", "ID", "NAME", "IP", "STATUS", "LAST SEEN")
+
+	widths := table.Widths(agentCols, m.width)
+	b.WriteString(table.Header(agentCols, widths))
+	b.WriteByte('\n')
+
 	for i, a := range m.agents {
 		lastSeen := wazuh.FormatTimestamp(a.LastKeepAlive, "2006-01-02 15:04")
-		row := fmt.Sprintf("%-4s  %-20s  %-16s  %-12s  %s",
-			a.ID, a.Name, a.IP, a.Status, lastSeen)
+		row := table.Row(widths, []string{a.ID, a.Name, a.IP, a.Status, lastSeen})
 		if i == m.cursor {
 			row = styles.SelectedRow.Render(row)
 		} else {
