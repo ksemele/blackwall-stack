@@ -2,9 +2,9 @@
 module: blackwall-eye
 status: in_progress
 stage: 1
-last_updated: 2026-05-16
-last_task: "Test env redesign: 2-container topology (black-master-00 + black-host-01), Wazuh all-in-one master (manager + indexer + dashboard via Ansible roles, TLS via wazuh-certs-tool), dashboard on https://localhost:5601 (admin/Blackwall1!), agent endpoint/enrollment fully parameterized for any master."
-next_task: "Stage 1 complete — mark done or add Suricata/Zeek for Stage 2 network layer"
+last_updated: 2026-05-17
+last_task: "TUI fixes: k9s-style inverted highlight, agent detail view on Enter, availability circles in contexts list, context switching (persists to config + rewires client), select_context_on_start honored on startup"
+next_task: "Interactive smoke test against live Docker env; add filter (/) to agents and contexts lists; auto-clear footer confirmation message after timeout"
 blockers: []
 ---
 
