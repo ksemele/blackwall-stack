@@ -134,3 +134,49 @@ func Validate(cfg Config) error {
 func writeFile(path, content string) error {
 	return os.WriteFile(path, []byte(content), 0600)
 }
+
+// SetCurrent updates the `current` field in the YAML config file on disk,
+// preserving all other content. It reads the file, unmarshals into a
+// yaml.Node tree to keep formatting, sets current, then re-marshals.
+func SetCurrent(path, contextName string) error {
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return fmt.Errorf("config setcurrent read: %w", err)
+	}
+
+	var doc yaml.Node
+	if err := yaml.Unmarshal(raw, &doc); err != nil {
+		return fmt.Errorf("config setcurrent parse: %w", err)
+	}
+
+	// doc is a DocumentNode; its first child is the mapping.
+	if len(doc.Content) == 0 {
+		return fmt.Errorf("config setcurrent: empty document")
+	}
+	mapping := doc.Content[0]
+	if mapping.Kind != yaml.MappingNode {
+		return fmt.Errorf("config setcurrent: expected mapping at root")
+	}
+
+	// Walk key-value pairs; keys are at even indices.
+	found := false
+	for i := 0; i+1 < len(mapping.Content); i += 2 {
+		if mapping.Content[i].Value == "current" {
+			mapping.Content[i+1].Value = contextName
+			found = true
+			break
+		}
+	}
+	if !found {
+		// Key absent — append it.
+		key := &yaml.Node{Kind: yaml.ScalarNode, Value: "current"}
+		val := &yaml.Node{Kind: yaml.ScalarNode, Value: contextName}
+		mapping.Content = append(mapping.Content, key, val)
+	}
+
+	out, err := yaml.Marshal(&doc)
+	if err != nil {
+		return fmt.Errorf("config setcurrent marshal: %w", err)
+	}
+	return os.WriteFile(path, out, 0600)
+}

@@ -12,3 +12,11 @@ type BackMsg struct{}
 
 // ContextChangedMsg announces a context switch initiated from `:contexts`.
 type ContextChangedMsg struct{ Name string }
+
+// ContextSwitchedMsg is dispatched after the context switch has been applied
+// (client replaced, config saved). The app uses it to update the status bar
+// and navigate to agents.
+type ContextSwitchedMsg struct {
+	Name string
+	Err  error
+}

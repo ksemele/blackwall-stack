@@ -157,3 +157,26 @@ func TestValidate_CAFileNotFound(t *testing.T) {
 		t.Fatal("Validate: expected error for missing CA file")
 	}
 }
+
+func TestSetCurrent_UpdatesField(t *testing.T) {
+	content := `current: old-ctx
+contexts:
+  old-ctx:
+    description: old
+  new-ctx:
+    description: new
+`
+	path := writeTempFile(t, "config.yaml", content)
+
+	if err := SetCurrent(path, "new-ctx"); err != nil {
+		t.Fatalf("SetCurrent: %v", err)
+	}
+
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load after SetCurrent: %v", err)
+	}
+	if cfg.Current != "new-ctx" {
+		t.Errorf("Current = %q, want new-ctx", cfg.Current)
+	}
+}
