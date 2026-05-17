@@ -11,6 +11,7 @@ import (
 	"github.com/greengrunt/blackwall/tools/blackwall/internal/app"
 	"github.com/greengrunt/blackwall/tools/blackwall/internal/config"
 	"github.com/greengrunt/blackwall/tools/blackwall/internal/ui/footer"
+	"github.com/greengrunt/blackwall/tools/blackwall/internal/ui/styles"
 )
 
 type Model struct {
@@ -73,16 +74,16 @@ func (m *Model) View() string {
 	var b strings.Builder
 	b.WriteString("NAME              DESCRIPTION                       WAZUH SERVER\n")
 	for i, name := range m.order {
-		cur := "  "
-		if i == m.cursor {
-			cur = "▶ "
-		}
 		ctx := m.cfg.Contexts[name]
 		server := ""
 		if ctx.Wazuh != nil {
 			server = fmt.Sprintf("%s:%d", ctx.Wazuh.Server, ctx.Wazuh.Port)
 		}
-		fmt.Fprintf(&b, "%s%-16s  %-32s  %s\n", cur, name, ctx.Description, server)
+		row := fmt.Sprintf("%-16s  %-32s  %s", name, ctx.Description, server)
+		if i == m.cursor {
+			row = styles.SelectedRow.Render(row)
+		}
+		fmt.Fprintln(&b, row)
 	}
 	return b.String()
 }

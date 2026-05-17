@@ -12,6 +12,7 @@ import (
 	"github.com/greengrunt/blackwall/tools/blackwall/internal/app"
 	"github.com/greengrunt/blackwall/tools/blackwall/internal/tickcmd"
 	"github.com/greengrunt/blackwall/tools/blackwall/internal/ui/footer"
+	"github.com/greengrunt/blackwall/tools/blackwall/internal/ui/styles"
 	"github.com/greengrunt/blackwall/tools/blackwall/internal/wazuh"
 )
 
@@ -119,13 +120,13 @@ func (m *Model) View() string {
 	}
 	b.WriteString(fmt.Sprintf("%-4s  %-20s  %-16s  %-12s  %s\n", "ID", "NAME", "IP", "STATUS", "LAST SEEN"))
 	for i, a := range m.agents {
-		cur := "  "
-		if i == m.cursor {
-			cur = "▶ "
-		}
 		lastSeen := wazuh.FormatTimestamp(a.LastKeepAlive, "2006-01-02 15:04")
-		fmt.Fprintf(&b, "%s%-4s  %-20s  %-16s  %-12s  %s\n",
-			cur, a.ID, a.Name, a.IP, a.Status, lastSeen)
+		row := fmt.Sprintf("%-4s  %-20s  %-16s  %-12s  %s",
+			a.ID, a.Name, a.IP, a.Status, lastSeen)
+		if i == m.cursor {
+			row = styles.SelectedRow.Render(row)
+		}
+		fmt.Fprintln(&b, row)
 	}
 	if len(m.agents) == 0 && m.lastErr == "" {
 		b.WriteString("\nNo agents.\n")
