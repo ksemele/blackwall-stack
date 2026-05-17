@@ -13,6 +13,7 @@ import (
 	"github.com/greengrunt/blackwall/tools/blackwall/internal/config"
 	"github.com/greengrunt/blackwall/tools/blackwall/internal/ui/footer"
 	"github.com/greengrunt/blackwall/tools/blackwall/internal/ui/styles"
+	"github.com/greengrunt/blackwall/tools/blackwall/internal/ui/table"
 	"github.com/greengrunt/blackwall/tools/blackwall/internal/wazuh"
 )
 
@@ -36,6 +37,7 @@ type Model struct {
 	order  []string
 	cursor int
 	reach  map[string]reachState // per-context reachability cache
+	width  int
 }
 
 func New(cfg config.Config) *Model {
@@ -113,6 +115,10 @@ func (m *Model) probeAllCmd() tea.Cmd {
 
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case tea.WindowSizeMsg:
+		m.width = msg.Width
+		return m, nil
+
 	case ProbeResultMsg:
 		m.reach[msg.Name] = msg.Reach
 		return m, nil
@@ -160,9 +166,26 @@ func (m *Model) circle(name string) string {
 	}
 }
 
+// gutter is the visible width of the leading circle + space prefix that sits
+// outside the table grid (kept ungrayed so reachability colour stays visible
+// when the row is highlighted).
+const gutter = 2
+
+var ctxCols = []table.Col{
+	{Title: "NAME", Min: 16, Flex: true},
+	{Title: "DESCRIPTION", Min: 32, Flex: true},
+	{Title: "WAZUH SERVER", Min: 20, Flex: true},
+}
+
 func (m *Model) View() string {
 	var b strings.Builder
-	b.WriteString("  NAME              DESCRIPTION                       WAZUH SERVER\n")
+
+	widths := table.Widths(ctxCols, max(m.width-gutter, 0))
+
+	b.WriteString(strings.Repeat(" ", gutter))
+	b.WriteString(table.Header(ctxCols, widths))
+	b.WriteByte('\n')
+
 	for i, name := range m.order {
 		ctx := m.cfg.Contexts[name]
 		server := ""
@@ -170,7 +193,7 @@ func (m *Model) View() string {
 			server = fmt.Sprintf("%s:%d", ctx.Wazuh.Server, ctx.Wazuh.Port)
 		}
 		circle := m.circle(name)
-		textPart := fmt.Sprintf("%-16s  %-32s  %s", name, ctx.Description, server)
+		textPart := table.Row(widths, []string{name, ctx.Description, server})
 		var row string
 		if i == m.cursor {
 			row = circle + " " + styles.SelectedRow.Render(textPart)
