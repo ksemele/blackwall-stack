@@ -39,4 +39,12 @@ var (
 	// RowGhost renders a full table row in dim grey for agents that were registered
 	// but have never connected (never_connected status).
 	RowGhost = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
+
+	// HRule is the style for the thin horizontal rule that separates the header
+	// chrome from the view body.  Color "240" is a mid-dark grey on 256-colour
+	// terminals (falls back to colour "8" on 8-colour terminals).
+	HRule = lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
+
+	// HelpHeading renders section headings inside the help view.
+	HelpHeading = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("14"))
 )
