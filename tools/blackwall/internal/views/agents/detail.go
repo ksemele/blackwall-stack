@@ -9,8 +9,24 @@ import (
 
 	"github.com/greengrunt/blackwall/tools/blackwall/internal/app"
 	"github.com/greengrunt/blackwall/tools/blackwall/internal/ui/footer"
+	"github.com/greengrunt/blackwall/tools/blackwall/internal/ui/styles"
 	"github.com/greengrunt/blackwall/tools/blackwall/internal/wazuh"
 )
+
+// statusStyled returns the agent status colored to match the agents-list view:
+// green=active, yellow=pending, grey=never_connected, red=anything else.
+func statusStyled(status string) string {
+	switch status {
+	case "active":
+		return styles.Active.Render(status)
+	case "pending":
+		return styles.Pending.Render(status)
+	case "never_connected":
+		return styles.RowGhost.Render(status)
+	default:
+		return styles.Disconnected.Render(status)
+	}
+}
 
 type DetailModel struct {
 	client  Client
@@ -89,6 +105,6 @@ func (m *DetailModel) View() string {
 			"Last seen:  %s\n"+
 			"Registered: %s\n"+
 			"Manager:    %s\n",
-		a.ID, a.Name, a.Status, a.IP, a.Version, osStr, lastSeen, registered, a.Manager,
+		a.ID, a.Name, statusStyled(a.Status), a.IP, a.Version, osStr, lastSeen, registered, a.Manager,
 	)
 }
