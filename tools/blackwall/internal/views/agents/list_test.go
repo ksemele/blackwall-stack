@@ -7,6 +7,7 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 
 	"github.com/greengrunt/blackwall/tools/blackwall/internal/app"
 	"github.com/greengrunt/blackwall/tools/blackwall/internal/tickcmd"
@@ -60,6 +61,26 @@ func TestListView_PauseSkipsFetch(t *testing.T) {
 	_, _ = v.Update(tickcmd.TickMsg{})
 	if fc.called > 0 {
 		t.Errorf("paused view kicked off %d fetches", fc.called)
+	}
+}
+
+func TestListView_RowsStretchToTerminalWidth(t *testing.T) {
+	fc := &fakeClient{agents: []wazuh.Agent{
+		{ID: "000", Name: "master", Status: "active"},
+	}}
+	v := New(fc, 3*time.Second)
+	v.SetAgents(fc.agents)
+	const width = 120
+	_, _ = v.Update(tea.WindowSizeMsg{Width: width})
+
+	out := v.View()
+	for _, line := range strings.Split(strings.TrimRight(out, "\n"), "\n") {
+		if line == "" {
+			continue
+		}
+		if w := lipgloss.Width(line); w != width {
+			t.Errorf("row width = %d, want %d (line: %q)", w, width, line)
+		}
 	}
 }
 
