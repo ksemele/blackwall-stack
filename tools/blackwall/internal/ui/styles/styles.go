@@ -22,4 +22,14 @@ var (
 	SelectedRow = lipgloss.NewStyle().Bold(true).
 			Background(lipgloss.Color("14")).
 			Foreground(lipgloss.Color("0"))
+
+	// ContextBadge renders the active context name as a yellow badge (k9s-style).
+	ContextBadge = lipgloss.NewStyle().
+			Background(lipgloss.Color("220")).
+			Foreground(lipgloss.Color("0")).
+			Padding(0, 1).
+			Bold(true)
+
+	// RowDown renders a full table row in red to signal an offline/down resource.
+	RowDown = lipgloss.NewStyle().Foreground(lipgloss.Color("9"))
 )

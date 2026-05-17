@@ -20,6 +20,7 @@ func Render(s State) string {
 	if s.Paused {
 		mode = "⏸ paused"
 	}
-	body := fmt.Sprintf("context: %s · wazuh: %s · %s", s.Context, s.Wazuh, mode)
+	ctxBadge := styles.ContextBadge.Render(s.Context)
+	body := fmt.Sprintf("context: %s · wazuh: %s · %s", ctxBadge, s.Wazuh, mode)
 	return styles.StatusBar.Render(body)
 }
