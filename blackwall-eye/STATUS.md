@@ -3,8 +3,8 @@ module: blackwall-eye
 status: in_progress
 stage: 1
 last_updated: 2026-05-17
-last_task: "TUI fixes: k9s-style inverted highlight, agent detail view on Enter, availability circles in contexts list, context switching (persists to config + rewires client), select_context_on_start honored on startup"
-next_task: "Interactive smoke test against live Docker env; add filter (/) to agents and contexts lists; auto-clear footer confirmation message after timeout"
+last_task: "TUI polish: drop redundant context-switch footer line, yellow badge for context name in header, red rows for offline contexts and inactive agents, QF1012 lint fix"
+next_task: "Interactive smoke test against live Docker env; add filter (/) to agents and contexts lists; auto-clear error footer message after timeout"
 blockers: []
 ---
 
