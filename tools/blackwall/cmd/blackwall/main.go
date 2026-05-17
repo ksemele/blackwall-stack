@@ -22,8 +22,14 @@ import (
 	"github.com/greengrunt/blackwall/tools/blackwall/internal/views"
 	agentsview "github.com/greengrunt/blackwall/tools/blackwall/internal/views/agents"
 	ctxview "github.com/greengrunt/blackwall/tools/blackwall/internal/views/contexts"
+	helpview "github.com/greengrunt/blackwall/tools/blackwall/internal/views/help"
 	"github.com/greengrunt/blackwall/tools/blackwall/internal/wazuh"
 )
+
+// version is the program version string.  Override at build time with:
+//
+//	go build -ldflags "-X main.version=v1.2.3" ./cmd/blackwall
+var version = "v0.0.1"
 
 func main() {
 	if err := run(); err != nil {
@@ -172,6 +178,8 @@ func run() error {
 	root := app.New(app.Deps{
 		Views:         registered,
 		InitialView:   initial,
+		Version:       version,
+		HelpView:      helpview.New(),
 		SwitchContext: switchContext,
 		Status: func() statusbar.State {
 			return statusbar.State{
