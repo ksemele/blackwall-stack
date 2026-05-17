@@ -72,14 +72,8 @@ func (m *DetailModel) View() string {
 		return fmt.Sprintf("⚠ %s\n", m.err)
 	}
 	a := m.detail.Agent
-	lastSeen := "—"
-	if !a.LastKeepAlive.IsZero() {
-		lastSeen = a.LastKeepAlive.Format("2006-01-02 15:04:05")
-	}
-	registered := "—"
-	if !a.DateAdd.IsZero() {
-		registered = a.DateAdd.Format("2006-01-02 15:04:05")
-	}
+	lastSeen := wazuh.FormatTimestamp(a.LastKeepAlive, "2006-01-02 15:04:05")
+	registered := wazuh.FormatTimestamp(a.DateAdd, "2006-01-02 15:04:05")
 	osStr := strings.TrimSpace(a.OS.Name + " " + a.OS.Version)
 	if osStr == "" {
 		osStr = "—"

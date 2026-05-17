@@ -123,10 +123,7 @@ func (m *Model) View() string {
 		if i == m.cursor {
 			cur = "▶ "
 		}
-		lastSeen := "—"
-		if !a.LastKeepAlive.IsZero() {
-			lastSeen = a.LastKeepAlive.Format("2006-01-02 15:04")
-		}
+		lastSeen := wazuh.FormatTimestamp(a.LastKeepAlive, "2006-01-02 15:04")
 		fmt.Fprintf(&b, "%s%-4s  %-20s  %-16s  %-12s  %s\n",
 			cur, a.ID, a.Name, a.IP, a.Status, lastSeen)
 	}
