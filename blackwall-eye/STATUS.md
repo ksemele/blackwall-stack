@@ -3,7 +3,7 @@ module: blackwall-eye
 status: in_progress
 stage: 1
 last_updated: 2026-05-17
-last_task: "TUI polish: drop redundant context-switch footer line, yellow badge for context name in header, red rows for offline contexts and inactive agents, QF1012 lint fix"
+last_task: "Broken agent fixtures: black-ghost-99 (never_connected) + black-dead-98 (disconnected); broken-agents.yml playbook; per-status TUI row colors (active/pending/disconnected/never_connected)"
 next_task: "Interactive smoke test against live Docker env; add filter (/) to agents and contexts lists; auto-clear error footer message after timeout"
 blockers: []
 ---
