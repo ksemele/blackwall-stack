@@ -75,6 +75,19 @@ services:
       blackwall-test:
         ipv4_address: 172.28.0.11
 
+  black-dead-98:
+    <<: *black-node
+    profiles: [ubuntu2204]
+    build:
+      context: ./images/ubuntu2204
+    container_name: black-dead-98
+    hostname: black-dead-98
+    ports:
+      - "2202:22"
+    networks:
+      blackwall-test:
+        ipv4_address: 172.28.0.98
+
   # ── Debian 12 (future) ────────────────────────────────────────────────────
   # Profile: debian12 — uncomment when tests/docker/images/debian12/Dockerfile exists.
   # Ports: 2210 (SSH), 5611 (dashboard) for master; 2211 (SSH) for host.
