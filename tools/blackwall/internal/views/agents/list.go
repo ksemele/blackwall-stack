@@ -118,13 +118,15 @@ func (m *Model) View() string {
 	if m.lastErr != "" {
 		fmt.Fprintf(&b, "⚠ %s\n", m.lastErr)
 	}
-	b.WriteString(fmt.Sprintf("%-4s  %-20s  %-16s  %-12s  %s\n", "ID", "NAME", "IP", "STATUS", "LAST SEEN"))
+	fmt.Fprintf(&b, "%-4s  %-20s  %-16s  %-12s  %s\n", "ID", "NAME", "IP", "STATUS", "LAST SEEN")
 	for i, a := range m.agents {
 		lastSeen := wazuh.FormatTimestamp(a.LastKeepAlive, "2006-01-02 15:04")
 		row := fmt.Sprintf("%-4s  %-20s  %-16s  %-12s  %s",
 			a.ID, a.Name, a.IP, a.Status, lastSeen)
 		if i == m.cursor {
 			row = styles.SelectedRow.Render(row)
+		} else if a.Status != "active" {
+			row = styles.RowDown.Render(row)
 		}
 		fmt.Fprintln(&b, row)
 	}
