@@ -1,0 +1,31 @@
+# blackwall configuration
+#
+# Docs: https://github.com/greengrunt/blackwall (placeholder)
+#
+# Switch contexts at runtime with `:ctx <name>` in the TUI,
+# or set the default below.
+
+current: example-master
+select_context_on_start: true     # show picker at startup; set false to skip
+
+contexts:
+
+  example-master:
+    description: "Replace this with your real Wazuh manager"
+    wazuh:
+      server:   wazuh.example.com
+      port:     55000
+      user:     wazuh
+      password: ${BW_EXAMPLE_WAZUH_PASSWORD}
+      tls:
+        insecure_skip_verify: false
+        # ca_file: /etc/blackwall/wazuh-ca.crt
+
+ui:
+  refresh_interval: 3s
+  theme:            dark
+  vim_keys:         true
+
+logging:
+  level: warn
+  # file: ~/.local/state/blackwall/blackwall.log   # default if unset
