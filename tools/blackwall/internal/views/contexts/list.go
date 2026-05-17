@@ -74,6 +74,7 @@ func (m *Model) Hints() []footer.Hint {
 		{Key: "↑↓", Desc: "nav"},
 		{Key: "↵", Desc: "switch"},
 		{Key: "ctrl+r", Desc: "re-probe"},
+		{Key: "?", Desc: "help"},
 	}
 }
 

@@ -29,6 +29,7 @@ func (m *DetailModel) Hints() []footer.Hint {
 	return []footer.Hint{
 		{Key: "esc", Desc: "back"},
 		{Key: "r", Desc: "refresh"},
+		{Key: "?", Desc: "help"},
 	}
 }
 
