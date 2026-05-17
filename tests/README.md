@@ -283,6 +283,53 @@ ansible black-master-00 -m shell -a 'tail -f /var/ossec/logs/alerts/alerts.json'
 
 ---
 
+## 6c. Broken agent fixtures (`broken-agents.yml`)
+
+Two static fixtures test the TUI's per-status row colouring:
+
+| Agent | Status | Mechanism |
+|---|---|---|
+| `black-ghost-99` | `never_connected` | Registered on manager; no container ever created |
+| `black-dead-98`  | `disconnected`    | Container starts, agent registers, then container is stopped |
+
+**Prerequisites:** bring the env up and provision all hosts including `black-dead-98` first:
+
+```bash
+# 1. Start containers
+docker compose -f tests/docker/docker-compose.yml --profile ubuntu2204 up -d --build
+
+# 2. Provision everything (manager + both agents)
+cd blackwall-eye
+ansible-playbook -i ../tests/inventory/hosts.yml ansible/playbooks/all.yml
+ansible-playbook -i ../tests/inventory/hosts.yml ansible/playbooks/monitored-host.yml --limit black-dead-98
+cd ..
+
+# 3. Register ghost + stop dead
+ansible-playbook -i tests/inventory/hosts.yml tests/triggers/broken-agents.yml
+```
+
+**Verify** on the manager:
+
+```bash
+ansible wazuh_managers -i tests/inventory/hosts.yml \
+  -m command -a "/var/ossec/bin/agent_control -l" --become
+# Expect:
+#   black-host-01   Active
+#   black-ghost-99  Never connected
+#   black-dead-98   Disconnected
+```
+
+The TUI renders each status with a distinct colour:
+
+| Status | Colour |
+|---|---|
+| `active` | default |
+| `pending` | yellow |
+| `disconnected` | red |
+| `never_connected` | dim grey |
+
+---
+
 ## 7. Service status (ad-hoc)
 
 ```bash
@@ -316,6 +363,12 @@ cat tests/docker/ssh_config >> ~/.ssh/config
 |---|---|---|---|---|
 | `black-master-00` | manager + indexer + dashboard | `2200→22` | `5601→443` | `172.28.0.10` |
 | `black-host-01`   | agent + auditd target | `2201→22` | — | `172.28.0.11` |
+| `black-dead-98`   | agent fixture — disconnected | `2202→22` | — | `172.28.0.98` |
+| `black-ghost-99`  | ghost fixture — never_connected | no container | — | `172.28.0.99` |
+
+`black-ghost-99` is a manager-side registration only (no container). It is registered via the `broken-agents.yml` playbook and will always appear as `never_connected` in Wazuh.
+
+`black-dead-98` is a real container that registers as a Wazuh agent; the `broken-agents.yml` playbook then stops the container so it transitions to `disconnected`.
 
 ---
 
@@ -387,6 +440,9 @@ blackwall/                                  # repo root
 │   │   └── ssh_config
 │   ├── inventory/
 │   │   └── hosts.yml
+│   ├── triggers/
+│   │   ├── bw-trigger                      # synthetic alert events
+│   │   └── broken-agents.yml               # registers ghost + stops dead
 │   └── .wazuh-certs/                       # gitignored TLS bundle
 └── blackwall-eye/
     ├── ansible.cfg
