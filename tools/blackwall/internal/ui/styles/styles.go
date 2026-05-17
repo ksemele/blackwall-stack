@@ -13,7 +13,14 @@ var (
 	StatusBar  = lipgloss.NewStyle().Foreground(lipgloss.Color("15"))
 	Footer     = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
 
-	TabActive   = lipgloss.NewStyle().Bold(true).Underline(true).Foreground(lipgloss.Color("14"))
+	// TabActive renders the currently-selected tab as a yellow badge with
+	// black text — mirrors the context badge style so selection language is
+	// consistent across the chrome.
+	TabActive = lipgloss.NewStyle().
+			Background(lipgloss.Color("220")).
+			Foreground(lipgloss.Color("0")).
+			Padding(0, 1).
+			Bold(true)
 	TabInactive = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
 
 	Error = lipgloss.NewStyle().Foreground(lipgloss.Color("9")).Bold(true)
