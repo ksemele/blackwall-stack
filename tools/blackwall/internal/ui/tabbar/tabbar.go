@@ -5,12 +5,16 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/charmbracelet/lipgloss"
+
 	"github.com/greengrunt/blackwall/tools/blackwall/internal/ui/styles"
 )
 
-// Render returns the tab strip given an ordered list of view names
-// and the index of the active view.
-func Render(viewNames []string, active int) string {
+// Render returns the tab strip given an ordered list of view names,
+// the index of the active view, the terminal width, and the program
+// version string (e.g. "v0.0.1").  When width <= 0 or version is empty
+// the right-aligned version label is omitted.
+func Render(viewNames []string, active int, width int, version string) string {
 	if len(viewNames) == 0 {
 		return ""
 	}
@@ -23,5 +27,18 @@ func Render(viewNames []string, active int) string {
 			parts = append(parts, styles.TabInactive.Render(label))
 		}
 	}
-	return strings.Join(parts, "  │  ")
+	left := strings.Join(parts, "  │  ")
+
+	if version == "" || width <= 0 {
+		return left
+	}
+
+	verLabel := styles.TabInactive.Render(version)
+	leftWidth := lipgloss.Width(left)
+	verWidth := lipgloss.Width(verLabel)
+	gap := width - leftWidth - verWidth
+	if gap < 1 {
+		gap = 1
+	}
+	return left + strings.Repeat(" ", gap) + verLabel
 }
