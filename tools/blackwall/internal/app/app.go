@@ -23,6 +23,11 @@ type Deps struct {
 
 	// PauseToggle is invoked on `p`; nil means no-op.
 	PauseToggle func()
+
+	// SwitchContext is called when the user selects a context.
+	// It must persist the change and return a tea.Cmd that fires
+	// ContextSwitchedMsg when done.
+	SwitchContext func(name string) tea.Cmd
 }
 
 type Model struct {
@@ -30,6 +35,9 @@ type Model struct {
 	active      int
 	status      func() statusbar.State
 	pauseToggle func()
+	switchCtx   func(name string) tea.Cmd
+
+	footerMsg string // transient confirmation shown in statusbar area
 
 	paletteOpen  bool
 	paletteInput string
@@ -41,6 +49,7 @@ func New(d Deps) *Model {
 		views:       d.Views,
 		status:      d.Status,
 		pauseToggle: d.PauseToggle,
+		switchCtx:   d.SwitchContext,
 	}
 	for i, v := range d.Views {
 		if v.Name() == d.InitialView {
@@ -126,6 +135,27 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 		return m, nil
+
+	case ContextChangedMsg:
+		if m.switchCtx != nil {
+			return m, m.switchCtx(msg.Name)
+		}
+		return m, nil
+
+	case ContextSwitchedMsg:
+		if msg.Err != nil {
+			m.footerMsg = "⚠ context switch failed: " + msg.Err.Error()
+			return m, nil
+		}
+		m.footerMsg = "→ context: " + msg.Name
+		// Navigate to agents view.
+		for i, v := range m.views {
+			if v.Name() == ":agents" {
+				m.active = i
+				return m, v.Init()
+			}
+		}
+		return m, nil
 	}
 
 	// Delegate everything else to the active view.
@@ -157,7 +187,12 @@ func (m *Model) View() string {
 		}
 	}
 	foot := footer.Render(m.Active().Hints())
-	return strings.Join([]string{tab, status, body, foot}, "\n")
+	parts := []string{tab, status}
+	if m.footerMsg != "" {
+		parts = append(parts, styles.Active.Render(m.footerMsg))
+	}
+	parts = append(parts, body, foot)
+	return strings.Join(parts, "\n")
 }
 
 func singleDigit(s string) int {

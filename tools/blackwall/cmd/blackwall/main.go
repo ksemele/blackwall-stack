@@ -141,14 +141,41 @@ func run() error {
 		initial = ":contexts"
 	}
 
-	wazuhInfo := fmt.Sprintf("%s:%d", currentCtx.Wazuh.Server, currentCtx.Wazuh.Port)
+	// liveCtx / liveWazuh track the active context for the status bar
+	// and are updated on every context switch.
+	liveCtx := cfg.Current
+	liveWazuh := fmt.Sprintf("%s:%d", currentCtx.Wazuh.Server, currentCtx.Wazuh.Port)
+
+	switchContext := func(name string) tea.Cmd {
+		return func() tea.Msg {
+			ctx := cfg.Contexts[name]
+			if ctx.Wazuh == nil {
+				return app.ContextSwitchedMsg{Name: name,
+					Err: fmt.Errorf("context %q has no wazuh subsystem", name)}
+			}
+			newClient, err := wazuh.New(*ctx.Wazuh)
+			if err != nil {
+				return app.ContextSwitchedMsg{Name: name, Err: err}
+			}
+			if err := config.SetCurrent(cfgPath, name); err != nil {
+				return app.ContextSwitchedMsg{Name: name, Err: err}
+			}
+			cfg.Current = name
+			liveCtx = name
+			liveWazuh = fmt.Sprintf("%s:%d", ctx.Wazuh.Server, ctx.Wazuh.Port)
+			agentsList.ReplaceClient(newClient)
+			return app.ContextSwitchedMsg{Name: name}
+		}
+	}
+
 	root := app.New(app.Deps{
-		Views:       registered,
-		InitialView: initial,
+		Views:         registered,
+		InitialView:   initial,
+		SwitchContext: switchContext,
 		Status: func() statusbar.State {
 			return statusbar.State{
-				Context: cfg.Current,
-				Wazuh:   wazuhInfo,
+				Context: liveCtx,
+				Wazuh:   liveWazuh,
 				Refresh: cfg.UI.RefreshInterval,
 			}
 		},
