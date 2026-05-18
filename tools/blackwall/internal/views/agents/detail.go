@@ -112,10 +112,7 @@ func (m *DetailModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.height = ws.Height
 		// headerRow (agent name) + tabbar row + newline = 3 fixed rows.
 		// footer rendered by app layer = 1 row.
-		subHeight := ws.Height - 4
-		if subHeight < 1 {
-			subHeight = 1
-		}
+		subHeight := max(ws.Height-4, 1)
 		for i, sub := range m.subs {
 			if sv, ok := sub.(sizedView); ok {
 				sv.SetSize(ws.Width, subHeight)

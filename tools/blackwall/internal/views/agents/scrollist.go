@@ -31,36 +31,22 @@ func (s *scrollist) visibleCount(total int) int {
 	if s.height <= 0 {
 		return total
 	}
-	v := s.height - s.headerRows - s.footerRows
-	if v < 1 {
-		v = 1
-	}
-	return v
+	return max(s.height-s.headerRows-s.footerRows, 1)
 }
 
 // clamp adjusts scroll so it stays in [0, max(0, total-visible)].
 func (s *scrollist) clamp(total int) {
 	vis := s.visibleCount(total)
-	maxScroll := total - vis
-	if maxScroll < 0 {
-		maxScroll = 0
-	}
-	if s.scroll > maxScroll {
-		s.scroll = maxScroll
-	}
-	if s.scroll < 0 {
-		s.scroll = 0
-	}
+	maxScroll := max(total-vis, 0)
+	s.scroll = min(s.scroll, maxScroll)
+	s.scroll = max(s.scroll, 0)
 }
 
 // HandleKey processes scroll keys and returns true if the key was consumed.
 // Caller must only invoke this when not in filter mode.
 func (s *scrollist) HandleKey(msg tea.KeyMsg, total int) bool {
 	vis := s.visibleCount(total)
-	half := vis / 2
-	if half < 1 {
-		half = 1
-	}
+	half := max(vis/2, 1)
 	switch msg.String() {
 	case "j", "down":
 		s.scroll++
@@ -94,10 +80,7 @@ func (s *scrollist) HandleKey(msg tea.KeyMsg, total int) bool {
 // within the footerRows budget.
 func (s *scrollist) Indicator(total int) string {
 	vis := s.visibleCount(total)
-	end := s.scroll + vis
-	if end > total {
-		end = total
-	}
+	end := min(s.scroll+vis, total)
 	first := s.scroll + 1
 	last := end
 	if total == 0 {
@@ -127,10 +110,7 @@ func (s *scrollist) Render(headerBlock string, rows []string, footerBlock string
 	}
 
 	vis := s.visibleCount(len(rows))
-	end := s.scroll + vis
-	if end > len(rows) {
-		end = len(rows)
-	}
+	end := min(s.scroll+vis, len(rows))
 	slice := rows[s.scroll:end]
 
 	var b strings.Builder

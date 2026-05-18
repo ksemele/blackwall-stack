@@ -190,7 +190,7 @@ func TestPackages_ScrollBehavior(t *testing.T) {
 	}
 
 	// Scroll down 5 times with 'j'; first data row should now be pkg-005.
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		next, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}})
 		m = next.(*PackagesModel)
 	}
