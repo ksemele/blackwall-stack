@@ -66,3 +66,60 @@ func TestDetail_TabbarRenderedWithHardwareActive(t *testing.T) {
 		t.Errorf("expected 'Hardware' in view output:\n%s", out)
 	}
 }
+
+func TestDetail_HKeyActivatesHardwareSubview(t *testing.T) {
+	d := NewDetail(&fakeClient{}, "001")
+	next, _ := d.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'h'}})
+	dm := next.(*DetailModel)
+
+	if dm.activeTab != 1 {
+		t.Errorf("activeTab = %d, want 1", dm.activeTab)
+	}
+	sub, ok := dm.subs[1]
+	if !ok {
+		t.Fatal("expected subs[1] to be set")
+	}
+	if _, isHW := sub.(*HardwareModel); !isHW {
+		t.Errorf("subs[1] type = %T, want *HardwareModel", sub)
+	}
+}
+
+func TestDetail_NKeyActivatesNetworkSubview(t *testing.T) {
+	d := NewDetail(&fakeClient{}, "001")
+	next, _ := d.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'n'}})
+	dm := next.(*DetailModel)
+
+	if dm.activeTab != 4 {
+		t.Errorf("activeTab = %d, want 4", dm.activeTab)
+	}
+	sub, ok := dm.subs[4]
+	if !ok {
+		t.Fatal("expected subs[4] to be set")
+	}
+	if _, isNet := sub.(*NetworkModel); !isNet {
+		t.Errorf("subs[4] type = %T, want *NetworkModel", sub)
+	}
+}
+
+func TestDetail_HardwareSubviewReceivesMsg(t *testing.T) {
+	d := NewDetail(&fakeClient{}, "001")
+	// Switch to hardware tab.
+	next, _ := d.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'h'}})
+	dm := next.(*DetailModel)
+
+	// Deliver a loaded message.
+	loaded := HardwareLoadedMsg{
+		HW: wazuh.Hardware{CPUName: "Intel Xeon"},
+		OS: wazuh.OSInfo{OSName: "Debian"},
+	}
+	next2, _ := dm.Update(loaded)
+	dm2 := next2.(*DetailModel)
+
+	sub := dm2.subs[1].(*HardwareModel)
+	if !sub.loaded {
+		t.Error("hardware sub-view should be loaded")
+	}
+	if sub.hw.CPUName != "Intel Xeon" {
+		t.Errorf("CPUName = %q, want Intel Xeon", sub.hw.CPUName)
+	}
+}
