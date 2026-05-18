@@ -23,6 +23,8 @@ type Client interface {
 	GetAgent(ctx context.Context, id string) (wazuh.AgentDetail, error)
 	GetHardware(ctx context.Context, id string) (wazuh.Hardware, error)
 	GetOSInfo(ctx context.Context, id string) (wazuh.OSInfo, error)
+	ListProcesses(ctx context.Context, id string) ([]wazuh.Process, error)
+	ListPackages(ctx context.Context, id string) ([]wazuh.Package, error)
 	ListNetiface(ctx context.Context, id string) ([]wazuh.Netiface, error)
 	ListNetaddr(ctx context.Context, id string) ([]wazuh.Netaddr, error)
 	ListPorts(ctx context.Context, id string) ([]wazuh.Port, error)
