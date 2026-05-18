@@ -28,6 +28,26 @@ func (f *fakeClient) GetAgent(_ context.Context, _ string) (wazuh.AgentDetail, e
 	return wazuh.AgentDetail{}, nil
 }
 
+func (f *fakeClient) GetHardware(_ context.Context, _ string) (wazuh.Hardware, error) {
+	return wazuh.Hardware{}, nil
+}
+
+func (f *fakeClient) GetOSInfo(_ context.Context, _ string) (wazuh.OSInfo, error) {
+	return wazuh.OSInfo{}, nil
+}
+
+func (f *fakeClient) ListNetiface(_ context.Context, _ string) ([]wazuh.Netiface, error) {
+	return nil, nil
+}
+
+func (f *fakeClient) ListNetaddr(_ context.Context, _ string) ([]wazuh.Netaddr, error) {
+	return nil, nil
+}
+
+func (f *fakeClient) ListPorts(_ context.Context, _ string) ([]wazuh.Port, error) {
+	return nil, nil
+}
+
 func TestListView_RenderShowsAgents(t *testing.T) {
 	fc := &fakeClient{agents: []wazuh.Agent{
 		{ID: "000", Name: "master", Status: "active"},
