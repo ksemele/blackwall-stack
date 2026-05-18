@@ -23,6 +23,8 @@ type Client struct {
 	mu       sync.Mutex
 	token    string
 	tokenExp time.Time
+
+	clientCache
 }
 
 // New constructs a Client for the given Wazuh subsystem.
@@ -38,6 +40,7 @@ func New(sub config.WazuhSubsystem) (*Client, error) {
 		password:       sub.Password,
 		httpClient:     httpc,
 		insecureScheme: "https",
+		clientCache:    clientCache{cache: make(map[string]cacheEntry)},
 	}, nil
 }
 
