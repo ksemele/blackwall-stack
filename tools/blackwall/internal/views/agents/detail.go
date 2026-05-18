@@ -52,6 +52,7 @@ type DetailModel struct {
 	err       string
 	activeTab int
 	width     int
+	height    int
 	subs      map[int]subView
 }
 
@@ -72,12 +73,23 @@ func NewDetail(c Client, id string) *DetailModel {
 func (m *DetailModel) Name() string { return ":agent-detail" }
 
 func (m *DetailModel) Hints() []footer.Hint {
-	return []footer.Hint{
+	base := []footer.Hint{
 		{Key: "o/h/t/k/n/s", Desc: "tabs"},
 		{Key: "esc", Desc: "back"},
 		{Key: "r", Desc: "refresh"},
 		{Key: "?", Desc: "help"},
 	}
+	// Let active sub-view inject extra hints (e.g. scroll keys).
+	if sub, ok := m.subs[m.activeTab]; ok {
+		if kc, ok2 := sub.(keyCapturer); ok2 && kc.CapturesKeys() {
+			// In filter mode sub-view owns the keyboard; don't add scroll hints.
+			return base
+		}
+		if hp, ok2 := sub.(hintProvider); ok2 {
+			return append(base, hp.Hints()...)
+		}
+	}
+	return base
 }
 
 func (m *DetailModel) SetDetail(d wazuh.AgentDetail) { m.detail = d }
@@ -97,7 +109,20 @@ func (m *DetailModel) Init() tea.Cmd {
 func (m *DetailModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if ws, ok := msg.(tea.WindowSizeMsg); ok {
 		m.width = ws.Width
-		return m, nil
+		m.height = ws.Height
+		// headerRow (agent name) + tabbar row + newline = 3 fixed rows.
+		// footer rendered by app layer = 1 row.
+		subHeight := ws.Height - 4
+		if subHeight < 1 {
+			subHeight = 1
+		}
+		for i, sub := range m.subs {
+			if sv, ok := sub.(sizedView); ok {
+				sv.SetSize(ws.Width, subHeight)
+				m.subs[i] = sub
+			}
+		}
+		// Don't return early — fall through so any other handler gets the message.
 	}
 
 	switch msg := msg.(type) {

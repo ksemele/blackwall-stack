@@ -3,6 +3,7 @@ package agents
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -145,5 +146,73 @@ func TestPackages_LoadingState(t *testing.T) {
 	out := m.View()
 	if !strings.Contains(out, "loading") {
 		t.Errorf("expected loading state:\n%s", out)
+	}
+}
+
+func TestPackages_ScrollBehavior(t *testing.T) {
+	// Build 100 distinct packages.
+	pkgs := make([]wazuh.Package, 100)
+	for i := range pkgs {
+		pkgs[i] = wazuh.Package{
+			Name:    fmt.Sprintf("pkg-%03d", i),
+			Version: "1.0",
+			Vendor:  "TestVendor",
+		}
+	}
+
+	fc := &fakePackagesClient{items: pkgs}
+	m := runPackagesInit(fc)
+
+	// Send a WindowSizeMsg: 80 wide, 20 tall.
+	// headerRows=2, footerRows=2 => visible = 20 - 2 - 2 = 16 rows.
+	m.SetSize(80, 20)
+
+	out := m.View()
+	lines := strings.Split(strings.TrimRight(out, "\n"), "\n")
+
+	// Total lines must be ≤ 20 (header+separator+visible+footer+indicator).
+	if len(lines) > 20 {
+		t.Errorf("view has %d lines, want ≤ 20", len(lines))
+	}
+
+	// Header NAME must be in the first line.
+	if !strings.Contains(lines[0], "NAME") {
+		t.Errorf("first line should be header, got: %q", lines[0])
+	}
+
+	// Last line is count+indicator: "100/100  1–16 of 100"
+	lastLine := lines[len(lines)-1]
+	if !strings.Contains(lastLine, "of 100") {
+		t.Errorf("last line should contain 'of 100', got: %q", lastLine)
+	}
+	if !strings.Contains(lastLine, "1–") {
+		t.Errorf("last line should contain '1–', got: %q", lastLine)
+	}
+
+	// Scroll down 5 times with 'j'; first data row should now be pkg-005.
+	for i := 0; i < 5; i++ {
+		next, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}})
+		m = next.(*PackagesModel)
+	}
+	out2 := m.View()
+	lines2 := strings.Split(out2, "\n")
+	// First data row is after header (line[0]) and separator (line[1]).
+	firstDataRow := lines2[2]
+	if !strings.Contains(firstDataRow, "pkg-005") {
+		t.Errorf("after 5×j, first data row should be pkg-005, got: %q", firstDataRow)
+	}
+
+	// Jump to bottom with 'G'; last data row should be pkg-099.
+	next, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'G'}})
+	m = next.(*PackagesModel)
+	out3 := m.View()
+	if !strings.Contains(out3, "pkg-099") {
+		t.Errorf("after G, view should contain pkg-099:\n%s", out3)
+	}
+	// Last line should still contain 'of 100'.
+	lines3 := strings.Split(strings.TrimRight(out3, "\n"), "\n")
+	ind3 := lines3[len(lines3)-1]
+	if !strings.Contains(ind3, "of 100") {
+		t.Errorf("indicator after G should contain 'of 100', got: %q", ind3)
 	}
 }
