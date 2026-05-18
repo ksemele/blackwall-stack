@@ -2,8 +2,8 @@
 module: blackwall-eye
 status: in_progress
 stage: 1
-last_updated: 2026-05-17
-last_task: "TUI layout polish: k9s-style flex column table helper (rows stretch to terminal width — fixes truncated selection highlight), active tab as yellow badge matching context badge, footer pinned to terminal bottom with a second divider above it"
+last_updated: 2026-05-18
+last_task: "TUI host-detail: replaced numeric [1]..[6] tab prefixes with letter hotkeys [O][H][T][K][N][S] via RenderWithKeys; backward-compatible with app.go numeric tabs"
 next_task: "Interactive smoke test against live Docker env; add filter (/) to agents and contexts lists; auto-clear error footer message after timeout"
 blockers: []
 ---
