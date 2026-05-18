@@ -31,6 +31,10 @@ func statusStyled(status string) string {
 
 var detailTabs = []string{"Overview", "Hardware", "Top", "Packages", "Network", "Security"}
 
+// detailTabKeys are the upper-case hotkey labels shown in the tabbar prefix.
+// IMPORTANT: keep in sync with tabIndex below — same order, same length.
+var detailTabKeys = []string{"O", "H", "T", "K", "N", "S"}
+
 // tabIndex maps single-letter hotkeys to tab indices.
 var tabIndex = map[string]int{
 	"o": 0,
@@ -178,7 +182,7 @@ func (m *DetailModel) renderActiveTab() string {
 func (m *DetailModel) View() string {
 	a := m.detail.Agent
 	header := fmt.Sprintf("Agent %s — %s  %s\n", a.ID, a.Name, statusStyled(a.Status))
-	tabs := tabbar.Render(detailTabs, m.activeTab, m.width, "")
+	tabs := tabbar.RenderWithKeys(detailTabs, detailTabKeys, m.activeTab, m.width, "")
 
 	if m.err != "" {
 		return header + tabs + "\n" + fmt.Sprintf("⚠ %s\n", m.err)
