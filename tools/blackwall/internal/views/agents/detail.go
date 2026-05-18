@@ -9,6 +9,7 @@ import (
 
 	"github.com/greengrunt/blackwall/tools/blackwall/internal/app"
 	"github.com/greengrunt/blackwall/tools/blackwall/internal/ui/footer"
+	"github.com/greengrunt/blackwall/tools/blackwall/internal/ui/tabbar"
 	"github.com/greengrunt/blackwall/tools/blackwall/internal/ui/styles"
 	"github.com/greengrunt/blackwall/tools/blackwall/internal/wazuh"
 )
@@ -28,11 +29,25 @@ func statusStyled(status string) string {
 	}
 }
 
+var detailTabs = []string{"Overview", "Hardware", "Top", "Packages", "Network", "Security"}
+
+// tabIndex maps single-letter hotkeys to tab indices.
+var tabIndex = map[string]int{
+	"o": 0,
+	"h": 1,
+	"t": 2,
+	"k": 3,
+	"n": 4,
+	"s": 5,
+}
+
 type DetailModel struct {
-	client  Client
-	agentID string
-	detail  wazuh.AgentDetail
-	err     string
+	client    Client
+	agentID   string
+	detail    wazuh.AgentDetail
+	err       string
+	activeTab int
+	width     int
 }
 
 func NewDetail(c Client, id string) *DetailModel {
@@ -43,6 +58,7 @@ func (m *DetailModel) Name() string { return ":agent-detail" }
 
 func (m *DetailModel) Hints() []footer.Hint {
 	return []footer.Hint{
+		{Key: "o/h/t/k/n/s", Desc: "tabs"},
 		{Key: "esc", Desc: "back"},
 		{Key: "r", Desc: "refresh"},
 		{Key: "?", Desc: "help"},
@@ -64,6 +80,11 @@ func (m *DetailModel) Init() tea.Cmd {
 }
 
 func (m *DetailModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if ws, ok := msg.(tea.WindowSizeMsg); ok {
+		m.width = ws.Width
+		return m, nil
+	}
+
 	switch msg := msg.(type) {
 	case DetailLoadedMsg:
 		if msg.Err != nil {
@@ -74,6 +95,10 @@ func (m *DetailModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.detail = msg.Detail
 
 	case tea.KeyMsg:
+		if idx, ok := tabIndex[msg.String()]; ok {
+			m.activeTab = idx
+			return m, nil
+		}
 		switch msg.String() {
 		case "esc", "left":
 			return m, func() tea.Msg { return app.BackMsg{} }
@@ -84,10 +109,8 @@ func (m *DetailModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m *DetailModel) View() string {
-	if m.err != "" {
-		return fmt.Sprintf("⚠ %s\n", m.err)
-	}
+// renderOverview renders agent metadata (was the full View content before tabbar).
+func (m *DetailModel) renderOverview() string {
 	a := m.detail.Agent
 	lastSeen := wazuh.FormatTimestamp(a.LastKeepAlive, "2006-01-02 15:04:05")
 	registered := wazuh.FormatTimestamp(a.DateAdd, "2006-01-02 15:04:05")
@@ -96,8 +119,7 @@ func (m *DetailModel) View() string {
 		osStr = "—"
 	}
 	return fmt.Sprintf(
-		"Agent %s — %s\n"+
-			"──────────────────────────────\n"+
+		"──────────────────────────────\n"+
 			"Status:     %s\n"+
 			"IP:         %s\n"+
 			"Version:    %s\n"+
@@ -105,6 +127,37 @@ func (m *DetailModel) View() string {
 			"Last seen:  %s\n"+
 			"Registered: %s\n"+
 			"Manager:    %s\n",
-		a.ID, a.Name, statusStyled(a.Status), a.IP, a.Version, osStr, lastSeen, registered, a.Manager,
+		statusStyled(a.Status), a.IP, a.Version, osStr, lastSeen, registered, a.Manager,
 	)
+}
+
+func (m *DetailModel) renderActiveTab() string {
+	switch m.activeTab {
+	case 0:
+		return m.renderOverview()
+	case 1:
+		return "Hardware — coming soon\n"
+	case 2:
+		return "Top (processes) — coming soon\n"
+	case 3:
+		return "Packages — coming soon\n"
+	case 4:
+		return "Network — coming soon\n"
+	case 5:
+		return "Security — coming soon\n"
+	default:
+		return ""
+	}
+}
+
+func (m *DetailModel) View() string {
+	a := m.detail.Agent
+	header := fmt.Sprintf("Agent %s — %s  %s\n", a.ID, a.Name, statusStyled(a.Status))
+	tabs := tabbar.Render(detailTabs, m.activeTab, m.width, "")
+
+	if m.err != "" {
+		return header + tabs + "\n" + fmt.Sprintf("⚠ %s\n", m.err)
+	}
+
+	return header + tabs + "\n" + m.renderActiveTab()
 }
