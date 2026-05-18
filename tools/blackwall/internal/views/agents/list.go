@@ -21,6 +21,11 @@ import (
 type Client interface {
 	ListAgents(ctx context.Context) ([]wazuh.Agent, error)
 	GetAgent(ctx context.Context, id string) (wazuh.AgentDetail, error)
+	GetHardware(ctx context.Context, id string) (wazuh.Hardware, error)
+	GetOSInfo(ctx context.Context, id string) (wazuh.OSInfo, error)
+	ListNetiface(ctx context.Context, id string) ([]wazuh.Netiface, error)
+	ListNetaddr(ctx context.Context, id string) ([]wazuh.Netaddr, error)
+	ListPorts(ctx context.Context, id string) ([]wazuh.Port, error)
 }
 
 type Model struct {
