@@ -32,3 +32,14 @@ type sizedView interface {
 type hintProvider interface {
 	Hints() []footer.Hint
 }
+
+// Compile-time assertions that sub-views satisfy the optional interfaces.
+// DetailModel uses these via type-assertion (sub.(sizedView) / sub.(hintProvider))
+// at runtime; the asserts here lock the contract so an accidental signature
+// change breaks the build instead of silently disabling resize/hints.
+var (
+	_ sizedView    = (*PackagesModel)(nil)
+	_ hintProvider = (*PackagesModel)(nil)
+	_ sizedView    = (*ProcessesModel)(nil)
+	_ hintProvider = (*ProcessesModel)(nil)
+)
