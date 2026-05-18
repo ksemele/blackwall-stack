@@ -48,10 +48,18 @@ type DetailModel struct {
 	err       string
 	activeTab int
 	width     int
+	subs      map[int]subView
 }
 
 func NewDetail(c Client, id string) *DetailModel {
-	return &DetailModel{client: c, agentID: id}
+	return &DetailModel{
+		client:  c,
+		agentID: id,
+		subs: map[int]subView{
+			1: NewHardware(c, id),
+			4: NewNetwork(c, id),
+		},
+	}
 }
 
 func (m *DetailModel) Name() string { return ":agent-detail" }
@@ -97,6 +105,9 @@ func (m *DetailModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		if idx, ok := tabIndex[msg.String()]; ok {
 			m.activeTab = idx
+			if sub, hasSub := m.subs[idx]; hasSub {
+				return m, sub.Init()
+			}
 			return m, nil
 		}
 		switch msg.String() {
@@ -106,6 +117,13 @@ func (m *DetailModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, m.Init()
 		}
 	}
+
+	if sub, ok := m.subs[m.activeTab]; ok {
+		next, cmd := sub.Update(msg)
+		m.subs[m.activeTab] = next
+		return m, cmd
+	}
+
 	return m, nil
 }
 
@@ -132,17 +150,16 @@ func (m *DetailModel) renderOverview() string {
 }
 
 func (m *DetailModel) renderActiveTab() string {
+	if sub, ok := m.subs[m.activeTab]; ok {
+		return sub.View()
+	}
 	switch m.activeTab {
 	case 0:
 		return m.renderOverview()
-	case 1:
-		return "Hardware — coming soon\n"
 	case 2:
-		return "Top (processes) — coming soon\n"
+		return "Top — coming soon\n"
 	case 3:
 		return "Packages — coming soon\n"
-	case 4:
-		return "Network — coming soon\n"
 	case 5:
 		return "Security — coming soon\n"
 	default:
