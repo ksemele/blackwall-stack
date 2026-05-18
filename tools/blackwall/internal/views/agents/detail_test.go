@@ -101,6 +101,75 @@ func TestDetail_NKeyActivatesNetworkSubview(t *testing.T) {
 	}
 }
 
+func TestDetail_TKeyActivatesProcessesSubview(t *testing.T) {
+	d := NewDetail(&fakeClient{}, "001")
+	next, _ := d.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'t'}})
+	dm := next.(*DetailModel)
+
+	if dm.activeTab != 2 {
+		t.Errorf("activeTab = %d, want 2 after pressing 't'", dm.activeTab)
+	}
+	sub, ok := dm.subs[2]
+	if !ok {
+		t.Fatal("expected subs[2] to be set")
+	}
+	if _, isProc := sub.(*ProcessesModel); !isProc {
+		t.Errorf("subs[2] type = %T, want *ProcessesModel", sub)
+	}
+}
+
+func TestDetail_KKeyActivatesPackagesSubview(t *testing.T) {
+	d := NewDetail(&fakeClient{}, "001")
+	next, _ := d.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'k'}})
+	dm := next.(*DetailModel)
+
+	if dm.activeTab != 3 {
+		t.Errorf("activeTab = %d, want 3 after pressing 'k'", dm.activeTab)
+	}
+	sub, ok := dm.subs[3]
+	if !ok {
+		t.Fatal("expected subs[3] to be set")
+	}
+	if _, isPkg := sub.(*PackagesModel); !isPkg {
+		t.Errorf("subs[3] type = %T, want *PackagesModel", sub)
+	}
+}
+
+func TestDetail_FilteringSubviewCapturesKeys(t *testing.T) {
+	d := NewDetail(&fakeClient{}, "001")
+
+	// Switch to processes tab (t) and trigger init.
+	next, _ := d.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'t'}})
+	dm := next.(*DetailModel)
+
+	// Deliver loaded msg so the sub-view is ready.
+	next2, _ := dm.Update(ProcessesLoadedMsg{Items: []wazuh.Process{
+		{PID: 1, Name: "sshd"},
+	}})
+	dm2 := next2.(*DetailModel)
+
+	// Press '/' to enter filter mode.
+	next3, _ := dm2.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}})
+	dm3 := next3.(*DetailModel)
+
+	pm := dm3.subs[2].(*ProcessesModel)
+	if !pm.filtering {
+		t.Fatal("processes sub-view should be in filtering mode")
+	}
+
+	// Now press 'h' — this is a tab hotkey, but it must go to the filter instead.
+	next4, _ := dm3.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'h'}})
+	dm4 := next4.(*DetailModel)
+
+	if dm4.activeTab != 2 {
+		t.Errorf("activeTab changed to %d; 'h' should have been consumed by filter", dm4.activeTab)
+	}
+	pm4 := dm4.subs[2].(*ProcessesModel)
+	if pm4.filter != "h" {
+		t.Errorf("filter = %q, want \"h\"", pm4.filter)
+	}
+}
+
 func TestDetail_HardwareSubviewReceivesMsg(t *testing.T) {
 	d := NewDetail(&fakeClient{}, "001")
 	// Switch to hardware tab.
