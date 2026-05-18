@@ -72,9 +72,12 @@ type OSInfo struct {
 }
 
 // Process holds one running process from syscollector.
+// PID is declared as FlexInt because Wazuh syscollector returns it as a JSON
+// string (e.g. "1") while all other numeric fields are plain integers. PPID
+// stays as int — it consistently arrives unquoted in tested Wazuh versions.
 type Process struct {
-	PID       int    `json:"pid"`
-	PPID      int    `json:"ppid"`
+	PID       FlexInt `json:"pid"`
+	PPID      int     `json:"ppid"`
 	Name      string `json:"name"`
 	Cmd       string `json:"cmd"`
 	Argvs     string `json:"argvs"`
@@ -108,18 +111,20 @@ type Package struct {
 }
 
 // Port holds one network port entry from syscollector.
+// PID is FlexInt for the same reason as Process.PID: syscollector may return
+// it as a quoted string even though logically it is a number.
 type Port struct {
-	Protocol   string `json:"protocol"`
-	LocalIP    string `json:"local_ip"`
-	LocalPort  int    `json:"local_port"`
-	RemoteIP   string `json:"remote_ip"`
-	RemotePort int    `json:"remote_port"`
-	TxQueue    int64  `json:"tx_queue"`
-	RxQueue    int64  `json:"rx_queue"`
-	Inode      int64  `json:"inode"`
-	State      string `json:"state"`
-	PID        int    `json:"pid"`
-	Process    string `json:"process"`
+	Protocol   string  `json:"protocol"`
+	LocalIP    string  `json:"local_ip"`
+	LocalPort  int     `json:"local_port"`
+	RemoteIP   string  `json:"remote_ip"`
+	RemotePort int     `json:"remote_port"`
+	TxQueue    int64   `json:"tx_queue"`
+	RxQueue    int64   `json:"rx_queue"`
+	Inode      int64   `json:"inode"`
+	State      string  `json:"state"`
+	PID        FlexInt `json:"pid"`
+	Process    string  `json:"process"`
 }
 
 // Netiface holds one network interface from syscollector.
