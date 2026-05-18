@@ -36,6 +36,14 @@ func (f *fakeClient) GetOSInfo(_ context.Context, _ string) (wazuh.OSInfo, error
 	return wazuh.OSInfo{}, nil
 }
 
+func (f *fakeClient) ListProcesses(_ context.Context, _ string) ([]wazuh.Process, error) {
+	return nil, nil
+}
+
+func (f *fakeClient) ListPackages(_ context.Context, _ string) ([]wazuh.Package, error) {
+	return nil, nil
+}
+
 func (f *fakeClient) ListNetiface(_ context.Context, _ string) ([]wazuh.Netiface, error) {
 	return nil, nil
 }
