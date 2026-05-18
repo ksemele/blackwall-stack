@@ -57,6 +57,8 @@ func NewDetail(c Client, id string) *DetailModel {
 		agentID: id,
 		subs: map[int]subView{
 			1: NewHardware(c, id),
+			2: NewProcesses(c, id),
+			3: NewPackages(c, id),
 			4: NewNetwork(c, id),
 		},
 	}
@@ -103,6 +105,13 @@ func (m *DetailModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.detail = msg.Detail
 
 	case tea.KeyMsg:
+		if sub, ok := m.subs[m.activeTab]; ok {
+			if kc, ok := sub.(keyCapturer); ok && kc.CapturesKeys() {
+				next, cmd := sub.Update(msg)
+				m.subs[m.activeTab] = next
+				return m, cmd
+			}
+		}
 		if idx, ok := tabIndex[msg.String()]; ok {
 			m.activeTab = idx
 			if sub, hasSub := m.subs[idx]; hasSub {
