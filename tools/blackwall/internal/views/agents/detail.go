@@ -60,6 +60,7 @@ func NewDetail(c Client, id string) *DetailModel {
 			2: NewProcesses(c, id),
 			3: NewPackages(c, id),
 			4: NewNetwork(c, id),
+			5: NewSecurity(c, id),
 		},
 	}
 }
@@ -169,8 +170,6 @@ func (m *DetailModel) renderActiveTab() string {
 		return "Top — coming soon\n"
 	case 3:
 		return "Packages — coming soon\n"
-	case 5:
-		return "Security — coming soon\n"
 	default:
 		return ""
 	}

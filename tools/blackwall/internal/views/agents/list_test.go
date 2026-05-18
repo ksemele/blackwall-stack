@@ -56,6 +56,26 @@ func (f *fakeClient) ListPorts(_ context.Context, _ string) ([]wazuh.Port, error
 	return nil, nil
 }
 
+func (f *fakeClient) GetSyscheckLastScan(_ context.Context, _ string) (wazuh.SyscheckScan, error) {
+	return wazuh.SyscheckScan{}, nil
+}
+
+func (f *fakeClient) ListSyscheckEntries(_ context.Context, _ string) ([]wazuh.SyscheckEntry, error) {
+	return nil, nil
+}
+
+func (f *fakeClient) GetRootcheckLastScan(_ context.Context, _ string) (wazuh.RootcheckScan, error) {
+	return wazuh.RootcheckScan{}, nil
+}
+
+func (f *fakeClient) ListRootcheckFindings(_ context.Context, _ string) ([]wazuh.RootcheckFinding, error) {
+	return nil, nil
+}
+
+func (f *fakeClient) ListSCAPolicies(_ context.Context, _ string) ([]wazuh.SCAPolicy, error) {
+	return nil, nil
+}
+
 func TestListView_RenderShowsAgents(t *testing.T) {
 	fc := &fakeClient{agents: []wazuh.Agent{
 		{ID: "000", Name: "master", Status: "active"},
