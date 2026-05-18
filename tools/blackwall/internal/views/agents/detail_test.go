@@ -135,6 +135,23 @@ func TestDetail_KKeyActivatesPackagesSubview(t *testing.T) {
 	}
 }
 
+func TestDetail_SKeyActivatesSecuritySubview(t *testing.T) {
+	d := NewDetail(&fakeClient{}, "001")
+	next, _ := d.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'s'}})
+	dm := next.(*DetailModel)
+
+	if dm.activeTab != 5 {
+		t.Errorf("activeTab = %d, want 5 after pressing 's'", dm.activeTab)
+	}
+	sub, ok := dm.subs[5]
+	if !ok {
+		t.Fatal("expected subs[5] to be set")
+	}
+	if _, isSec := sub.(*SecurityModel); !isSec {
+		t.Errorf("subs[5] type = %T, want *SecurityModel", sub)
+	}
+}
+
 func TestDetail_FilteringSubviewCapturesKeys(t *testing.T) {
 	d := NewDetail(&fakeClient{}, "001")
 
