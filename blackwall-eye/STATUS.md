@@ -3,7 +3,7 @@ module: blackwall-eye
 status: in_progress
 stage: 1
 last_updated: 2026-05-18
-last_task: "Enabled syscollector wodle in wazuh-agent role; hardware/processes/packages/ports/network now populated via API"
+last_task: "TUI: FlexInt for syscollector pid; scrollable Packages/Top with sticky header"
 next_task: "Interactive smoke test against live Docker env; add filter (/) to agents and contexts lists; auto-clear error footer message after timeout"
 blockers: []
 ---
