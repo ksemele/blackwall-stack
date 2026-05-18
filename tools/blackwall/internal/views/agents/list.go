@@ -28,6 +28,11 @@ type Client interface {
 	ListNetiface(ctx context.Context, id string) ([]wazuh.Netiface, error)
 	ListNetaddr(ctx context.Context, id string) ([]wazuh.Netaddr, error)
 	ListPorts(ctx context.Context, id string) ([]wazuh.Port, error)
+	GetSyscheckLastScan(ctx context.Context, id string) (wazuh.SyscheckScan, error)
+	ListSyscheckEntries(ctx context.Context, id string) ([]wazuh.SyscheckEntry, error)
+	GetRootcheckLastScan(ctx context.Context, id string) (wazuh.RootcheckScan, error)
+	ListRootcheckFindings(ctx context.Context, id string) ([]wazuh.RootcheckFinding, error)
+	ListSCAPolicies(ctx context.Context, id string) ([]wazuh.SCAPolicy, error)
 }
 
 type Model struct {
