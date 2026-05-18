@@ -16,3 +16,6 @@ wazuh_manager_protocol: "tcp"
 wazuh_enrollment_host: "{{ wazuh_manager_host }}"
 wazuh_enrollment_port: 1515
 wazuh_enrollment_password: ""
+
+# Syscollector (system inventory)
+wazuh_syscollector_interval: "5m"
