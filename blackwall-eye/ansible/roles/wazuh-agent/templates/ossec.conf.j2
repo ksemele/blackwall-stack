@@ -51,6 +51,19 @@
     <directories realtime="yes">/etc/ssh/sshd_config</directories>
   </syscheck>
 
+  <!-- System inventory: hardware, processes, packages, network -->
+  <wodle name="syscollector">
+    <disabled>no</disabled>
+    <interval>{{ wazuh_syscollector_interval | default('5m') }}</interval>
+    <scan_on_start>yes</scan_on_start>
+    <hardware>yes</hardware>
+    <os>yes</os>
+    <network>yes</network>
+    <packages>yes</packages>
+    <ports all="no">yes</ports>
+    <processes>yes</processes>
+  </wodle>
+
   <!-- Active response disabled for Stage 1 -->
   <active-response>
     <disabled>yes</disabled>
