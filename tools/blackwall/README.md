@@ -67,6 +67,46 @@ blackwall --once                       # print agents and exit (script-friendly)
 | `Ctrl+R` | force refresh now |
 | `?` | toggle help (planned) |
 
+## Agent detail
+
+Open an agent from the agents list with `↵` to enter detail. The detail screen
+has six tabs, switchable by hotkey:
+
+| Tab | Key | Content |
+|---|---|---|
+| Overview | `o` | Status, IP, version, OS, last-seen, registered, manager |
+| Hardware | `h` | CPU, RAM, board, OS details |
+| Top | `t` | Running processes (filterable with `/`) |
+| Packages | `k` | Installed packages (filterable with `/`) |
+| Network | `n` | Interfaces, addresses, open ports |
+| Security | `s` | FIM scan, rootcheck findings, SCA compliance |
+
+Press `esc` to return to the agents list, `r` to force a refresh.
+
+While in Top or Packages, press `/` to start typing a substring filter.
+`Enter` applies it, `Esc` clears.
+
+Hardware, packages, and network inventory are cached for 30–60 seconds to
+avoid hammering the Wazuh API when switching between tabs. Press `r` to
+force a fresh fetch.
+
+## Local development
+
+Rebuild and reinstall after local changes:
+
+```bash
+cd tools/blackwall
+make install              # go install ./cmd/blackwall — refreshes the binary in $GOBIN
+```
+
+Clean rebuild:
+
+```bash
+make clean && make install
+```
+
+Other useful targets: `make build` (binary into `bin/`), `make test`, `make lint`.
+
 ## Distribution to remote hosts
 
 ```bash
