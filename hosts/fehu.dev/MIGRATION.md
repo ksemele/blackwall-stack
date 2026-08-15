@@ -68,11 +68,18 @@ sudo install -m 0644 systemd/blackwall-cf-refresh.service /etc/systemd/system/
 sudo install -m 0644 systemd/blackwall-cf-refresh.timer   /etc/systemd/system/
 sudo systemctl daemon-reload
 
-# --- 2. Сверить переменные с реальностью ---
-ip -o -4 route show to default | awk '{print $5}'   # -> BASE_WAN_IF / WALL_WAN_IF
-podman network inspect podman -f '{{range .Subnets}}{{.Subnet}}{{end}}'  # -> PODMAN_NET
-sudo vi /etc/nftables.d/blackwall-base.nft
-sudo vi /etc/default/blackwall-cf-refresh            # ADMIN_ALLOW — свой IP!
+# --- 2. Переменные ---
+# Сверено на хосте 2026-08-15 — значения в файлах уже верные, править не нужно:
+#   BASE_WAN_IF / WALL_WAN_IF = "eth0"       (ip -o -4 route show to default)
+#   PODMAN_NET = 10.88.0.0/16                (podman network inspect podman)
+# Перепроверить, если менялась сеть хоста или podman:
+ip -o -4 route show to default | awk '{print $5}'
+podman network inspect podman -f '{{range .Subnets}}{{.Subnet}}{{end}}'
+
+# Остаётся только ADMIN_ALLOW — свои IP для прямого доступа к origin мимо CF.
+# Пусто — безопасно: на SSH не влияет, просто не будет прямого входа на 80/443
+# для деплоя и отладки.
+sudo vi /etc/default/blackwall-cf-refresh
 
 # --- 3. Синтаксис, ничего не применяя ---
 sudo nft -c -f /etc/nftables.d/blackwall-base.nft
