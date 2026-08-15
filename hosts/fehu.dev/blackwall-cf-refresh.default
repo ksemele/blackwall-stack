@@ -1,0 +1,24 @@
+# /etc/default/blackwall-cf-refresh
+
+# Твои IP с прямым доступом к origin в обход Cloudflare (через пробел).
+# Сюда — адрес, с которого деплоишь, и IP мониторинга (blackwall-eye),
+# иначе после включения whitelist'а они тоже получат drop на 80/443.
+# Оставить пустым, если прямой доступ не нужен вообще.
+ADMIN_ALLOW=""
+
+# Внешний интерфейс. Пусто = определить по default route.
+# Проверить: ip -o -4 route show to default | awk '{print $5}'
+WAN_IF=""
+
+# --- nginx real_ip ---
+# Имя/ID контейнера podman с nginx. Пусто = не трогать real_ip вообще.
+# Найти: podman ps --format '{{.Names}}\t{{.Ports}}'
+NGINX_CONTAINER=""
+
+# Путь НА ХОСТЕ к файлу внутри каталога, смонтированного в контейнер
+# как /etc/nginx/conf.d. Узнать монтирования:
+#   podman inspect $NGINX_CONTAINER --format '{{range .Mounts}}{{.Source}} -> {{.Destination}}{{"\n"}}{{end}}'
+#REALIP_OUT=/opt/fehu/nginx/conf.d/cf-realip.conf
+
+# Путь для nftables-правил (обычно менять не нужно)
+#RULES_OUT=/etc/nftables.d/blackwall-wall.nft

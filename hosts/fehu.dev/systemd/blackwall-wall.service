@@ -1,0 +1,17 @@
+[Unit]
+Description=Blackwall: load origin-cloaking nftables rules (Cloudflare-only 80/443)
+Documentation=file:///etc/nftables.d/blackwall-wall.nft
+# firewalld и netavark управляют своими таблицами (inet firewalld / ip nat /
+# ip filter) и нашу не трогают — ни firewall-cmd --reload, ни рестарт podman
+# её не сносят. Порядок нужен лишь чтобы не гоняться за ними при загрузке.
+After=firewalld.service nftables.service network-pre.target
+Wants=network-pre.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/sbin/nft -f /etc/nftables.d/blackwall-wall.nft
+ExecStop=/usr/sbin/nft delete table inet blackwall_wall
+
+[Install]
+WantedBy=multi-user.target
