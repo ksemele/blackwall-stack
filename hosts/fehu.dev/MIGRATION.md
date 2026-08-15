@@ -50,12 +50,38 @@ ExecStop=/sbin/nft flush ruleset
 drop-in `systemd/nftables.service.d/blackwall.conf`, ограничивающий службу
 собственными таблицами. **Без drop-in'а миграцию не делать.**
 
+## Что куда ложится
+
+| В репозитории | На хосте |
+|---|---|
+| `nftables/blackwall-base.nft` | `/etc/nftables.d/blackwall-base.nft` |
+| `nftables/blackwall-wall.nft` | `/etc/nftables.d/blackwall-wall.nft` |
+| `nftables/sysconfig-nftables.conf` | `/etc/sysconfig/nftables.conf` |
+| `systemd/nftables.service.d/blackwall.conf` | `/etc/systemd/system/nftables.service.d/blackwall.conf` |
+| `bin/blackwall-cf-refresh` | `/usr/local/sbin/blackwall-cf-refresh` |
+| `blackwall-cf-refresh.default` | `/etc/default/blackwall-cf-refresh` |
+| `systemd/blackwall-cf-refresh.service` | `/etc/systemd/system/` |
+| `systemd/blackwall-cf-refresh.timer` | `/etc/systemd/system/` |
+| `nginx/cf-realip.conf` | не копировать вручную — его пишет `blackwall-cf-refresh` по пути `REALIP_OUT` |
+
+`/etc/sysconfig/nftables.conf` уже существует (идёт в пакете `nftables`, внутри
+закомментированный пример) — мы его перезаписываем, поэтому ниже он бэкапится.
+
 ## Порядок
 
 Нужны две SSH-сессии: рабочая и запасная (не закрывать до конца).
 
 ```bash
+# --- 0. Перенос файлов со своей машины на хост ---
+# выполняется ЛОКАЛЬНО, из корня репозитория blackwall
+scp -r hosts/fehu.dev root@93.115.20.111:/root/blackwall-fw
+ssh root@93.115.20.111
+cd /root/blackwall-fw          # дальше всё выполняется здесь, на хосте
+
 # --- 1. Файлы ---
+# бэкап того, что перезаписываем
+sudo cp -a /etc/sysconfig/nftables.conf /etc/sysconfig/nftables.conf.bak-$(date +%F)
+
 sudo install -d -m 0755 /etc/nftables.d
 sudo install -m 0644 nftables/blackwall-base.nft /etc/nftables.d/blackwall-base.nft
 sudo install -m 0644 nftables/blackwall-wall.nft /etc/nftables.d/blackwall-wall.nft
@@ -150,6 +176,9 @@ sudo nft delete table inet blackwall_base
 sudo systemctl unmask firewalld
 sudo systemctl enable --now firewalld
 sudo systemctl restart podman   # netavark перевесит свои правила
+
+# вернуть исходный конфиг пакета (если понадобится ставить nftables заново)
+sudo cp -a /etc/sysconfig/nftables.conf.bak-* /etc/sysconfig/nftables.conf
 ```
 
 ## Осталось на подумать
