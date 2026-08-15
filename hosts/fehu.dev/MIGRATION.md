@@ -16,8 +16,8 @@ nftables.service    disabled, inactive (dead)
 | Что | Откуда сейчас | Куда переезжает |
 |---|---|---|
 | 22 SSH отовсюду | `filter_IN_public_allow` | `blackwall_base` input |
-| 9090 cockpit | `filter_IN_public_allow` | `blackwall_base` input |
-| 9999 | `filter_IN_public_allow` | `blackwall_base` input |
+| 9090 cockpit | `filter_IN_public_allow` | **убрано** — никто не слушает |
+| 9999 zuzia | `filter_IN_public_allow` | `blackwall_base`, только с `@zuzia_v4` |
 | 443 → контейнер | DNAT netavark + `ct status dnat accept` | `blackwall_base` forward |
 | контейнеры наружу | `filter_FWD_public_allow { oifname eth0 }` | `blackwall_base` forward |
 | ICMP/ICMPv6 | `meta l4proto { icmp, ipv6-icmp } accept` | `blackwall_base` input |
@@ -27,7 +27,7 @@ nftables.service    disabled, inactive (dead)
 Проверено на стенде (две сети, DNAT в бэкенд-контейнер):
 
 ```
-22/9090/9999 -> OPEN     8080, 53 -> blocked
+22/9999 -> OPEN          8080, 53 -> blocked
 443 не-CF    -> blocked  443 из cf_v4 -> OPEN
 контейнер -> интернет: OPEN
 ```
@@ -183,15 +183,13 @@ sudo cp -a /etc/sysconfig/nftables.conf.bak-* /etc/sysconfig/nftables.conf
 
 ## Осталось на подумать
 
-**9090 (cockpit) и 9999 открыты всему интернету.** Перенесены как есть, чтобы
-миграция ничего не меняла по доступу. Но cockpit — веб-панель управления хостом
-с root-доступом; по риску это больше, чем открытый origin. Ограничить своими
-адресами — правка одной строки в `blackwall_base`:
+**9090 (cockpit) — убран.** `ss -lntp` показал, что на нём никто не слушает
+(cockpit.socket не запущен), снаружи порт уходит в таймаут. Разрешение осталось
+от firewalld и держало открытым порт в пустоту.
 
-```nft
-tcp dport { 9090, 9999 } ip saddr @admin_v4 accept
-tcp dport 22 accept
-```
+**9999 (zuzia) — ограничен адресами сервиса.** Мониторинг скрейпит хост со
+своих серверов и публикует список адресов; они лежат в set `zuzia_v4` в
+`blackwall-base.nft`. **Заполнить до применения** — пустой set закроет 9999
+для всех, и мониторинг перестанет собирать данные.
 
-`admin_v4` при этом надо перенести из `blackwall_wall` в `blackwall_base` или
-завести второй такой же set. SSH остаётся открытым отовсюду — вход по ключу.
+SSH остаётся открытым отовсюду — вход по ключу.
