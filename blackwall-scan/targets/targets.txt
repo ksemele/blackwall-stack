@@ -1,0 +1,5 @@
+# blackwall-scan targets — one per line. Domains or IPv4.
+# Lines starting with # are ignored.
+example.com
+203.0.113.10
+198.51.100.20
