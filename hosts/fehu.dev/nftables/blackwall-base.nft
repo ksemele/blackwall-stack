@@ -22,8 +22,11 @@
 
 define BASE_WAN_IF = "eth0"
 
-# Подсеть podman. Проверить: podman network inspect podman -f '{{range .Subnets}}{{.Subnet}}{{end}}'
+# Подсеть и мост podman.
+#   podman network inspect podman -f '{{range .Subnets}}{{.Subnet}}{{end}}'
+#   podman network inspect podman -f '{{.NetworkInterface}}'
 define PODMAN_NET = 10.88.0.0/16
+define PODMAN_IF = "podman0"
 
 table inet blackwall_base
 delete table inet blackwall_base
@@ -43,6 +46,19 @@ table inet blackwall_base {
         iif lo accept
         ct state established,related accept
         ct state invalid drop
+
+        # Антиспуфинг: адреса подсети контейнеров не могут прийти из интернета.
+        # Нужен до правил ниже, которые доверяют $PODMAN_NET.
+        iifname $BASE_WAN_IF ip saddr $PODMAN_NET counter drop
+
+        # DNS от контейнеров к aardvark-dns на хосте.
+        # У netavark это разрешено в его таблице:
+        #     chain NETAVARK_INPUT { ip saddr 10.88.0.0/16 udp dport 53 accept }
+        # но его accept не спасает: наш policy drop в другой таблице убивает
+        # пакет независимо. Без этих двух строк у контейнеров не резолвятся
+        # имена — молча, с виду «сеть есть, но ничего не работает».
+        iifname $PODMAN_IF ip saddr $PODMAN_NET udp dport 53 counter accept
+        iifname $PODMAN_IF ip saddr $PODMAN_NET tcp dport 53 counter accept
 
         # ICMP целиком: без icmpv6 ломается IPv6 (neighbor discovery, PMTU),
         # без icmp — path MTU discovery в IPv4. firewalld пускал их так же.
