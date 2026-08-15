@@ -1,0 +1,88 @@
+#!/usr/sbin/nft -f
+#
+# blackwall-base — основной firewall хоста, замена firewalld.
+#
+# Воспроизводит поведение прежней зоны firewalld `public`, но явным списком
+# правил. Разбор соответствия — в README, раздел «Миграция с firewalld».
+#
+# Открыто наружу:
+#   22    SSH   — отовсюду (вход только по ключу)
+#   9090  cockpit
+#   9999
+#   443   НЕ здесь: приходит через DNAT podman и обрабатывается в forward,
+#         фильтруется отдельной таблицей blackwall_wall (только префиксы CF)
+#
+# Таблицы netavark (`ip nat`, `ip filter`) эта таблица не трогает: она их
+# дополняет, а не заменяет. Публикация портов контейнеров продолжает работать
+# через `ct status dnat accept` в forward — ровно как это делал firewalld.
+#
+# Применить:  sudo nft -f /etc/nftables.d/blackwall-base.nft
+# Проверить:  sudo nft list table inet blackwall_base
+# Откатить:   sudo nft delete table inet blackwall_base
+
+define BASE_WAN_IF = "eth0"
+
+# Подсеть podman. Проверить: podman network inspect podman -f '{{range .Subnets}}{{.Subnet}}{{end}}'
+define PODMAN_NET = 10.88.0.0/16
+
+table inet blackwall_base
+delete table inet blackwall_base
+
+table inet blackwall_base {
+
+    # Порты, открытые всему интернету.
+    # 22 — по требованию владельца: вход только по ключу, PasswordAuthentication no.
+    set public_tcp {
+        type inet_service
+        elements = { 22, 9090, 9999 }
+    }
+
+    chain input {
+        type filter hook input priority filter; policy drop;
+
+        iif lo accept
+        ct state established,related accept
+        ct state invalid drop
+
+        # ICMP целиком: без icmpv6 ломается IPv6 (neighbor discovery, PMTU),
+        # без icmp — path MTU discovery в IPv4. firewalld пускал их так же.
+        meta l4proto { icmp, ipv6-icmp } accept
+
+        # DHCPv6-клиент — было в firewalld (filter_IN_public_allow).
+        ip6 daddr fe80::/64 udp dport 546 accept
+
+        tcp dport @public_tcp ct state new counter accept
+
+        # Полезно для blackwall-eye: видно, что и куда стучится.
+        limit rate 5/minute log prefix "[blackwall-base] input-drop " level info
+        counter
+    }
+
+    chain forward {
+        type filter hook forward priority filter; policy drop;
+
+        ct state established,related accept
+        ct state invalid drop
+
+        # КРИТИЧНО для podman: опубликованные порты контейнеров (443 -> 10.88.0.31)
+        # после DNAT идут в forward. Ровно это правило было у firewalld
+        # (`ct status dnat accept` в filter_FORWARD) — без него сайт ляжет.
+        # Фильтрация «кого пускать на 443» живёт в blackwall_wall (prerouting),
+        # то есть срабатывает ДО этого accept.
+        ct status dnat counter accept
+
+        # Контейнеры наружу. Аналог filter_FWD_public_allow { oifname "eth0" accept }.
+        oifname $BASE_WAN_IF ip saddr $PODMAN_NET counter accept
+
+        # Трафик между контейнерами firewalld тоже не пропускал — поведение
+        # сохранено. Раскомментировать, если контейнерам нужно общаться:
+        # iifname "podman0" oifname "podman0" accept
+
+        limit rate 5/minute log prefix "[blackwall-base] fwd-drop " level info
+        counter
+    }
+
+    chain output {
+        type filter hook output priority filter; policy accept;
+    }
+}

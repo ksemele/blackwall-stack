@@ -49,7 +49,7 @@
 # Внешний интерфейс. Проверить: ip -o -4 route show to default | awk '{print $5}'
 # Если здесь окажется неверное имя — правила просто ничего не будут фильтровать
 # (fail-open), сайт при этом не ляжет.
-define WAN_IF = "eth0"
+define WALL_WAN_IF = "eth0"
 
 # Идиома атомарной перезагрузки: создать (если нет), удалить, определить заново.
 table inet blackwall_wall
@@ -110,7 +110,7 @@ table inet blackwall_wall {
         # Полицейщина только на внешнем интерфейсе. Без этого мы бы дропали
         # исходящий HTTPS самих контейнеров: пакет 10.88.0.31 -> internet:443
         # тоже проходит prerouting, и по dport 443 / src не-CF попал бы под drop.
-        iifname != $WAN_IF accept
+        iifname != $WALL_WAN_IF accept
 
         # Уже установленные соединения не рвём при перезагрузке правил.
         ct state established,related accept

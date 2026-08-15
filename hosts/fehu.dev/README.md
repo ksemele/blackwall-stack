@@ -12,8 +12,9 @@ TCP/443 пускаются только префиксы CF, остальное 
 | Таблица | Кто управляет | Трогаем? |
 |---|---|---|
 | `ip nat`, `ip filter` | netavark (podman), помечены "do not touch" | нет |
-| `inet firewalld` | firewalld, зона `public` | нет |
-| `inet blackwall_wall` | этот каталог | да |
+| `inet firewalld` | firewalld — **снимается**, см. MIGRATION.md | заменяется |
+| `inet blackwall_base` | этот каталог, замена firewalld | да |
+| `inet blackwall_wall` | этот каталог, фильтр Cloudflare | да |
 
 Что открыто наружу:
 
@@ -55,43 +56,29 @@ input. Правила на `hook input` по нему не отработают.
 проскакивает мимо зон. Поэтому портов 80/443 нет в `filter_IN_public_allow`, а
 443 снаружи при этом открыт. Rich-rule в зоне `public` эту дыру не закроет.
 
+## Состав
+
+| Файл | Назначение |
+|---|---|
+| `nftables/blackwall-base.nft` | основной firewall хоста, замена firewalld |
+| `nftables/blackwall-wall.nft` | фильтр Cloudflare на 80/443 (prerouting) |
+| `nftables/sysconfig-nftables.conf` | что грузит `nftables.service` (`/etc/sysconfig/nftables.conf`) |
+| `systemd/nftables.service.d/blackwall.conf` | drop-in: убирает `flush ruleset` из reload/stop |
+| `bin/blackwall-cf-refresh` | обновление префиксов CF в nft и nginx `real_ip` |
+| `systemd/blackwall-cf-refresh.{service,timer}` | еженедельный запуск обновления |
+| `nginx/cf-realip.conf` | снапшот `set_real_ip_from` |
+
+Обе таблицы грузит `nftables.service` через `include`. Отдельного юнита под
+`blackwall_wall` нет — он был бы вторым владельцем той же таблицы.
+
 ## Установка
 
-```bash
-# 1. Файлы
-sudo install -D -m 0755 bin/blackwall-cf-refresh /usr/local/sbin/blackwall-cf-refresh
-sudo install -D -m 0644 nftables/blackwall-wall.nft /etc/nftables.d/blackwall-wall.nft
-sudo install -D -m 0644 blackwall-cf-refresh.default /etc/default/blackwall-cf-refresh
-sudo install -D -m 0644 systemd/blackwall-wall.service        /etc/systemd/system/blackwall-wall.service
-sudo install -D -m 0644 systemd/blackwall-cf-refresh.service  /etc/systemd/system/blackwall-cf-refresh.service
-sudo install -D -m 0644 systemd/blackwall-cf-refresh.timer    /etc/systemd/system/blackwall-cf-refresh.timer
+Хост сейчас под firewalld, поэтому установка = миграция. Пошаговая процедура
+со страховкой и откатом: **[MIGRATION.md](MIGRATION.md)**.
 
-# 2. ОБЯЗАТЕЛЬНО: вписать свой IP в ADMIN_ALLOW, иначе прямой доступ к
-#    origin для деплоя/отладки пропадёт вместе с чужим
-sudo vi /etc/default/blackwall-cf-refresh
-
-# 3. Проверить внешний интерфейс (в правилах зашит eth0)
-ip -o -4 route show to default | awk '{print $5}'
-
-# 4. Сухой прогон — ничего не применяет
-sudo /usr/local/sbin/blackwall-cf-refresh --dry-run
-
-# 5. Применить
-sudo systemctl enable --now blackwall-wall.service
-sudo systemctl enable --now blackwall-cf-refresh.timer
-```
-
-### Первое применение — со страховкой
-
-Правила трогают только 80/443, SSH залочить нельзя. Но если ошибёшься с
-`WAN_IF` или `ADMIN_ALLOW`, можно потерять сайт. Автооткат на 5 минут:
-
-```bash
-# в отдельной сессии, ДО применения
-sudo sh -c 'sleep 300 && nft delete table inet blackwall_wall' &
-# применяем, проверяем; если всё хорошо:
-sudo kill %1
-```
+Перед началом обязательно вписать свой IP в `ADMIN_ALLOW`
+(`/etc/default/blackwall-cf-refresh`) — иначе прямой доступ к origin для
+деплоя и отладки пропадёт вместе с чужим.
 
 ## Проверка
 
@@ -113,10 +100,24 @@ sudo journalctl -k -g 'blackwall-wall' -n 50
 
 ## Откат
 
+Только фильтр Cloudflare (базовый firewall остаётся):
+
 ```bash
-sudo systemctl disable --now blackwall-wall.service blackwall-cf-refresh.timer
 sudo nft delete table inet blackwall_wall
 ```
+
+Полный откат на firewalld — в [MIGRATION.md](MIGRATION.md).
+
+## Чего нельзя делать
+
+- **Не убирать `ct status dnat accept` из forward** в `blackwall-base.nft`.
+  Проверено: без него 443 через DNAT сразу перестаёт отвечать.
+- **Не ставить `nftables.service` без drop-in'а** `nftables.service.d/blackwall.conf`.
+  Штатные `ExecReload`/`ExecStop` делают `flush ruleset` и сносят таблицы
+  netavark вместе с нашими — сеть контейнеров умрёт до `systemctl restart podman`.
+- **Не заводить один и тот же `define` в обоих .nft-файлах.** Они включаются
+  вместе, и `nft` падает с `redefinition of symbol`, откатывая всю транзакцию.
+  Поэтому переменные названы `BASE_WAN_IF` и `WALL_WAN_IF`.
 
 ## real_ip
 
@@ -138,14 +139,14 @@ podman inspect <container> --format '{{range .Mounts}}{{.Source}} -> {{.Destinat
 
 ## Что осталось незакрытым
 
-- **Cockpit на 9090 и порт 9999 открыты всему интернету** (из
-  `filter_IN_public_allow`). Cockpit — веб-панель управления хостом с
-  root-доступом. По масштабу это серьёзнее, чем открытый origin: origin за
-  прямым IP отдаёт тот же сайт, а 9090 — это вход в систему. Стоит закрыть
-  до своих IP через firewalld:
-  `firewall-cmd --permanent --zone=public --remove-port=9090/tcp`
-  плюс rich-rule с `source address=`. Здесь не сделано — вне рамок задачи и
-  требует твоего решения по списку адресов.
+- **Cockpit на 9090 и порт 9999 открыты всему интернету.** Перенесены в
+  `blackwall_base` как есть, чтобы миграция ничего не меняла по доступу.
+  Cockpit — веб-панель управления хостом с root-доступом; по риску это больше,
+  чем открытый origin. Как ограничить — в конце MIGRATION.md. Требует твоего
+  решения по списку адресов, поэтому не сделано.
+- **SSH/22 открыт отовсюду** — по твоему решению, вход только по ключу.
+  Стоит убедиться, что это подкреплено конфигом: `PasswordAuthentication no`
+  и `PermitRootLogin prohibit-password` в `/etc/ssh/sshd_config`.
 - **Второй хост 192.227.212.28** (ravencraft.dev) — по твоему решению не трогаем.
 - **Ротация IP origin.** Firewall закрывает доступ, но сам IP уже утёк в
   CT-логи и historical DNS — он останется известным навсегда. Полное решение —
@@ -154,21 +155,21 @@ podman inspect <container> --format '{{range .Mounts}}{{.Source}} -> {{.Destinat
 
 ## Про Ansible
 
-Бэкпортить текущие таблицы в Ansible **не нужно** — там нечего версионировать:
+Бэкпортить существующие таблицы **не нужно** — там нечего версионировать:
+`ip nat`/`ip filter` пересоздаёт netavark при каждом старте контейнера, а
+`inet firewalld` — это вывод firewalld, а не конфиг.
 
-- `ip nat` / `ip filter` пересоздаются netavark при каждом старте контейнера.
-  Управлять ими из Ansible — воевать с podman на каждом рестарте.
-- `inet firewalld` — это вывод firewalld, а не конфиг. Версионировать надо
-  источник: `/etc/firewalld/zones/public.xml`, то есть список сервисов и
-  портов зоны.
-
-Что реально стоит завести в роли, когда дойдут руки:
+После миграции вопрос упрощается: firewalld больше нет, и весь периметр
+описан файлами из этого каталога. Роль сводится к их раскладке:
 
 | Ansible-ресурс | Чем управляет |
 |---|---|
-| `ansible.posix.firewalld` | порты зоны public (22/9090/9999) + ограничение по source |
+| `ansible.builtin.template` | `blackwall-base.nft` (WAN_IF, PODMAN_NET, список портов — переменные) |
+| `ansible.builtin.copy` + `systemd` | drop-in, таймер, `blackwall-cf-refresh` |
 | `containers.podman.podman_container` / quadlet | контейнер nginx и публикация 443 |
-| files + systemd (этот каталог) | таблица `blackwall_wall` и таймер обновления CF |
+
+`blackwall-wall.nft` в Ansible не нужен — его генерирует `blackwall-cf-refresh`
+на хосте; версионируется шаблон и скрипт, а не результат.
 
 Разложить это лучше в `blackwall-eye/ansible/roles/` — по правилу изоляции
 модулей из корневого `CLAUDE.md`. Пока хост ручной, каталог живёт здесь.
