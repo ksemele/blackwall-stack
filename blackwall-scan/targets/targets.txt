@@ -1,0 +1,5 @@
+# blackwall-scan targets — one per line. Domains or IPv4.
+# Lines starting with # are ignored.
+fehu.dev
+93.115.20.111
+192.227.212.28
