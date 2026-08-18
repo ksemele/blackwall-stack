@@ -2,7 +2,7 @@
 module: blackwall-voice
 status: in_progress
 stage: 2
-last_updated: 2026-05-10
+last_updated: 2026-08-18
 last_task: "Реализована Ansible роль telegram-alerter: alerter.py (tail-follow, dedup, inode-rotation), systemd unit, playbooks voice.yml + verify-voice.yml. Задеплоено в Docker, verify прошёл (ok=13, failed=0)"
 next_task: "Настроить реальный Telegram bot token + chat_id через ansible-vault и протестировать end-to-end доставку алертов"
 blockers: []
@@ -54,7 +54,7 @@ blockers: []
 
 ## Открытые вопросы
 
-- `telegram_bot_token` и `telegram_chat_id` в `tests/inventory/hosts.yml` — невалидный токен (возвращает HTTP 404). Нужен рабочий токен для e2e-теста доставки.
+- `telegram_bot_token` и `telegram_chat_id`: реальные значения **удалены** из `tests/inventory/hosts.yml` (были закоммиченными секретами). Нужен источник через ansible-vault/env для e2e-теста доставки.
 - State file (`sent_ids.txt`) растёт неограниченно — в будущем нужна ротация/TTL.
 
 ## Решения

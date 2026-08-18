@@ -13,9 +13,12 @@ deployable via Infrastructure-as-Code with no vendor lock-in.
 |---|---|---|
 | [blackwall-eye](./blackwall-eye/) | Host monitoring core | 1 — Active |
 | [blackwall-voice](./blackwall-voice/) | Alerts & dashboards | 2 — Active |
-| blackwall-brain | AI analysis agents | 3 — Planned |
+| blackwall-brain | AI analysis agents | 3 — In progress |
 | blackwall-trap | Honeypots | 4 — Planned |
 | blackwall-fang | Active countermeasures (research) | 5 — Planned |
+| [blackwall-scan](./blackwall-scan/) | External attack surface scanning (CESM)¹ | 1 — Active |
+
+¹ Separate track from the defense chain (eye→voice→brain→trap→fang); see [blackwall-scan/STATUS.md](./blackwall-scan/STATUS.md).
 
 ## Getting Started
 
