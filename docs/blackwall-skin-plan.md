@@ -1,10 +1,10 @@
-# Blackwall — модуль внешнего сканера периметра (codename: **Skin**)
+# Blackwall — модуль внешнего сканера периметра (codename Skin → **blackwall-scan**)
 
 > Attack surface = «кожа» системы: то, чем она соприкасается с внешним миром.
 > Модуль смотрит на твою инфру **снаружи контура** глазами атакующего и сравнивает
 > с тем, что должно быть открыто (inside-out ground truth).
 
-Статус: **план / pending**. Это проектный документ, не реализация.
+Статус: **фаза 1 (MVP) — реализована** в [\`blackwall-scan/\`](../blackwall-scan/)… Фазы 2-6 — впереди; документ остаётся планом и референсом.
 
 ---
 
@@ -21,8 +21,8 @@
 - MVP не требует инфраструктурных вложений: asset-centric подход (домен/ASN →
   discovery → fingerprint → CVE → дифф во времени) даёт ~80% ценности.
 
-**Тематическое имя:** `blackwall-skin` (кожа/поверхность = attack surface).
-Альтернатива — `blackwall-mirror` (взгляд на себя снаружи). Финальный выбор за тобой.
+**Тематическое имя:** в плане было `blackwall-skin` (кожа/поверхность = attack surface).
+По решению владельца модуль назван **blackwall-scan** (2026-08).
 
 ---
 
@@ -115,7 +115,7 @@
 
 ---
 
-## 2. План модуля `blackwall-skin`
+## 2. План модуля `blackwall-scan`
 
 ### 2.1 Основная идея — дифф двух источников
 
@@ -174,7 +174,7 @@ DNS, руками открытый порт**. Это drift detection для п�
 ### 2.5 Интеграция в существующий Blackwall
 
 ```
-blackwall-skin (CronJob на ВНЕШНЕМ VPS)
+blackwall-scan (CronJob на ВНЕШНЕМ VPS)
    → JSONL observations → ClickHouse
    → diff engine → pushgateway метрики
    → blackwall-voice (Telegram/Slack/webhook алерты)
