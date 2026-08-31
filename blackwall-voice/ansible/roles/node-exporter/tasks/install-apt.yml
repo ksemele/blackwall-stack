@@ -1,0 +1,22 @@
+---
+- name: Install prometheus-node-exporter package
+  ansible.builtin.apt:
+    name: prometheus-node-exporter
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Set listen address
+  ansible.builtin.copy:
+    dest: /etc/default/prometheus-node-exporter
+    content: |
+      # Managed by Ansible role node-exporter. Do not edit by hand.
+      ARGS="--web.listen-address={{ node_exporter_listen_address }}"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart node_exporter
+
+- name: Record service name
+  ansible.builtin.set_fact:
+    node_exporter_service_name: prometheus-node-exporter

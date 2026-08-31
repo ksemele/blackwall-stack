@@ -1,0 +1,41 @@
+---
+- name: Verify node_exporter is up and serving metrics
+  hosts: all
+  become: true
+  gather_facts: false
+
+  tasks:
+    - name: Detect installed node_exporter unit
+      ansible.builtin.shell: >-
+        set -o pipefail;
+        systemctl list-unit-files --no-legend --no-pager
+        'prometheus-node-exporter.service' 'node_exporter.service'
+        | awk '{print $1}' | head -1
+      args:
+        executable: /bin/bash
+      register: ne_unit
+      changed_when: false
+
+    - name: Assert a node_exporter unit exists
+      ansible.builtin.assert:
+        that: ne_unit.stdout | length > 0
+        fail_msg: "node_exporter unit not installed on {{ inventory_hostname }}"
+
+    - name: Check unit is active
+      ansible.builtin.command: "systemctl is-active {{ ne_unit.stdout }}"
+      register: ne_active
+      changed_when: false
+      failed_when: ne_active.stdout != 'active'
+
+    - name: Fetch metrics endpoint
+      ansible.builtin.uri:
+        url: http://127.0.0.1:9100/metrics
+        return_content: true
+      register: ne_metrics
+
+    - name: Assert node_ metrics are present
+      ansible.builtin.assert:
+        that:
+          - "'node_load1' in ne_metrics.content"
+          - "'node_memory_MemTotal_bytes' in ne_metrics.content"
+        fail_msg: "node_exporter answered but without expected node_* metrics"
