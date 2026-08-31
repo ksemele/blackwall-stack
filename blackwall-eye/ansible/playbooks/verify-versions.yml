@@ -1,0 +1,53 @@
+---
+- name: Verify installed package versions
+  hosts: all
+  become: true
+  gather_facts: false
+
+  vars:
+    expected_packages:
+      # auditd is deliberately absent here: the auditd role runs from
+      # monitored-host.yml, which targets wazuh_agents only. The manager is not
+      # a monitored host in this topology.
+      wazuh_managers:
+        - wazuh-manager
+        - wazuh-indexer
+        - wazuh-dashboard
+        - filebeat
+        - nftables
+      wazuh_agents:
+        - wazuh-agent
+        - auditd
+        - nftables
+
+  tasks:
+    - name: Resolve expected package list for this host
+      ansible.builtin.set_fact:
+        host_packages: >-
+          {{ expected_packages['wazuh_managers']
+             if 'wazuh_managers' in group_names
+             else expected_packages['wazuh_agents'] }}
+
+    - name: Query installed versions
+      ansible.builtin.shell: >-
+        dpkg-query -W -f='${Package} ${Version} ${Status}\n' {{ item }} 2>/dev/null || true
+      register: pkg_query
+      changed_when: false
+      loop: "{{ host_packages }}"
+
+    - name: Report versions
+      ansible.builtin.debug:
+        msg: >-
+          {{ inventory_hostname }}:
+          {{ item.stdout | trim if item.stdout | trim else item.item ~ ' MISSING' }}
+      loop: "{{ pkg_query.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+
+    - name: Assert every expected package is installed
+      ansible.builtin.assert:
+        that: "'install ok installed' in item.stdout"
+        fail_msg: "package {{ item.item }} is not installed on {{ inventory_hostname }}"
+      loop: "{{ pkg_query.results }}"
+      loop_control:
+        label: "{{ item.item }}"
