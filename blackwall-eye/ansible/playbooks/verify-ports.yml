@@ -1,0 +1,33 @@
+---
+- name: Verify listening ports
+  hosts: all
+  become: true
+  gather_facts: false
+
+  vars:
+    expected_ports:
+      wazuh_managers: [22, 443, 1514, 1515, 9100, 9200, 55000]
+      wazuh_agents: [22, 9100]
+
+  tasks:
+    - name: Resolve expected ports for this host
+      ansible.builtin.set_fact:
+        host_ports: >-
+          {{ expected_ports['wazuh_managers']
+             if 'wazuh_managers' in group_names
+             else expected_ports['wazuh_agents'] }}
+
+    - name: List TCP listeners
+      ansible.builtin.command: ss -tlnH
+      register: listeners
+      changed_when: false
+
+    - name: Report listeners
+      ansible.builtin.debug:
+        var: listeners.stdout_lines
+
+    - name: Assert each expected port has a listener
+      ansible.builtin.assert:
+        that: "listeners.stdout is search(':' ~ item ~ '\\s')"
+        fail_msg: "nothing is listening on port {{ item }} on {{ inventory_hostname }}"
+      loop: "{{ host_ports }}"
