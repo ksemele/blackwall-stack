@@ -1,0 +1,26 @@
+# Managed in git — монтируется в black-metrics-00 read-only.
+# Цели заданы именами compose-сервисов: внутри сети blackwall-test они
+# резолвятся встроенным DNS, поэтому в Grafana instance читается как
+# "black-host-01:9100", а не как безымянный IP.
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    env: blackwall-test
+
+scrape_configs:
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  # black-dead-98 штатно остановлен после tests/triggers/broken-agents.yml,
+  # поэтому его цель регулярно в состоянии down — это ожидаемо.
+  - job_name: blackwall-hosts
+    static_configs:
+      - targets:
+          - "black-master-00:9100"
+          - "black-host-01:9100"
+          - "black-dead-98:9100"
+        labels:
+          env: test

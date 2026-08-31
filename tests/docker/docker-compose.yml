@@ -88,6 +88,55 @@ services:
       blackwall-test:
         ipv4_address: 172.28.0.98
 
+  # ── Мониторинг стенда: Prometheus + Grafana ───────────────────────────────
+  # Profile: ubuntu2204
+  # Обычные контейнеры, а не systemd-ноды: им не нужны privileged, host cgroup
+  # и tmpfs, поэтому якорь *black-node они намеренно не наследуют.
+  # Конфиги монтируются из репозитория read-only — ручных шагов внутри нет.
+  # Ports:
+  #   black-metrics-00: 9090 (Prometheus UI + API)
+  #   black-grafana-00: 3000 (Grafana, admin / blackwall)
+
+  black-metrics-00:
+    image: prom/prometheus:v2.55.1
+    profiles: [ubuntu2204]
+    container_name: black-metrics-00
+    hostname: black-metrics-00
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.retention.time=24h
+      - --web.enable-lifecycle
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - "9090:9090"
+    networks:
+      blackwall-test:
+        ipv4_address: 172.28.0.12
+    restart: "no"
+
+  black-grafana-00:
+    image: grafana/grafana:11.4.0
+    profiles: [ubuntu2204]
+    container_name: black-grafana-00
+    hostname: black-grafana-00
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: blackwall
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on:
+      - black-metrics-00
+    ports:
+      - "3000:3000"
+    networks:
+      blackwall-test:
+        ipv4_address: 172.28.0.13
+    restart: "no"
+
   # ── Debian 12 (future) ────────────────────────────────────────────────────
   # Profile: debian12 — uncomment when tests/docker/images/debian12/Dockerfile exists.
   # Ports: 2210 (SSH), 5611 (dashboard) for master; 2211 (SSH) for host.
