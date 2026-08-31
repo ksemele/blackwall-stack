@@ -22,30 +22,35 @@ deployable via Infrastructure-as-Code with no vendor lock-in.
 
 ## Getting Started
 
-Each module is independently deployable. A shared 2-container Docker test environment lives in `tests/`:
+Each module is independently deployable. A shared Docker test environment lives in `tests/`:
 
 | Container | Role |
 |---|---|
 | `black-master-00` | Wazuh manager + indexer + dashboard |
-| `black-host-01`   | Wazuh agent (target for other module roles) |
+| `black-host-01` | Wazuh agent (target for other module roles) |
+| `black-dead-98` | agent fixture, stopped on purpose |
+| `black-metrics-00` | Prometheus |
+| `black-grafana-00` | Grafana |
 
 ### 1. Start the test environment
 
-```bash
-# From repo root
-docker compose -f tests/docker/docker-compose.yml --profile ubuntu2204 up -d --build
-cd blackwall-eye
-ansible all -m wait_for_connection -T 60
-ansible-playbook ansible/playbooks/all.yml
-```
-
-Then open the dashboard: **https://localhost:5601** — login `admin / Blackwall1!` (self-signed cert; accept the browser warning).
-
-Tear down:
+Two scripts drive it — [`tests/bin/bw-lab`](./tests/bin/bw-lab) for lifecycle and
+[`tests/bin/bw-check`](./tests/bin/bw-check) for verification:
 
 ```bash
-docker compose -f tests/docker/docker-compose.yml --profile ubuntu2204 down -v
+# From anywhere in the repo
+tests/bin/bw-lab up        # containers + Wazuh + node_exporter + nftables
+tests/bin/bw-check all     # hosts, packages, firewall, ports, agents, metrics
 ```
+
+| Service | URL | Credentials |
+|---|---|---|
+| Wazuh dashboard | https://localhost:5601 | `admin` / `Blackwall1!` |
+| Grafana | http://localhost:3000 | `admin` / `blackwall` |
+| Prometheus | http://localhost:9090 | none |
+
+Certificates are self-signed; accept the browser warning. Tear down with
+`tests/bin/bw-lab down`, or start from scratch with `tests/bin/bw-lab reset`.
 
 ### 2. Point agents at a real Wazuh master
 

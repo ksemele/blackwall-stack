@@ -2,13 +2,30 @@
 module: blackwall-voice
 status: in_progress
 stage: 2
-last_updated: 2026-08-18
-last_task: "Реализована Ansible роль telegram-alerter: alerter.py (tail-follow, dedup, inode-rotation), systemd unit, playbooks voice.yml + verify-voice.yml. Задеплоено в Docker, verify прошёл (ok=13, failed=0)"
+last_updated: 2026-08-31
+last_task: "Роль node-exporter + Prometheus/Grafana как compose-сервисы стенда; метрики трёх хостов доезжают, дашборд Blackwall hosts провижинится из репозитория"
 next_task: "Настроить реальный Telegram bot token + chat_id через ansible-vault и протестировать end-to-end доставку алертов"
 blockers: []
 ---
 
 ## Что сделано
+
+### Stage 2 — метрики хостов
+
+- **`ansible/roles/node-exporter/`** — ставит `prometheus-node-exporter` из apt
+  (`node_exporter_install_method: apt`), с фолбэком на tarball с GitHub.
+  Слушает `0.0.0.0:9100`, systemd enabled + started.
+- **`ansible/playbooks/metrics.yml`** — раскатка на всю группу `all`.
+- **`ansible/playbooks/verify-metrics.yml`** — юнит active + `/metrics` отдаёт
+  `node_load1` и `node_memory_MemTotal_bytes`.
+- **Prometheus + Grafana — compose-сервисы стенда** (`black-metrics-00`,
+  `black-grafana-00`), конфиги в `tests/docker/prometheus/` и
+  `tests/docker/grafana/`: scrape-конфиг, datasource и дашборд
+  «Blackwall hosts» провижинятся из репозитория, ручных шагов нет.
+- Проверено на живом стенде: `metrics.yml` ok=7 на трёх хостах, Prometheus
+  скрейпит `black-master-00` и `black-host-01`, `node_load1` возвращает данные.
+
+### Stage 2 — Telegram Alerter
 
 ### Stage 2 — Telegram Alerter
 
@@ -59,6 +76,14 @@ blockers: []
 
 ## Решения
 
+- Wazuh не отдаёт Prometheus-метрики нативно — экспортер для него не делали.
+  «Поступление метрик» проверяется по node_exporter, здоровье агентов — через
+  Wazuh API (`tests/bin/bw-check wazuh`).
+- Prometheus/Grafana живут в compose стенда, а не в ansible-ролях: это
+  инфраструктура тестовой среды, а не то, что раскатывается на прод-хосты.
+  node_exporter — наоборот, роль: он ставится на реальные хосты.
+- `bw-check voice` даёт SKIP, если алертер не раскатан: `bw-lab provision all`
+  намеренно не включает voice — ему нужен настоящий Telegram-токен.
 - Дедупликация: `id` → `sent_ids.txt` (персистентно между рестартами)
 - Inode rotation detection: сервис переоткрывает файл при замене (линейный файл vs log rotate)
 - Логирование: Python → stdout → systemd `StandardOutput=append:` (один путь, без дублирования)
