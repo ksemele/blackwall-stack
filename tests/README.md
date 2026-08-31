@@ -260,14 +260,15 @@ tests/bin/bw-lab ssh black-master-00 'nft delete table inet blackwall_base'
 below narrow it down. All `ansible` commands run from `blackwall-eye/`;
 `docker` and `curl` from the repo root.
 
-Run any subset of these to debug a specific piece. All `ansible` commands run from `blackwall-eye/`; `docker` and `curl` from the repo root.
-
 ### Containers
 ```bash
 docker ps --format '{{.Names}}' | sort
 # Expect:
+#   black-dead-98
+#   black-grafana-00
 #   black-host-01
 #   black-master-00
+#   black-metrics-00
 
 docker compose -f tests/docker/docker-compose.yml --profile ubuntu2204 config --quiet
 # Expect: exit 0, no output
@@ -279,7 +280,7 @@ ssh -F tests/docker/ssh_config black-master-00 hostname    # → black-master-00
 ssh -F tests/docker/ssh_config black-host-01 hostname      # → black-host-01
 
 ansible all -m wait_for_connection -T 30
-# Expect: SUCCESS for both hosts
+# Expect: SUCCESS for all three systemd nodes
 ```
 
 ### Wazuh indexer
@@ -360,6 +361,17 @@ ansible black-master-00 -m command -a "dpkg -l wazuh-manager wazuh-indexer wazuh
 ```
 
 ### Full clean-room acceptance
+
+`bw-lab reset` is exactly this sequence:
+
+```bash
+tests/bin/bw-lab reset
+tests/bin/bw-check all      # exit 0, no FAIL
+tests/bin/bw-lab open dashboard
+```
+
+Spelled out, in case you want to run it step by step:
+
 ```bash
 docker compose -f tests/docker/docker-compose.yml --profile ubuntu2204 down -v
 rm -rf tests/.wazuh-certs/wazuh-certificates*
@@ -368,13 +380,13 @@ docker compose -f tests/docker/docker-compose.yml --profile ubuntu2204 up -d --b
 cd blackwall-eye
 ansible all -m wait_for_connection -T 60
 ansible-playbook ansible/playbooks/all.yml
+cd ../blackwall-voice && ansible-playbook ansible/playbooks/metrics.yml
+cd ../blackwall-eye && ansible-playbook ansible/playbooks/nftables.yml
 
 ansible-playbook ansible/playbooks/verify-agents.yml
 
 open https://localhost:5601    # admin / Blackwall1!
 ```
-
----
 
 ---
 
