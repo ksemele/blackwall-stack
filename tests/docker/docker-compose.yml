@@ -88,11 +88,11 @@ services:
       blackwall-test:
         ipv4_address: 172.28.0.98
 
-  # ── Мониторинг стенда: Prometheus + Grafana ───────────────────────────────
+  # ── Monitoring stack: Prometheus + Grafana ────────────────────────────────
   # Profile: ubuntu2204
-  # Обычные контейнеры, а не systemd-ноды: им не нужны privileged, host cgroup
-  # и tmpfs, поэтому якорь *black-node они намеренно не наследуют.
-  # Конфиги монтируются из репозитория read-only — ручных шагов внутри нет.
+  # Plain containers, not systemd nodes: they need no privileged mode, host
+  # cgroup or tmpfs, so they deliberately do not inherit the *black-node anchor.
+  # Configs are mounted read-only from the repo — no manual steps inside.
   # Ports:
   #   black-metrics-00: 9090 (Prometheus UI + API)
   #   black-grafana-00: 3000 (Grafana, admin / blackwall)
