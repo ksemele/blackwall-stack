@@ -1,0 +1,62 @@
+#!/usr/sbin/nft -f
+#
+# Managed by the Ansible role blackwall-eye/nftables. Do not edit by hand.
+#
+# Inspect:  nft list table inet blackwall_base
+# Roll back: nft delete table inet blackwall_base
+
+# Atomic-reload idiom: create (if absent), delete, define again.
+table inet blackwall_base
+delete table inet blackwall_base
+
+table inet blackwall_base {
+
+    set public_tcp {
+        type inet_service
+        elements = { {{ nft_public_tcp | join(', ') }} }
+    }
+{% for r in nft_restricted %}
+
+    set src_{{ r.port }} {
+        type ipv4_addr
+        flags interval
+        auto-merge
+        elements = { {{ r.sources | join(', ') }} }
+    }
+{% endfor %}
+
+    chain input {
+        type filter hook input priority filter; policy drop;
+
+        # Scaffolding: without these rules the host locks itself out.
+        iif lo accept
+        ct state established,related accept
+        ct state invalid drop
+
+        # All of ICMP: dropping icmpv6 breaks IPv6 (neighbor discovery, PMTU),
+        # dropping icmp breaks path MTU discovery on IPv4.
+        meta l4proto { icmp, ipv6-icmp } accept
+        ip6 daddr fe80::/64 udp dport 546 accept
+
+        tcp dport @public_tcp ct state new counter accept
+{% for r in nft_restricted %}
+        tcp dport {{ r.port }} ip saddr @src_{{ r.port }} ct state new counter accept
+{% endfor %}
+{% if nft_log_drops %}
+
+        limit rate 5/minute log prefix "[blackwall-base] input-drop " level info
+{% endif %}
+        counter
+    }
+
+    chain forward {
+        type filter hook forward priority filter; policy {{ nft_forward_policy }};
+
+        ct state established,related accept
+        ct state invalid drop
+    }
+
+    chain output {
+        type filter hook output priority filter; policy accept;
+    }
+}

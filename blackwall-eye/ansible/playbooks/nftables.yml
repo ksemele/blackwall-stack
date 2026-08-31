@@ -1,0 +1,9 @@
+---
+- name: Apply nftables ruleset
+  hosts: all
+  become: true
+  gather_facts: true
+
+  roles:
+    - role: nftables
+      tags: [nftables, firewall]
