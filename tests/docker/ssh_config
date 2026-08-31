@@ -17,3 +17,11 @@ Host black-host-01
     StrictHostKeyChecking no
     UserKnownHostsFile /dev/null
     LogLevel ERROR
+
+Host black-dead-98
+    HostName localhost
+    Port 2202
+    User root
+    StrictHostKeyChecking no
+    UserKnownHostsFile /dev/null
+    LogLevel ERROR
