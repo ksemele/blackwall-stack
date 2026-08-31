@@ -2,13 +2,24 @@
 module: blackwall-eye
 status: in_progress
 stage: 1
-last_updated: 2026-05-18
-last_task: "TUI: FlexInt for syscollector pid; scrollable Packages/Top with sticky header"
-next_task: "Interactive smoke test against live Docker env; add filter (/) to agents and contexts lists; auto-clear error footer message after timeout"
+last_updated: 2026-08-31
+last_task: "Роль nftables + verify-плейбуки (versions/ports/nftables); тестовый стенд переведён на tests/bin/bw-lab и bw-check"
+next_task: "Портировать hosts/fehu.dev/nftables/*.nft в роль nftables (прод-конфиг пока вне config-as-code); interactive smoke test TUI против живого стенда"
 blockers: []
 ---
 
 ## Что сделано
+
+- 2026-08-31: роль `nftables` + проверки стенда.
+  - `ansible/roles/nftables/` — параметризованная роль: `nft_enabled`,
+    `nft_wan_if`, `nft_public_tcp`, `nft_restricted`, `nft_forward_policy`,
+    `nft_log_drops`. Рендерит `/etc/nftables.d/blackwall-base.nft`, владеет
+    `/etc/nftables.conf`, перед применением гоняет `nft -c -f`.
+  - `ansible/playbooks/nftables.yml`, `verify-nftables.yml` (assert
+    `policy drop` + все ожидаемые порты), `verify-versions.yml`, `verify-ports.yml`.
+  - Порты по группам живут в `tests/inventory/group_vars/`.
+  - Проверено на живом стенде: `policy drop` реально фильтрует, allow-list
+    открывает порт, SSH и ansible не теряются.
 
 - 2026-05-16: переработана тестовая среда — `black-master-00` (manager + indexer + dashboard) + `black-host-01` (agent). Добавлены роли `wazuh-indexer`, `wazuh-dashboard`. Manager научен шипить алерты в indexer через filebeat. Сертификаты генерируются разово через `wazuh-certificates.yml`. Дашборд доступен на `https://localhost:5601` (admin / Blackwall1!). Агент полностью параметризован: `wazuh_manager_host`/`port`/`protocol`/`enrollment_*` — позволяет указать любого мастера через `-e` или group_vars. Spec: `docs/superpowers/specs/2026-05-15-test-env-master-host-dashboard-design.md`. Plan: `docs/superpowers/plans/2026-05-15-test-env-master-host-dashboard.md`.
 
@@ -44,6 +55,23 @@ blockers: []
 - Версия Wazuh: зафиксировать на 4.x (current stable) или конкретный minor?
 
 ## Решения
+
+- **nftables: никакого глобального `flush ruleset`.** Роль пересоздаёт только
+  свою таблицу (идиома create/delete/define). Глобальный flush внутри Docker
+  сносит NAT-правила встроенного резолвера `127.0.0.11` — DNS в контейнере
+  умирает, apt падает с `Temporary failure resolving ...`, при этом сам ruleset
+  выглядит корректным. Восстанавливается рестартом контейнера. То же верно для
+  podman-хостов (таблицы netavark) — см. `hosts/fehu.dev/`.
+- **На менеджере нельзя закрывать 9200/9300.** filebeat и dashboard ходят в
+  indexer по адресу интерфейса (`172.28.0.10`), а не через loopback, поэтому
+  пакеты идут через цепочку `input`. При закрытии все сервисы остаются `active`,
+  а алерты молча перестают доезжать.
+- **`group_vars` переехал в `tests/inventory/group_vars/`.** Прежний
+  `blackwall-eye/ansible/group_vars/` не загружался вообще: ansible ищет
+  group_vars рядом с инвентарём или плейбуком, а этот путь не совпадал ни с
+  тем, ни с другим — значения молча брались из defaults ролей.
+- **auditd не ставится на менеджер** — роль идёт только из `monitored-host.yml`
+  по группе `wazuh_agents`; в `verify-versions.yml` она ожидается только там.
 
 - packages.wazuh.com доступен из контейнеров напрямую (CDN не заблокирован, в отличие от Canonical)
 - Порядок задач в роли: gnupg/curl → GPG key → apt repo → install package → template → systemd (template после install, т.к. группа wazuh создаётся пакетом)
