@@ -1,0 +1,9 @@
+---
+- name: Deploy node_exporter to all monitored hosts
+  hosts: all
+  become: true
+  gather_facts: true
+
+  roles:
+    - role: node-exporter
+      tags: [node-exporter, metrics]
