@@ -7,3 +7,17 @@ wazuh_indexer_admin_password: "Blackwall1!"
 # Manager REST API (separate user system, on the manager process):
 wazuh_manager_api_user: "wazuh"
 wazuh_manager_api_password: "wazuh"
+
+# nftables (role blackwall-eye/nftables).
+# WARNING: closing 9200/9300 silently breaks alert delivery into the indexer —
+# filebeat and the dashboard reach it over the interface address (172.28.0.10),
+# not over loopback, so those packets traverse the input chain.
+#   22    ssh for ansible
+#   443   wazuh-dashboard (published as localhost:5601)
+#   1514  agent event intake
+#   1515  authd enrollment
+#   9100  node_exporter, scraped by black-metrics-00
+#   9200  indexer REST
+#   9300  indexer transport
+#   55000 wazuh-manager REST API
+nft_public_tcp: [22, 443, 1514, 1515, 9100, 9200, 9300, 55000]

@@ -1,0 +1,63 @@
+---
+- name: Skip role when disabled
+  ansible.builtin.meta: end_host
+  when: not nft_enabled
+
+- name: Install nftables
+  ansible.builtin.apt:
+    name: nftables
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Create rules directory
+  ansible.builtin.file:
+    path: /etc/nftables.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Render ruleset to a staging path
+  ansible.builtin.template:
+    src: blackwall-base.nft.j2
+    dest: /etc/nftables.d/.blackwall-base.nft.new
+    owner: root
+    group: root
+    mode: "0600"
+  changed_when: false
+
+- name: Syntax-check the rendered ruleset
+  ansible.builtin.command: nft -c -f /etc/nftables.d/.blackwall-base.nft.new
+  changed_when: false
+
+- name: Install checked ruleset
+  ansible.builtin.copy:
+    src: /etc/nftables.d/.blackwall-base.nft.new
+    dest: /etc/nftables.d/blackwall-base.nft
+    remote_src: true
+    owner: root
+    group: root
+    mode: "0600"
+  notify: Reload nftables
+
+- name: Remove staging file
+  ansible.builtin.file:
+    path: /etc/nftables.d/.blackwall-base.nft.new
+    state: absent
+  changed_when: false
+
+- name: Install nftables.conf
+  ansible.builtin.template:
+    src: nftables.conf.j2
+    dest: /etc/nftables.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload nftables
+
+- name: Enable and start nftables
+  ansible.builtin.systemd:
+    name: nftables
+    enabled: true
+    state: started
