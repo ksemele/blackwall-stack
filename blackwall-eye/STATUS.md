@@ -21,10 +21,18 @@ blockers: []
   - Проверено на живом стенде: `policy drop` реально фильтрует, allow-list
     открывает порт, SSH и ansible не теряются.
 
+- 2026-08-31: пин Wazuh поднят 4.14.5 → 4.14.7 во всех четырёх ролях
+  (manager, agent, indexer, dashboard). Причина: апстрим отдаёт HTTP 400 на
+  `raw.githubusercontent.com/wazuh/wazuh/v4.14.5/.../wazuh-template.json`,
+  из-за чего роль `wazuh-manager` падала и чистый `bw-lab up` не проходил.
+  На v4.14.7 и v4.9.0 тот же путь отдаёт 200. Пакеты 4.14.7-1 есть в apt для
+  всех трёх серверных компонентов. Побочно устранено расхождение: агент по
+  факту ставился 4.14.7, пока роли были запинены на 4.14.5.
+
 - 2026-05-16: переработана тестовая среда — `black-master-00` (manager + indexer + dashboard) + `black-host-01` (agent). Добавлены роли `wazuh-indexer`, `wazuh-dashboard`. Manager научен шипить алерты в indexer через filebeat. Сертификаты генерируются разово через `wazuh-certificates.yml`. Дашборд доступен на `https://localhost:5601` (admin / Blackwall1!). Агент полностью параметризован: `wazuh_manager_host`/`port`/`protocol`/`enrollment_*` — позволяет указать любого мастера через `-e` или group_vars. Spec: `docs/superpowers/specs/2026-05-15-test-env-master-host-dashboard-design.md`. Plan: `docs/superpowers/plans/2026-05-15-test-env-master-host-dashboard.md`.
 
 - `ansible/roles/wazuh-manager/` — полная Ansible роль: defaults, tasks, handlers, templates/ossec.conf.j2
-  - Устанавливает wazuh-manager из официального apt репозитория (pinned 4.14.5)
+  - Устанавливает wazuh-manager из официального apt репозитория (pinned 4.14.7)
   - ossec.conf: authd (enrollment, port 1515), API (port 55000), remote listener (tcp:1514), FIM на /etc/{passwd,shadow,sudoers,ssh/sshd_config}, log collection из auth.log и syslog
   - systemd: enabled + started, handler для restart при изменении конфига
   - Active response и vulnerability detection отключены для Stage 1
