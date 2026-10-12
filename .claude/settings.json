@@ -8,7 +8,13 @@
       "Bash(docker compose -f tests/docker/docker-compose.yml * config*)",
       "Bash(docker compose -f tests/docker/docker-compose.yml * ps*)",
       "Bash(git add *)",
-      "Bash(git commit *)"
+      "Bash(git commit *)",
+      "Bash(go test *)",
+      "Bash(go build *)",
+      "Bash(go vet *)",
+      "Bash(make test *)",
+      "Bash(make lint *)",
+      "Bash(make build *)"
     ]
   }
 }
