@@ -3,8 +3,9 @@
 k9s-style terminal UI for the Blackwall security project. Today it surfaces
 Wazuh agent state; over time it will gain alerts, modules, and other views.
 
-The lightweight one-shot CLI [`bw-status`](../../blackwall-eye/tools/bw-status)
-remains available for scripts and quick checks.
+For scripts and quick checks use `blackwall --once`: it prints the agents table
+and exits (it replaces the former Python `bw-status`). Timestamps are shown in
+local time with UTC in parentheses, e.g. `2026-10-12 09:58 (06:58Z)`.
 
 ## Install
 
@@ -44,6 +45,25 @@ ui:
   refresh_interval: 3s
   vim_keys:         true
 ```
+
+### Test environment
+
+`tests/bin/bw-lab up` publishes the Wazuh API on `127.0.0.1:55000`, so a context
+for the lab is just:
+
+```yaml
+  lab:
+    description: "Docker test env (tests/bin/bw-lab)"
+    wazuh:
+      server:   127.0.0.1
+      port:     55000
+      user:     wazuh
+      password: wazuh
+      tls:
+        insecure_skip_verify: true
+```
+
+The generated template already contains it; `blackwall --context lab --once`.
 
 ## Run
 

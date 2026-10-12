@@ -45,7 +45,8 @@ services:
   # Profile: ubuntu2204
   # Base:    geerlingguy/docker-ubuntu2204-ansible (systemd + Python pre-installed)
   # Ports:
-  #   black-master-00:  2200 (SSH), 5601 (Wazuh dashboard, container :443)
+  #   black-master-00:  2200 (SSH), 5601 (Wazuh dashboard, container :443),
+  #                     55000 (Wazuh API, loopback only — for the blackwall TUI)
   #   black-host-01:    2201 (SSH)
 
   black-master-00:
@@ -58,6 +59,7 @@ services:
     ports:
       - "2200:22"
       - "5601:443"
+      - "127.0.0.1:55000:55000"
     networks:
       blackwall-test:
         ipv4_address: 172.28.0.10

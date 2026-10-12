@@ -48,6 +48,7 @@ tests/bin/bw-check all     # hosts, packages, firewall, ports, agents, metrics
 | Wazuh dashboard | https://localhost:5601 | `admin` / `Blackwall1!` |
 | Grafana | http://localhost:3000 | `admin` / `blackwall` |
 | Prometheus | http://localhost:9090 | none |
+| Wazuh API (`blackwall --context lab`) | https://127.0.0.1:55000 | `wazuh` / `wazuh` |
 
 The nodes are containers: kernel audit is unavailable, so auditd rules are
 deployed but never fire in the lab (see [container limitations](./tests/README.md#container-limitations)).

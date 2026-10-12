@@ -19,10 +19,14 @@ func Print(ctx context.Context, out io.Writer, c Lister) error {
 	if err != nil {
 		return err
 	}
-	fmt.Fprintf(out, "%-4s  %-20s  %-16s  %-12s  %s\n", "ID", "NAME", "IP", "STATUS", "LAST SEEN")
+	fmt.Fprintf(out, "%-4s  %-20s  %-16s  %-16s  %-12s  %s\n", "ID", "NAME", "IP", "WAZUH", "STATUS", "LAST SEEN")
 	for _, a := range agents {
-		last := wazuh.FormatTimestamp(a.LastKeepAlive, "2006-01-02 15:04")
-		fmt.Fprintf(out, "%-4s  %-20s  %-16s  %-12s  %s\n", a.ID, a.Name, a.IP, a.Status, last)
+		last := wazuh.FormatLocalUTC(a.LastKeepAlive, "2006-01-02 15:04", "15:04Z")
+		name := a.Name
+		if a.InContainer() {
+			name += " [docker]"
+		}
+		fmt.Fprintf(out, "%-4s  %-20s  %-16s  %-16s  %-12s  %s\n", a.ID, name, a.IP, a.Version, a.Status, last)
 	}
 	return nil
 }

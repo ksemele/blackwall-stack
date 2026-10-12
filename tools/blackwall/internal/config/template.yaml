@@ -21,6 +21,16 @@ contexts:
         insecure_skip_verify: false
         # ca_file: /etc/blackwall/wazuh-ca.crt
 
+  lab:
+    description: "Docker test env (tests/bin/bw-lab), API on loopback"
+    wazuh:
+      server:   127.0.0.1
+      port:     55000
+      user:     wazuh
+      password: wazuh               # lab-only credentials, see tests/README.md
+      tls:
+        insecure_skip_verify: true  # self-signed lab certificate
+
 ui:
   refresh_interval: 3s
   theme:            dark
