@@ -106,7 +106,7 @@ tests/bin/bw-check metrics    # just one group
 | Check | What it asserts |
 |---|---|
 | `hosts` | the four running containers exist; ansible reaches every systemd node |
-| `versions` | `wazuh-*`, `filebeat`, `auditd`, `nftables` are installed, and prints their versions |
+| `versions` | `wazuh-*`, `filebeat`, `auditd`, `nftables` are installed (prints versions); `wazuh-agent` version equals `wazuh-manager` |
 | `nft` | `chain input` is `policy drop` and every expected port is in `set public_tcp` |
 | `ports` | expected listeners inside the containers, plus published ports probed from the Mac |
 | `wazuh` | agents registered on the manager, REST API answers, dashboard responds |

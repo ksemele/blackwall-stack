@@ -22,9 +22,11 @@
     state: present
     filename: wazuh
 
+# Pinned like the server roles: an agent newer than the manager is unsupported.
 - name: Install wazuh-agent package
   apt:
-    name: wazuh-agent
+    name: "wazuh-agent={{ wazuh_version }}-*"
+    allow_downgrade: true
     state: present
     update_cache: true
 
