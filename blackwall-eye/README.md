@@ -102,24 +102,14 @@ Ports for the test environment live in `tests/inventory/group_vars/`.
 
 ## Tools
 
-### bw-status — Agent Status Dashboard
+### Agent status
 
-Query the Wazuh Manager API and print all agents with their status and last heartbeat.
+The Python `bw-status` script is gone; use the `blackwall` TUI
+([tools/blackwall](../tools/blackwall/README.md)):
 
 ```bash
-# Via SSH tunnel to Docker test manager:
-ssh -F tests/docker/ssh_config -L 55000:172.28.0.10:55000 black-master-00 -N &
-./blackwall-eye/tools/bw-status --host localhost
-
-# Direct (if Wazuh API port is accessible from your machine):
-./blackwall-eye/tools/bw-status --host 172.28.0.10
-
-# Options:
-#   --host HOST         Wazuh Manager hostname or IP (default: localhost)
-#   --port PORT         Wazuh API port (default: 55000)
-#   --user USER         Wazuh API user (default: wazuh)
-#   --password PASSWORD Wazuh API password (default: wazuh)
-#   --no-color          Disable ANSI color output
+blackwall --context lab           # interactive, k9s-style
+blackwall --context lab --once    # print agents and exit
 ```
 
 ## Docs

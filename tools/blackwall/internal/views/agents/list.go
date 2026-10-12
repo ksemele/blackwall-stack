@@ -133,6 +133,12 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+// Last-seen layouts for table rows: local date and time, UTC time only.
+const (
+	shortLocal = "2006-01-02 15:04"
+	shortUTC   = "15:04Z"
+)
+
 // dockerTag follows the name of agents in the wazuh.ContainerGroup group.
 const dockerTag = "[docker]"
 
@@ -157,7 +163,7 @@ var agentCols = []table.Col{
 	{Title: "STATUS", Min: 12},
 	{Title: "WAZUH", Min: 14},
 	{Title: "OS", Min: 16, Flex: true},
-	{Title: "LAST SEEN", Min: 16, Flex: true},
+	{Title: "LAST SEEN", Min: 24, Flex: true},
 }
 
 func (m *Model) View() string {
@@ -171,7 +177,7 @@ func (m *Model) View() string {
 	b.WriteByte('\n')
 
 	for i, a := range m.agents {
-		lastSeen := wazuh.FormatTimestamp(a.LastKeepAlive, "2006-01-02 15:04")
+		lastSeen := wazuh.FormatLocalUTC(a.LastKeepAlive, shortLocal, shortUTC)
 		osStr := strings.TrimSpace(a.OS.Name + " " + a.OS.Version)
 		if osStr == "" {
 			osStr = "—"

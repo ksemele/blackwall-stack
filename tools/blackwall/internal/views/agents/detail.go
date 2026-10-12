@@ -172,8 +172,9 @@ func (m *DetailModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 // renderOverview renders agent metadata (was the full View content before tabbar).
 func (m *DetailModel) renderOverview() string {
 	a := m.detail.Agent
-	lastSeen := wazuh.FormatTimestamp(a.LastKeepAlive, "2006-01-02 15:04:05")
-	registered := wazuh.FormatTimestamp(a.DateAdd, "2006-01-02 15:04:05")
+	const local, utc = "2006-01-02 15:04:05 MST", "2006-01-02 15:04:05 UTC"
+	lastSeen := wazuh.FormatLocalUTC(a.LastKeepAlive, local, utc)
+	registered := wazuh.FormatLocalUTC(a.DateAdd, local, utc)
 	osStr := strings.TrimSpace(a.OS.Name + " " + a.OS.Version)
 	if osStr == "" {
 		osStr = "—"

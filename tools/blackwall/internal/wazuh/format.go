@@ -12,3 +12,13 @@ func FormatTimestamp(t time.Time, layout string) string {
 	}
 	return t.Format(layout)
 }
+
+// FormatLocalUTC renders t in the local zone followed by UTC in parentheses,
+// e.g. "2026-10-12 09:58 (06:58Z)": operators read local time, Wazuh logs and
+// alerts are in UTC. Sentinel and zero values render as "—" like FormatTimestamp.
+func FormatLocalUTC(t time.Time, localLayout, utcLayout string) string {
+	if t.IsZero() || t.Year() < 1970 || t.Year() > 9000 {
+		return "—"
+	}
+	return t.Local().Format(localLayout) + " (" + t.UTC().Format(utcLayout) + ")"
+}

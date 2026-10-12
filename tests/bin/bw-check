@@ -162,7 +162,7 @@ check_ports() {
   # host and the container, and a break in it is invisible from the inside.
   local entry port label
   for entry in "2200:ssh black-master-00" "2201:ssh black-host-01" \
-               "5601:wazuh-dashboard" "9090:prometheus" "3000:grafana"; do
+               "5601:wazuh-dashboard" "55000:wazuh-api" "9090:prometheus" "3000:grafana"; do
     port="${entry%%:*}"
     label="${entry#*:}"
     if bw_tcp_probe localhost "$port"; then

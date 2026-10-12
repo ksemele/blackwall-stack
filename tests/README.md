@@ -132,6 +132,7 @@ fixture stops it deliberately.
 | Wazuh dashboard | `https://localhost:5601` | `admin` / `Blackwall1!` |
 | Grafana | `http://localhost:3000` | `admin` / `blackwall` |
 | Prometheus | `http://localhost:9090` | none |
+| Wazuh API (for `blackwall` TUI) | `https://127.0.0.1:55000` | `wazuh` / `wazuh` |
 | SSH to any node | `tests/bin/bw-lab ssh <host>` | `root` / `blackwall` |
 
 Wazuh dashboard and indexer use a self-signed certificate; browsers show
@@ -170,7 +171,7 @@ Unset variables render as empty strings — playbooks still run, delivery just f
 
 | Container | Role | SSH port | Published | Static IP |
 |---|---|---|---|---|
-| `black-master-00` | manager + indexer + dashboard | `2200→22` | `5601→443` | `172.28.0.10` |
+| `black-master-00` | manager + indexer + dashboard | `2200→22` | `5601→443`, `127.0.0.1:55000→55000` | `172.28.0.10` |
 | `black-host-01` | agent + auditd target | `2201→22` | — | `172.28.0.11` |
 | `black-dead-98` | agent fixture — disconnected | `2202→22` | — | `172.28.0.98` |
 | `black-metrics-00` | Prometheus | — | `9090→9090` | `172.28.0.12` |

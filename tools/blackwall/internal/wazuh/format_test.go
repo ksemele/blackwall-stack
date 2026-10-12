@@ -25,3 +25,21 @@ func TestFormatTimestamp(t *testing.T) {
 		})
 	}
 }
+
+func TestFormatLocalUTC(t *testing.T) {
+	saved := time.Local
+	time.Local = time.FixedZone("EEST", 3*60*60)
+	t.Cleanup(func() { time.Local = saved })
+
+	in := time.Date(2026, 10, 12, 6, 58, 55, 0, time.UTC)
+	if got, want := FormatLocalUTC(in, "2006-01-02 15:04", "15:04Z"), "2026-10-12 09:58 (06:58Z)"; got != want {
+		t.Errorf("short = %q, want %q", got, want)
+	}
+	if got, want := FormatLocalUTC(in, "2006-01-02 15:04:05 MST", "2006-01-02 15:04:05 UTC"),
+		"2026-10-12 09:58:55 EEST (2026-10-12 06:58:55 UTC)"; got != want {
+		t.Errorf("long = %q, want %q", got, want)
+	}
+	if got := FormatLocalUTC(time.Time{}, "15:04", "15:04Z"); got != "—" {
+		t.Errorf("zero = %q, want —", got)
+	}
+}
