@@ -3,3 +3,6 @@ tests/.wazuh-certs/*
 
 # Claude Code per-user local settings
 .claude/settings.local.json
+
+# Local secrets for direnv (template: .envrc.example)
+.envrc

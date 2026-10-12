@@ -29,7 +29,9 @@ See [tests/README.md](../tests/README.md) for full environment documentation.
 
 ## Configure
 
-Set these vars before deploying (use Ansible vault for secrets):
+On the test environment the secrets (telegram_bot_token, telegram_chat_id)
+are read from env vars set in `.envrc` — see [tests/README.md](../tests/README.md#secrets-telegram-claude-api).
+For other targets, set these vars before deploying (use Ansible vault for secrets):
 
 ```yaml
 telegram_bot_token: "your-bot-token"
