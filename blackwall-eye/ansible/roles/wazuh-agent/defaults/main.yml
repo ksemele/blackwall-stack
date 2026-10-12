@@ -19,3 +19,8 @@ wazuh_enrollment_password: ""
 
 # Syscollector (system inventory)
 wazuh_syscollector_interval: "5m"
+
+# Rootcheck (rootkit / anomaly scan) and SCA (CIS benchmark policies bundled
+# with the agent, picked automatically for the host OS)
+wazuh_rootcheck_frequency: 43200
+wazuh_sca_interval: "12h"
