@@ -209,3 +209,21 @@ func TestDetail_HardwareSubviewReceivesMsg(t *testing.T) {
 		t.Errorf("CPUName = %q, want Intel Xeon", sub.hw.CPUName)
 	}
 }
+
+func TestDetail_ContainerWarning(t *testing.T) {
+	d := NewDetail(&fakeClient{}, "001")
+	d.SetDetail(wazuh.AgentDetail{Agent: wazuh.Agent{ID: "001", Name: "host-01", Status: "active"}})
+	if out := d.View(); strings.Contains(out, "DOCKER") || strings.Contains(out, containerWarning) {
+		t.Errorf("plain host shows container warning:\n%s", out)
+	}
+
+	d.SetDetail(wazuh.AgentDetail{Agent: wazuh.Agent{
+		ID: "001", Name: "host-01", Status: "active", Group: []string{"default", wazuh.ContainerGroup},
+	}})
+	out := d.View()
+	for _, want := range []string{"DOCKER", containerWarning} {
+		if !strings.Contains(out, want) {
+			t.Errorf("missing %q in:\n%s", want, out)
+		}
+	}
+}

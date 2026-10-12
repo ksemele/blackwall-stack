@@ -49,6 +49,9 @@ tests/bin/bw-check all     # hosts, packages, firewall, ports, agents, metrics
 | Grafana | http://localhost:3000 | `admin` / `blackwall` |
 | Prometheus | http://localhost:9090 | none |
 
+The nodes are containers: kernel audit is unavailable, so auditd rules are
+deployed but never fire in the lab (see [container limitations](./tests/README.md#container-limitations)).
+
 Certificates are self-signed; accept the browser warning. Tear down with
 `tests/bin/bw-lab down`, or start from scratch with `tests/bin/bw-lab reset`.
 

@@ -52,6 +52,13 @@ var (
 	// terminals (falls back to colour "8" on 8-colour terminals).
 	HRule = lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
 
+	// DockerBadge marks agents running in a container: white on red, because
+	// such hosts silently lack kernel audit (auditd detections never fire).
+	DockerBadge = lipgloss.NewStyle().
+			Background(lipgloss.Color("9")).
+			Foreground(lipgloss.Color("15")).
+			Bold(true)
+
 	// HelpHeading renders section headings inside the help view.
 	HelpHeading = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("14"))
 )

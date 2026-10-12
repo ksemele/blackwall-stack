@@ -3,6 +3,17 @@
   shell: while fuser /var/lib/dpkg/lock-frontend /var/lib/dpkg/lock >/dev/null 2>&1; do sleep 2; done
   changed_when: false
 
+- name: Detect container environment (/.dockerenv)
+  stat:
+    path: /.dockerenv
+  register: _agent_dockerenv
+
+- name: Resolve enrollment groups
+  set_fact:
+    _wazuh_enroll_groups: >-
+      {{ wazuh_agent_groups ~ (',' ~ wazuh_agent_container_group
+         if _agent_dockerenv.stat.exists else '') }}
+
 - name: Install prerequisites (gnupg, curl)
   apt:
     name:

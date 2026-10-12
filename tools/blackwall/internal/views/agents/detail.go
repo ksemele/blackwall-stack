@@ -29,6 +29,12 @@ func statusStyled(status string) string {
 	}
 }
 
+// containerWarning explains what the DOCKER badge costs: container runtimes
+// share the host kernel, and kernels without audit support (Docker Desktop,
+// OrbStack) leave auditd unable to start.
+const containerWarning = "⚠ Container host: no kernel audit — auditd rules do not fire. " +
+	"FIM, rootcheck, SCA and inventory work."
+
 var detailTabs = []string{"Overview", "Hardware", "Top", "Packages", "Network", "Security"}
 
 // detailTabKeys are the upper-case hotkey labels shown in the tabbar prefix.
@@ -172,7 +178,11 @@ func (m *DetailModel) renderOverview() string {
 	if osStr == "" {
 		osStr = "—"
 	}
-	return fmt.Sprintf(
+	warn := ""
+	if a.InContainer() {
+		warn = styles.Error.Render(containerWarning) + "\n"
+	}
+	return warn + fmt.Sprintf(
 		"──────────────────────────────\n"+
 			"Status:     %s\n"+
 			"IP:         %s\n"+
@@ -203,7 +213,11 @@ func (m *DetailModel) renderActiveTab() string {
 
 func (m *DetailModel) View() string {
 	a := m.detail.Agent
-	header := fmt.Sprintf("Agent %s — %s  %s\n", a.ID, a.Name, statusStyled(a.Status))
+	header := fmt.Sprintf("Agent %s — %s  %s", a.ID, a.Name, statusStyled(a.Status))
+	if a.InContainer() {
+		header += "  " + styles.DockerBadge.Render(" DOCKER ")
+	}
+	header += "\n"
 	tabs := tabbar.RenderWithKeys(detailTabs, detailTabKeys, m.activeTab, m.width, "")
 
 	if m.err != "" {

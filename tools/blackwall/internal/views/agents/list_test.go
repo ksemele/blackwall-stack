@@ -149,3 +149,31 @@ func TestListView_EnterEmitsSwitchToDetail(t *testing.T) {
 		t.Errorf("AgentID = %q, want 001", sd.AgentID)
 	}
 }
+
+func TestListView_DockerAgentsTagged(t *testing.T) {
+	fc := &fakeClient{agents: []wazuh.Agent{
+		{ID: "000", Name: "master", Status: "active"},
+		{ID: "001", Name: "host-01", Status: "active", Group: []string{"default", "docker"}},
+		{ID: "002", Name: "dead-98", Status: "disconnected", Group: []string{"docker"}},
+	}}
+	v := New(fc, 3*time.Second)
+	v.SetAgents(fc.agents)
+	const width = 120
+	_, _ = v.Update(tea.WindowSizeMsg{Width: width})
+
+	lines := strings.Split(strings.TrimRight(v.View(), "\n"), "\n")
+	// lines[0] is the header; rows follow in agent order, row 1 is selected.
+	if strings.Contains(lines[1], dockerTag) {
+		t.Errorf("non-container agent tagged: %q", lines[1])
+	}
+	for _, line := range lines[2:] {
+		if !strings.Contains(line, dockerTag) {
+			t.Errorf("container agent not tagged: %q", line)
+		}
+	}
+	for _, line := range lines {
+		if w := lipgloss.Width(line); w != width {
+			t.Errorf("row width = %d, want %d (line: %q)", w, width, line)
+		}
+	}
+}

@@ -44,6 +44,18 @@
     state: started
     daemon_reload: true
 
+# Enrollment into a group the manager does not know is rejected, so groups
+# must exist before any agent registers.
+- name: List agent groups
+  command: /var/ossec/bin/agent_groups -l
+  register: _agent_groups
+  changed_when: false
+
+- name: Create agent groups
+  command: /var/ossec/bin/agent_groups -a -g {{ item }} -q
+  loop: "{{ wazuh_manager_agent_groups }}"
+  when: ("  " ~ item ~ " (") not in _agent_groups.stdout
+
 - name: Install filebeat (Wazuh-shipped variant)
   apt:
     name: "filebeat={{ wazuh_filebeat_version | default('7.10.2-2') }}"
