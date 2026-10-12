@@ -37,7 +37,7 @@ claude_api_key:     "your-anthropic-api-key"
 telegram_bot_token: "your-bot-token"
 telegram_chat_id:   "your-chat-id"
 analysis_threshold: 7   # analyze alerts with rule.level >= this value
-claude_model:       "claude-haiku-4-5-20251001"
+claude_model:       "claude-haiku-5-5"
 max_tokens:         300
 ```
 
