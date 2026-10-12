@@ -1,5 +1,10 @@
 # Stage 1 — Docker Test Environment Design
 
+> **Historical design doc.** Names (`black-00..02`) and paths (`blackwall-eye/tests/`)
+> below are from the original design and no longer match the repo. The current test
+> environment lives in [`tests/`](../../../tests/README.md) (`black-master-00`,
+> `black-host-01`, `black-dead-98`, driven by `tests/bin/bw-lab` / `bw-check`).
+
 **Purpose:** Provide a fast, reproducible local environment for iterating on Ansible roles
 before deploying to real hosts. Targets macOS (Docker Desktop) and must support systemd
 inside containers (required by Wazuh, auditd).
