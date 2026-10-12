@@ -15,5 +15,8 @@ wazuh_authd_enabled: "yes"
 wazuh_api_port: 55000
 wazuh_api_enabled: "yes"
 
+# How long an agent may stay silent before it is marked disconnected
+wazuh_agents_disconnection_time: 10m
+
 # Syscheck settings
 wazuh_syscheck_frequency: 43200

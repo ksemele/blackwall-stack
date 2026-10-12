@@ -8,6 +8,10 @@ wazuh_indexer_admin_password: "Blackwall1!"
 wazuh_manager_api_user: "wazuh"
 wazuh_manager_api_password: "wazuh"
 
+# Lab: the stopped black-dead-98 fixture should read as disconnected right
+# after `bw-lab up`, not ten minutes later.
+wazuh_agents_disconnection_time: 1m
+
 # nftables (role blackwall-eye/nftables).
 # WARNING: closing 9200/9300 silently breaks alert delivery into the indexer —
 # filebeat and the dashboard reach it over the interface address (172.28.0.10),

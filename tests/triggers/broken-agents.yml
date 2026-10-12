@@ -3,12 +3,10 @@
 # never_connected and disconnected Wazuh status codes in the TUI.
 #
 # Usage (from repo root):
-#   ansible-playbook -i tests/inventory/hosts.yml tests/triggers/broken-agents.yml
+#   tests/bin/bw-lab provision fixtures
 #
-# Prerequisites:
-#   - docker compose --profile ubuntu2204 up -d --build  (from tests/docker/)
-#   - ansible-playbook -i tests/inventory/hosts.yml blackwall-eye/ansible/playbooks/all.yml
-#   - ansible-playbook -i tests/inventory/hosts.yml blackwall-eye/ansible/playbooks/monitored-host.yml --limit black-dead-98
+# Runs automatically as the last step of `tests/bin/bw-lab up`
+# (`bw-lab provision fixtures` re-applies just this playbook).
 #
 # What this produces:
 #   black-ghost-99 (IP 172.28.0.99) — registered on manager, no container, status: never_connected
@@ -29,7 +27,7 @@
 
     - name: Register black-ghost-99 (no container — will stay never_connected)
       command: >
-        /var/ossec/bin/manage_agents -a black-ghost-99 -i 172.28.0.99 -q
+        /var/ossec/bin/manage_agents -a 172.28.0.99 -n black-ghost-99
       when: "'black-ghost-99' not in agent_list.stdout"
       changed_when: true
 
