@@ -20,11 +20,11 @@ SSH tunnel (for Docker test environment):
         bw-status --host 172.28.0.10
 
     Via SSH tunnel:
-        ssh -F tests/docker/ssh_config -L 55000:172.28.0.10:55000 black-00 -N &
+        ssh -F tests/docker/ssh_config -L 55000:172.28.0.10:55000 black-master-00 -N &
         bw-status --host localhost
 
     The SSH tunnel maps local port 55000 → manager container port 55000.
-    black-00 in tests/docker/ssh_config is reachable at localhost:2200.
+    black-master-00 in tests/docker/ssh_config is reachable at localhost:2200.
 """
 
 import argparse

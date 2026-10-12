@@ -64,7 +64,7 @@ blockers: []
 
 - `ansible-playbook voice.yml` → `ok=9, changed=2, failed=0`
 - `ansible-playbook verify-voice.yml` → `ok=13, changed=1, failed=0`
-- Сервис `voice-alerter` активен на `black-00` (Docker test env)
+- Сервис `voice-alerter` активен на `black-master-00` (Docker test env; на момент теста назывался `black-00`)
 - Алертер корректно читает реальные Wazuh-алерты из `alerts.json`
 - Синтетические алерты (level=10) подхватываются и логируются
 - Telegram 404 ожидаем (токен в hosts.yml невалиден)
