@@ -84,7 +84,7 @@ Checks:
   versions   expected packages are installed, with versions
   nft        applied nftables ruleset and open ports
   ports      listeners inside containers + published ports from the host
-  wazuh      agent registration, REST API, dashboard
+  wazuh      agent registration, REST API, broken-agent fixtures, dashboard
   metrics    node_exporter, Prometheus targets, Grafana health and datasource
   voice      telegram-alerter
 
@@ -182,12 +182,39 @@ check_wazuh() {
   bw_run "manager REST API answers" \
     bw_ansible blackwall-eye ansible/playbooks/verify-api.yml
 
+  check_fixtures
+
   local code
   code="$(curl -sk -m 5 -o /dev/null -w '%{http_code}' "$BW_DASHBOARD_URL/" 2>/dev/null)"
   if [[ "$code" =~ ^(2|3)[0-9][0-9]$ ]]; then
     bw_pass "dashboard answers ($code) at $BW_DASHBOARD_URL"
   else
     bw_fail "dashboard does not answer at $BW_DASHBOARD_URL (code '$code')"
+  fi
+}
+
+# Broken-agent fixtures from `bw-lab provision fixtures`. The manager needs up
+# to wazuh_agents_disconnection_time (1m in the lab) to notice the stopped
+# container, so dead-98 gets a short grace period instead of failing at once.
+check_fixtures() {
+  local agents i
+  for i in $(seq 1 10); do
+    agents="$(bw_ansible_adhoc blackwall-eye wazuh_managers -b \
+                -m command -a '/var/ossec/bin/agent_control -l' 2>&1)"
+    grep -q 'black-dead-98, IP: [^,]*, Disconnected' <<<"$agents" && break
+    sleep 9
+  done
+
+  if grep -q 'black-ghost-99, IP: [^,]*, Never connected' <<<"$agents"; then
+    bw_pass "fixture black-ghost-99 is never_connected"
+  else
+    bw_fail "fixture black-ghost-99 missing (run: bw-lab provision fixtures)"
+  fi
+  if grep -q 'black-dead-98, IP: [^,]*, Disconnected' <<<"$agents"; then
+    bw_pass "fixture black-dead-98 is disconnected"
+  else
+    bw_fail "fixture black-dead-98 is not disconnected (run: bw-lab provision fixtures)"
+    grep 'black-dead-98' <<<"$agents" | sed 's/^/      /'
   fi
 }
 

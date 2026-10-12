@@ -4,8 +4,7 @@ Fires controlled security events on `black-host-01` so you can verify which dete
 
 ## Prereqs
 
-- Test environment running: `docker compose -f tests/docker/docker-compose.yml --profile ubuntu2204 up -d --build`
-- Wazuh stack deployed: `cd blackwall-eye && ansible-playbook ansible/playbooks/all.yml`
+- Test environment up and provisioned: `tests/bin/bw-lab up`
 - `ansible` on PATH (uses `blackwall-eye/ansible.cfg` + `tests/inventory/hosts.yml`)
 
 ## Usage

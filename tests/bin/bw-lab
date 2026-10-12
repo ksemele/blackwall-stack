@@ -25,7 +25,7 @@ Commands:
   down [--keep-data]                  stop the environment (volumes removed by default)
   reset                               down -v + wipe Wazuh certs + up
   status                              containers, ports, monitoring health
-  provision <target>                  ansible only: eye|nftables|metrics|voice|all
+  provision <target>                  ansible only: eye|nftables|metrics|voice|fixtures|all
   ssh <host> [command...]             shell into a test container
   logs <service> [-f]                 compose logs for one service
   open <target>                       open in a browser: dashboard|grafana|prometheus
@@ -42,35 +42,51 @@ Examples:
 USAGE
 }
 
+# The broken-agents fixture stops black-dead-98 on purpose. Re-provisioning a
+# single target afterwards must not trip over it, so skip it while it is down.
+bw_live_limit() {
+  if [[ "$(docker inspect -f '{{.State.Running}}' black-dead-98 2>/dev/null)" == "true" ]]; then
+    printf 'all'
+  else
+    printf '!black-dead-98'
+  fi
+}
+
 cmd_provision() {
   bw_require_ansible
   local target="${1:-all}"
   case "$target" in
     eye)
       bw_info "provision: blackwall-eye (certs -> indexer/manager/dashboard -> agents)"
-      bw_ansible blackwall-eye ansible/playbooks/all.yml
+      bw_ansible blackwall-eye ansible/playbooks/all.yml --limit "$(bw_live_limit)"
       ;;
     nftables)
       bw_info "provision: nftables"
-      bw_ansible blackwall-eye ansible/playbooks/nftables.yml
+      bw_ansible blackwall-eye ansible/playbooks/nftables.yml --limit "$(bw_live_limit)"
       ;;
     metrics)
       bw_info "provision: node_exporter"
-      bw_ansible blackwall-voice ansible/playbooks/metrics.yml
+      bw_ansible blackwall-voice ansible/playbooks/metrics.yml --limit "$(bw_live_limit)"
+      ;;
+    fixtures)
+      bw_info "provision: broken-agent fixtures (ghost-99 never_connected, dead-98 stopped)"
+      bw_ansible blackwall-eye ../tests/triggers/broken-agents.yml
       ;;
     voice)
       bw_info "provision: telegram-alerter"
       bw_ansible blackwall-voice ansible/playbooks/voice.yml
       ;;
     all)
-      # Order matters: nftables runs last so the firewall covers services that
-      # are already up, instead of blocking their install (apt, agent enrollment).
+      # Order matters: nftables runs after the services so the firewall covers
+      # what is already up instead of blocking its install (apt, agent
+      # enrollment); fixtures go last because they stop black-dead-98.
       cmd_provision eye
       cmd_provision metrics
       cmd_provision nftables
+      cmd_provision fixtures
       ;;
     *)
-      bw_die "unknown target: $target (eye|nftables|metrics|voice|all)"
+      bw_die "unknown target: $target (eye|nftables|metrics|voice|fixtures|all)"
       ;;
   esac
 }

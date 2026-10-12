@@ -65,7 +65,7 @@ tests/bin/bw-lab reset
 | `bw-lab down [--keep-data]` | stop the environment; volumes are removed unless `--keep-data` |
 | `bw-lab reset` | `down -v` + wipe Wazuh certificates + `up` |
 | `bw-lab status` | containers, published ports, health of Prometheus/Grafana/dashboard |
-| `bw-lab provision <target>` | ansible only: `eye`, `nftables`, `metrics`, `voice`, `all` |
+| `bw-lab provision <target>` | ansible only: `eye`, `nftables`, `metrics`, `voice`, `fixtures`, `all` |
 | `bw-lab ssh <host> [cmd...]` | shell into a container (root password `blackwall`) |
 | `bw-lab logs <service> [-f]` | compose logs for one service |
 | `bw-lab open <target>` | open `dashboard`, `grafana` or `prometheus` in a browser |
@@ -75,9 +75,12 @@ tests/bin/bw-lab reset
 1. `blackwall-eye/ansible/playbooks/all.yml` — certificates → indexer + manager + dashboard → agent + auditd
 2. `blackwall-voice/ansible/playbooks/metrics.yml` — node_exporter on every host
 3. `blackwall-eye/ansible/playbooks/nftables.yml` — firewall
+4. `tests/triggers/broken-agents.yml` — fixtures: registers `black-ghost-99`, stops `black-dead-98`
 
-nftables goes **last** on purpose: the firewall should cover services that are
-already up rather than block their installation (apt, agent enrollment).
+nftables goes after the services on purpose: the firewall should cover services
+that are already up rather than block their installation (apt, agent enrollment).
+Fixtures go last because they stop `black-dead-98`; while it is stopped,
+`provision eye|metrics|nftables` skip it automatically.
 
 Environment variables: `BW_PROFILE` (compose profile, default `ubuntu2204`),
 `BW_SSH_PASSWORD` (root password in the containers, default `blackwall`).
@@ -109,7 +112,7 @@ tests/bin/bw-check metrics    # just one group
 | `versions` | `wazuh-*`, `filebeat`, `auditd`, `nftables` are installed (prints versions); `wazuh-agent` version equals `wazuh-manager` |
 | `nft` | `chain input` is `policy drop` and every expected port is in `set public_tcp` |
 | `ports` | expected listeners inside the containers, plus published ports probed from the Mac |
-| `wazuh` | agents registered on the manager, REST API answers, dashboard responds |
+| `wazuh` | agents registered on the manager, REST API answers, `black-ghost-99` is `never_connected` and `black-dead-98` is `disconnected`, dashboard responds |
 | `metrics` | node_exporter serves metrics, Prometheus targets are `up`, `node_load1` returns data, Grafana is healthy with its datasource and dashboard |
 | `voice` | `telegram-alerter` is running |
 
@@ -441,21 +444,16 @@ Two static fixtures test the TUI's per-status row colouring:
 | `black-ghost-99` | `never_connected` | Registered on manager; no container ever created |
 | `black-dead-98`  | `disconnected`    | Container starts, agent registers, then container is stopped |
 
-**Prerequisites:** bring the env up and provision all hosts including `black-dead-98` first:
+Both are created by `bw-lab up` as its last step; to re-apply just the fixtures:
 
 ```bash
-# 1. Start containers
-docker compose -f tests/docker/docker-compose.yml --profile ubuntu2204 up -d --build
-
-# 2. Provision everything (manager + both agents)
-cd blackwall-eye
-ansible-playbook -i ../tests/inventory/hosts.yml ansible/playbooks/all.yml
-ansible-playbook -i ../tests/inventory/hosts.yml ansible/playbooks/monitored-host.yml --limit black-dead-98
-cd ..
-
-# 3. Register ghost + stop dead
-ansible-playbook -i tests/inventory/hosts.yml tests/triggers/broken-agents.yml
+tests/bin/bw-lab provision fixtures
 ```
+
+The lab manager uses `wazuh_agents_disconnection_time: 1m`
+(`tests/inventory/group_vars/wazuh_managers.yml`, default `10m` in the role), so
+`black-dead-98` reads as `disconnected` about a minute after the container stops.
+`bw-check wazuh` asserts both statuses.
 
 **Verify** on the manager:
 
