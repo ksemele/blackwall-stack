@@ -123,9 +123,9 @@ check_versions() {
   rc=$?
   printf '%s\n' "$out" | bw_show_reports
   if (( rc == 0 )); then
-    bw_pass "expected packages are installed"
+    bw_pass "expected packages are installed, agent version matches manager"
   else
-    bw_fail "some expected packages are missing"
+    bw_fail "packages missing or agent/manager version mismatch"
     printf '%s\n' "$out" | tail -25 | sed 's/^/      /'
   fi
 }

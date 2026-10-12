@@ -51,3 +51,22 @@
       loop: "{{ pkg_query.results }}"
       loop_control:
         label: "{{ item.item }}"
+
+    # Wazuh does not support an agent newer than its manager; the roles pin both
+    # to wazuh_version, this catches a role that forgets to.
+    - name: Assert wazuh-agent version matches wazuh-manager
+      vars:
+        _ver: "{{ item.stdout.split(' ')[1] | default('') }}"
+        _mgr: "{{ groups['wazuh_managers'] | first }}"
+        _mgr_ver: >-
+          {{ (hostvars[_mgr].pkg_query.results
+              | selectattr('item', 'equalto', 'wazuh-manager') | first).stdout.split(' ')[1] }}
+      ansible.builtin.assert:
+        that: _ver == _mgr_ver
+        fail_msg: "wazuh-agent {{ _ver }} on {{ inventory_hostname }} != wazuh-manager {{ _mgr_ver }}"
+        quiet: true
+      loop: "{{ pkg_query.results | selectattr('item', 'equalto', 'wazuh-agent') | list }}"
+      loop_control:
+        label: "{{ item.item }}"
+      when: hostvars[groups['wazuh_managers'] | first].pkg_query is defined
+
