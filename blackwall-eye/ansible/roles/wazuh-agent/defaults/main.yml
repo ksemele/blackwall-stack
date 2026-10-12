@@ -6,7 +6,7 @@ wazuh_apt_repo: "deb https://packages.wazuh.com/4.x/apt/ stable main"
 # Agent identity
 wazuh_agent_name: "{{ inventory_hostname }}"
 wazuh_agent_groups: "default"
-# Added to the enrollment groups when the host runs in a container (/.dockerenv).
+# Replaces wazuh_agent_groups when the host runs in a container (/.dockerenv).
 # Must exist on the manager (wazuh_manager_agent_groups); the blackwall TUI
 # flags such agents, since container kernels may lack audit support.
 wazuh_agent_container_group: "docker"

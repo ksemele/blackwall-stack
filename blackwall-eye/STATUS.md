@@ -2,13 +2,29 @@
 module: blackwall-eye
 status: in_progress
 stage: 1
-last_updated: 2026-08-31
-last_task: "Роль nftables + verify-плейбуки (versions/ports/nftables); тестовый стенд переведён на tests/bin/bw-lab и bw-check"
+last_updated: 2026-10-12
+last_task: "Пин wazuh-agent, rootcheck+SCA на агентах, группа docker для контейнерных агентов, фикстуры dead/ghost в bw-lab up, bw-status заменён на blackwall --once"
 next_task: "Портировать hosts/example.com/nftables/*.nft в роль nftables (прод-конфиг пока вне config-as-code); interactive smoke test TUI против живого стенда"
 blockers: []
 ---
 
 ## Что сделано
+
+- 2026-10-12: прогон стенда с нуля и правки по итогам.
+  - `wazuh-agent` ставился без пина (apt отдал 4.14.8 при менеджере 4.14.7) —
+    теперь `wazuh-agent={{ wazuh_version }}-*` + `allow_downgrade`;
+    `verify-versions.yml` проверяет, что версия агента равна версии менеджера.
+  - На агентах включены rootcheck и SCA (CIS Ubuntu 22.04: 103 pass / 84 fail).
+  - Контейнерные агенты (`/.dockerenv`) регистрируются в группе Wazuh `docker`
+    (менеджер создаёт её через `wazuh_manager_agent_groups`); TUI помечает их
+    красным: в ядре Docker-VM нет audit, auditd на стенде не стартует.
+    Группа одна, не `default,docker`: при одновременной регистрации в ещё не
+    созданную мультигруппу wazuh-db ловит гонку, проигравший агент остаётся
+    `Unknown` без `NNN.db` (поймано на чистом `bw-lab reset`).
+  - `wazuh_agents_disconnection_time` вынесен в переменную (лаба: 1m);
+    фикстуры `broken-agents.yml` починены (`manage_agents -a <ip> -n <name>`)
+    и выполняются последним шагом `bw-lab up`.
+  - Python `tools/bw-status` удалён — его заменяет `blackwall --once`.
 
 - 2026-08-31: роль `nftables` + проверки стенда.
   - `ansible/roles/nftables/` — параметризованная роль: `nft_enabled`,
