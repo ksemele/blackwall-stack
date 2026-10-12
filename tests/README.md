@@ -142,6 +142,25 @@ cd blackwall-eye
 ansible-playbook ansible/playbooks/security-node.yml --tags wazuh-indexer,wazuh-dashboard
 ```
 
+### Secrets (Telegram, Claude API)
+
+Real secrets never live in the inventory. `tests/inventory/hosts.yml` reads them
+from the environment via `lookup('env', ...)`; locally they come from a gitignored
+`.envrc` loaded by [direnv](https://direnv.net/):
+
+```bash
+cp .envrc.example .envrc   # from repo root, then fill in the values
+direnv allow
+```
+
+| Env var | Ansible var | Used by |
+|---|---|---|
+| `BW_TELEGRAM_BOT_TOKEN` | `telegram_bot_token` | voice, brain |
+| `BW_TELEGRAM_CHAT_ID` | `telegram_chat_id` | voice, brain |
+| `BW_CLAUDE_API_KEY` | `claude_api_key` | brain |
+
+Unset variables render as empty strings — playbooks still run, delivery just fails.
+
 ---
 
 ## 5. Host topology

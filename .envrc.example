@@ -1,0 +1,6 @@
+# Blackwall local secrets — copy to .envrc, fill in, run `direnv allow`.
+# .envrc is gitignored. Consumed by tests/inventory/hosts.yml via lookup('env', ...).
+
+export BW_TELEGRAM_BOT_TOKEN=''   # blackwall-voice / blackwall-brain
+export BW_TELEGRAM_CHAT_ID=''
+export BW_CLAUDE_API_KEY=''       # blackwall-brain

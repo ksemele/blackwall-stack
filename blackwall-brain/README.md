@@ -30,7 +30,9 @@ See [tests/README.md](../tests/README.md) for full environment documentation.
 
 ## Configure
 
-Set these vars before deploying (use Ansible vault for secrets in production):
+On the test environment the secrets (claude_api_key, telegram_bot_token, telegram_chat_id)
+are read from env vars set in `.envrc` — see [tests/README.md](../tests/README.md#secrets-telegram-claude-api).
+For other targets, set these vars before deploying (use Ansible vault for secrets in production):
 
 ```yaml
 claude_api_key:     "your-anthropic-api-key"

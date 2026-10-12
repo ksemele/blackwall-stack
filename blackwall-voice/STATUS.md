@@ -71,7 +71,7 @@ blockers: []
 
 ## Открытые вопросы
 
-- `telegram_bot_token` и `telegram_chat_id`: реальные значения **удалены** из `tests/inventory/hosts.yml` (были закоммиченными секретами). Нужен источник через ansible-vault/env для e2e-теста доставки.
+- `telegram_bot_token` и `telegram_chat_id`: на стенде берутся из env (`BW_TELEGRAM_*` в `.envrc`, direnv); из истории git вычищены 2026-10-12. Для прода — ansible-vault.
 - State file (`sent_ids.txt`) растёт неограниченно — в будущем нужна ротация/TTL.
 
 ## Решения
