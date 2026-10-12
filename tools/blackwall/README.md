@@ -81,6 +81,12 @@ has six tabs, switchable by hotkey:
 | Network | `n` | Interfaces, addresses, open ports |
 | Security | `s` | FIM scan, rootcheck findings, SCA compliance |
 
+Agents enrolled into the Wazuh group `docker` (the `wazuh-agent` role does this
+for hosts with `/.dockerenv`) get a red `[docker]` tag in the list and a `DOCKER`
+badge plus warning in detail: container kernels may lack audit support, so
+auditd detections do not fire there. See
+[tests/README.md](../../tests/README.md#container-limitations).
+
 Press `esc` to return to the agents list, `r` to force a refresh.
 
 While in Top or Packages, press `/` to start typing a substring filter.

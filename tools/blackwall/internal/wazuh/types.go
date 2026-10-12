@@ -19,6 +19,21 @@ type Agent struct {
 	Manager string    `json:"manager"`
 }
 
+// ContainerGroup is the Wazuh agent group the wazuh-agent Ansible role assigns
+// to hosts running inside a container (detected via /.dockerenv).
+const ContainerGroup = "docker"
+
+// InContainer reports whether the agent runs inside a container. Such hosts
+// have no kernel audit support, so auditd-based detections do not fire there.
+func (a Agent) InContainer() bool {
+	for _, g := range a.Group {
+		if g == ContainerGroup {
+			return true
+		}
+	}
+	return false
+}
+
 type AgentDetail struct {
 	Agent
 	Config map[string]string `json:"-"`

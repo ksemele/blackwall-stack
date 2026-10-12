@@ -8,6 +8,7 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 
 	"github.com/greengrunt/blackwall/tools/blackwall/internal/app"
 	"github.com/greengrunt/blackwall/tools/blackwall/internal/tickcmd"
@@ -132,6 +133,23 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+// dockerTag follows the name of agents in the wazuh.ContainerGroup group.
+const dockerTag = "[docker]"
+
+// rowStyle colours a whole agents row by status; active rows stay default.
+func rowStyle(status string) lipgloss.Style {
+	switch status {
+	case "active":
+		return lipgloss.NewStyle()
+	case "pending":
+		return styles.RowPending
+	case "never_connected":
+		return styles.RowGhost
+	default:
+		return styles.RowDown
+	}
+}
+
 var agentCols = []table.Col{
 	{Title: "ID", Min: 4},
 	{Title: "NAME", Min: 20, Flex: true},
@@ -162,22 +180,26 @@ func (m *Model) View() string {
 		if version == "" {
 			version = "—"
 		}
-		row := table.Row(widths, []string{a.ID, a.Name, a.IP, a.Status, version, osStr, lastSeen})
+		values := []string{a.ID, a.Name, a.IP, a.Status, version, osStr, lastSeen}
+		var row string
 		if i == m.cursor {
-			row = styles.SelectedRow.Render(row)
-		} else {
-			switch a.Status {
-			case "active":
-				// default — no extra styling
-			case "pending":
-				row = styles.RowPending.Render(row)
-			case "disconnected":
-				row = styles.RowDown.Render(row)
-			case "never_connected":
-				row = styles.RowGhost.Render(row)
-			default:
-				row = styles.RowDown.Render(row)
+			// The full-row highlight wins; the badge stays as plain text so its
+			// own colours do not cut the highlight in half.
+			if a.InContainer() {
+				values[1] += " " + dockerTag
 			}
+			row = styles.SelectedRow.Render(table.Row(widths, values))
+		} else {
+			// Style cell by cell: a styled badge inside a row-wide style would
+			// reset the colour of every column after it.
+			st := rowStyle(a.Status)
+			for j := range values {
+				values[j] = st.Render(values[j])
+			}
+			if a.InContainer() {
+				values[1] += " " + styles.DockerBadge.Render(dockerTag)
+			}
+			row = table.Row(widths, values)
 		}
 		fmt.Fprintln(&b, row)
 	}

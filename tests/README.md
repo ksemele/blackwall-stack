@@ -184,6 +184,22 @@ registered via the `broken-agents.yml` playbook and always appears as
 `black-dead-98` is a real container that registers as a Wazuh agent; the
 `broken-agents.yml` playbook then stops it so it transitions to `disconnected`.
 
+### Container limitations
+
+The nodes are containers, so they share the kernel of the Docker VM (OrbStack,
+Docker Desktop). What that kernel lacks, the lab cannot test:
+
+| Component | In the lab | Why |
+|---|---|---|
+| `auditd` | installed, rules deployed, **service fails to start** | no kernel audit support (`audit support not in kernel`); the role ignores the failure only when `/.dockerenv` exists |
+| `nftables` | works on OrbStack; `bw-check nft` SKIPs on kernels without `nf_tables` | depends on the VM kernel |
+| FIM, rootcheck, SCA, syscollector | work | user-space only |
+
+So auditd-based detections (`exec`, `priv_esc`, `sudo`, `shadow` keys) never fire
+here — verify them on a real host. To keep this visible, the `wazuh-agent` role
+enrolls containerised agents into the Wazuh group **`docker`**, and the
+`blackwall` TUI marks them with a red `[docker]` tag and a warning in agent detail.
+
 ---
 
 ## 6. Monitoring stack

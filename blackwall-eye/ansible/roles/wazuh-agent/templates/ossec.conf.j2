@@ -15,7 +15,7 @@
       <manager_address>{{ wazuh_enrollment_host }}</manager_address>
       <port>{{ wazuh_enrollment_port }}</port>
       <agent_name>{{ wazuh_agent_name }}</agent_name>
-      <groups>{{ wazuh_agent_groups }}</groups>
+      <groups>{{ _wazuh_enroll_groups }}</groups>
 {% if wazuh_enrollment_password | length > 0 %}
       <authorization_pass_path>/var/ossec/etc/authd.pass</authorization_pass_path>
 {% endif %}
