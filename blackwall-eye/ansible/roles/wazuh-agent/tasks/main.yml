@@ -8,11 +8,14 @@
     path: /.dockerenv
   register: _agent_dockerenv
 
+# A single group, not "default,docker": agents enrolling at the same moment
+# into a not-yet-existing multigroup race inside wazuh-db, and the loser is left
+# registered but broken (no NNN.db, status "Unknown", never reported by the API).
 - name: Resolve enrollment groups
   set_fact:
     _wazuh_enroll_groups: >-
-      {{ wazuh_agent_groups ~ (',' ~ wazuh_agent_container_group
-         if _agent_dockerenv.stat.exists else '') }}
+      {{ wazuh_agent_container_group if _agent_dockerenv.stat.exists
+         else wazuh_agent_groups }}
 
 - name: Install prerequisites (gnupg, curl)
   apt:
