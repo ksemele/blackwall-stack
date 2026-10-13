@@ -68,20 +68,20 @@ module: blackwall-eye
 status: in_progress          # pending | in_progress | blocked | done
 stage: 1
 last_updated: 2026-05-09
-last_task: "Описание последней выполненной задачи"
-next_task: "Описание следующей задачи"
+last_task: "Description of the last completed task"
+next_task: "Description of the next task"
 blockers: []
 ---
 
-## Что сделано
+## Done
 
 - ...
 
-## Открытые вопросы
+## Open questions
 
 - ...
 
-## Решения
+## Decisions
 
 - ...
 ```
@@ -101,10 +101,10 @@ blockers: []
 Read `STATUS.md` from every module directory. Render summary:
 
 ```
-BLACKWALL — статус модулей
+BLACKWALL — module status
 ──────────────────────────
-[in_progress] blackwall-eye    Stage 1 | Следующее: Ansible роль wazuh-agent
-[pending]     blackwall-voice  Не начат
+[in_progress] blackwall-eye    Stage 1 | Next: wazuh-agent Ansible role
+[pending]     blackwall-voice  Not started
 ```
 
 Discovery: scan root directory for subdirectories containing `STATUS.md`.
@@ -112,11 +112,11 @@ Discovery: scan root directory for subdirectories containing `STATUS.md`.
 ### Step 2: Present options and wait
 
 ```
-Что делаем?
-  1. Продолжить <module> (следующая задача: <next_task>)
-  2. Начать <pending-module>
-  3. Показать детали модуля [имя]
-  4. Ничего, только статус
+What next?
+  1. Continue <module> (next task: <next_task>)
+  2. Start <pending-module>
+  3. Show module details [name]
+  4. Nothing, status only
 ```
 
 Orchestrator does NOT auto-select. Always waits for user input.
@@ -133,9 +133,9 @@ When user selects an action, spawn Agent with:
 
 3-5 lines returned to orchestrator:
 ```
-✓ Выполнено: <что сделано>
-→ Следующее: <next_task>
-⚠ Вопросы: <если есть>
+✓ Done: <what was done>
+→ Next: <next_task>
+⚠ Questions: <if any>
 ```
 
 Orchestrator displays the report to user and returns to idle.
