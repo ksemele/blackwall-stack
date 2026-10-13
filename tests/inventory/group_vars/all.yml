@@ -1,0 +1,8 @@
+---
+# Lab-only: fetch Wazuh packages through the apt cache (black-aptcache-00).
+# packages.wazuh.com is HTTPS-only, and apt-cacher-ng cannot cache through a
+# CONNECT tunnel; the cache remaps this http:// URL to the https:// upstream
+# (tests/docker/images/aptcache/blackwall.conf). Package integrity still comes
+# from the Wazuh GPG signature on the repo metadata, not from TLS. The role
+# defaults keep https://, so nothing changes outside the lab.
+wazuh_apt_repo: "deb http://packages.wazuh.com/4.x/apt/ stable main"

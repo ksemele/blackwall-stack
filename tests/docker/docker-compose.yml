@@ -38,8 +38,30 @@ x-black-node: &black-node
   networks:
     - blackwall-test
   restart: "no"
+  depends_on:
+    - black-aptcache-00
 
 services:
+
+  # ── apt cache (apt-cacher-ng) ──────────────────────────────────────────────
+  # Profile: ubuntu2204
+  # Every node sends apt traffic here (see images/ubuntu2204/Dockerfile).
+  # The cache lives in tests/.apt-cache on the host (gitignored): a bind mount,
+  # not a volume, so `bw-lab down` (which drops volumes) keeps it.
+  # Not published to the host — only the nodes need it.
+
+  black-aptcache-00:
+    build:
+      context: ./images/aptcache
+    profiles: [ubuntu2204]
+    container_name: black-aptcache-00
+    hostname: black-aptcache-00
+    volumes:
+      - ../.apt-cache:/var/cache/apt-cacher-ng
+    networks:
+      blackwall-test:
+        ipv4_address: 172.28.0.14
+    restart: "no"
 
   # ── Ubuntu 22.04 ───────────────────────────────────────────────────────────
   # Profile: ubuntu2204
