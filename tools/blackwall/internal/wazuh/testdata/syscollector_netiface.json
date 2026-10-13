@@ -1,0 +1,35 @@
+{
+  "data": {
+    "affected_items": [
+      {
+        "rx": {
+          "bytes": 71244593,
+          "dropped": 0,
+          "errors": 0,
+          "packets": 7041
+        },
+        "scan": {
+          "id": 0,
+          "time": "2026-10-13T23:43:02+00:00"
+        },
+        "tx": {
+          "bytes": 3000347,
+          "dropped": 0,
+          "errors": 0,
+          "packets": 7482
+        },
+        "mtu": 1500,
+        "mac": "fa:65:17:03:89:d9",
+        "state": "up",
+        "type": "ethernet",
+        "name": "eth0",
+        "agent_id": "002"
+      }
+    ],
+    "total_affected_items": 1,
+    "total_failed_items": 0,
+    "failed_items": []
+  },
+  "message": "All specified syscollector information was returned",
+  "error": 0
+}

@@ -1,0 +1,76 @@
+{
+  "data": {
+    "affected_items": [
+      {
+        "local": {
+          "ip": "127.0.0.53",
+          "port": 53
+        },
+        "remote": {
+          "ip": "0.0.0.0",
+          "port": 0
+        },
+        "scan": {
+          "id": 0,
+          "time": "2026-10-13T23:12:31+00:00"
+        },
+        "pid": 39,
+        "state": "listening",
+        "process": "systemd-resolve",
+        "tx_queue": 0,
+        "protocol": "tcp",
+        "inode": 982744,
+        "rx_queue": 0,
+        "agent_id": "002"
+      },
+      {
+        "local": {
+          "ip": "::",
+          "port": 22
+        },
+        "remote": {
+          "ip": "::",
+          "port": 0
+        },
+        "scan": {
+          "id": 0,
+          "time": "2026-10-13T23:12:31+00:00"
+        },
+        "pid": 51,
+        "state": "listening",
+        "process": "sshd",
+        "tx_queue": 0,
+        "protocol": "tcp6",
+        "inode": 986176,
+        "rx_queue": 0,
+        "agent_id": "002"
+      },
+      {
+        "local": {
+          "ip": "127.0.0.53",
+          "port": 53
+        },
+        "remote": {
+          "ip": "0.0.0.0",
+          "port": 0
+        },
+        "scan": {
+          "id": 0,
+          "time": "2026-10-13T23:12:32+00:00"
+        },
+        "pid": 39,
+        "process": "systemd-resolve",
+        "tx_queue": 0,
+        "protocol": "udp",
+        "inode": 982743,
+        "rx_queue": 0,
+        "agent_id": "002"
+      }
+    ],
+    "total_affected_items": 7,
+    "total_failed_items": 0,
+    "failed_items": []
+  },
+  "message": "All specified syscollector information was returned",
+  "error": 0
+}
