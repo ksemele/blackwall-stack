@@ -1,0 +1,18 @@
+---
+# Disable the role entirely on a host
+nft_enabled: true
+
+# External interface. Check with: ip -o -4 route show to default | awk '{print $5}'
+nft_wan_if: eth0
+
+# TCP ports open to everyone
+nft_public_tcp: [22]
+
+# Ports reachable only from the listed sources:
+#   nft_restricted:
+#     - port: 9100
+#       sources: [172.28.0.12]
+nft_restricted: []
+
+nft_forward_policy: accept
+nft_log_drops: true

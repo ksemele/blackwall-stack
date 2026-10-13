@@ -1,0 +1,89 @@
+---
+# Verify brain-analyst is running and processes injected synthetic alerts
+- name: blackwall-brain | verify brain-analyst
+  hosts: wazuh_managers
+  become: true
+  vars:
+    synthetic_alert_id: "verify-brain-{{ ansible_date_time.epoch }}"
+    synthetic_alert_json: >-
+      {"id":"{{ synthetic_alert_id }}","timestamp":"{{ ansible_date_time.iso8601 }}",
+      "rule":{"level":9,"description":"Synthetic verify-brain test alert","id":"99998"},
+      "agent":{"name":"verify-bot"},"manager":{"name":"black-master-00"},
+      "full_log":"synthetic alert injected by verify-brain.yml"}
+
+  tasks:
+    - name: Check brain-analyst service is active
+      ansible.builtin.systemd:
+        name: brain-analyst
+      register: svc_state
+
+    - name: Assert service is running
+      ansible.builtin.assert:
+        that:
+          - svc_state.status.ActiveState in ["active", "activating"]
+        fail_msg: "brain-analyst service is not active (state: {{ svc_state.status.ActiveState }})"
+        success_msg: "brain-analyst is {{ svc_state.status.ActiveState }}"
+
+    - name: Show last 30 lines of brain analyst log
+      ansible.builtin.command: tail -n 30 {{ brain_log_file | default('/var/log/brain-analyst/analyst.log') }}
+      register: log_tail
+      changed_when: false
+
+    - name: Print brain analyst log tail
+      ansible.builtin.debug:
+        msg: "{{ log_tail.stdout_lines }}"
+
+    - name: Ensure alerts.json exists (touch without replacing)
+      ansible.builtin.file:
+        path: /var/ossec/logs/alerts/alerts.json
+        state: touch
+        owner: root
+        group: root
+        mode: "0644"
+        modification_time: preserve
+        access_time: preserve
+
+    - name: Inject synthetic high-severity alert into alerts.json
+      ansible.builtin.shell:
+        cmd: "printf '%s\\n' '{{ synthetic_alert_json }}' >> /var/ossec/logs/alerts/alerts.json"
+
+    - name: Wait for brain-analyst to process the synthetic alert
+      ansible.builtin.pause:
+        seconds: "{{ poll_interval | default(5) | int + 3 }}"
+
+    - name: Read brain state file
+      ansible.builtin.slurp:
+        src: "{{ brain_state_file | default('/var/lib/brain-analyst/sent_ids.txt') }}"
+      register: state_file_content
+      ignore_errors: true
+
+    - name: Check synthetic alert ID is in state file (dedup confirmation)
+      ansible.builtin.assert:
+        that:
+          - state_file_content.content is defined
+          - synthetic_alert_id in (state_file_content.content | b64decode)
+        fail_msg: >-
+          Synthetic alert ID '{{ synthetic_alert_id }}' not found in state file.
+          State file content: {{ state_file_content.content | default('') | b64decode }}
+          Note: if Claude API key or bot token is invalid, send fails and ID won't be written — this is expected with placeholder credentials.
+        success_msg: "Dedup state file contains synthetic alert ID — brain-analyst processed and sent successfully"
+      ignore_errors: true
+
+    - name: Show state file contents
+      ansible.builtin.debug:
+        msg: "State file: {{ state_file_content.content | default('') | b64decode }}"
+
+    - name: Confirm brain-analyst picked up the synthetic alert (check log)
+      ansible.builtin.command:
+        cmd: "grep -q '{{ synthetic_alert_id }}' {{ brain_log_file | default('/var/log/brain-analyst/analyst.log') }}"
+      register: log_check
+      changed_when: false
+      failed_when: false
+
+    - name: Assert brain-analyst attempted the synthetic alert
+      ansible.builtin.assert:
+        that: log_check.rc == 0
+        fail_msg: >-
+          Synthetic alert '{{ synthetic_alert_id }}' not found in brain analyst log.
+          The brain-analyst may not have picked up the injected alert.
+        success_msg: "Brain-analyst picked up and attempted synthetic alert '{{ synthetic_alert_id }}'"

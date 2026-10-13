@@ -1,0 +1,131 @@
+#!/usr/sbin/nft -f
+#
+# blackwall-base — основной firewall хоста, замена firewalld.
+#
+# Воспроизводит поведение прежней зоны firewalld `public`, но явным списком
+# правил. Разбор соответствия — в README, раздел «Миграция с firewalld».
+#
+# Открыто наружу:
+#   22    SSH    — отовсюду (вход только по ключу)
+#   9999  zuzia  — ТОЛЬКО с адресов самого сервиса мониторинга (@zuzia_v4)
+#   443   НЕ здесь: приходит через DNAT podman и обрабатывается в forward,
+#         фильтруется отдельной таблицей blackwall_wall (только префиксы CF)
+#
+# Таблицы netavark (`ip nat`, `ip filter`) эта таблица не трогает: она их
+# дополняет, а не заменяет. Публикация портов контейнеров продолжает работать
+# через `ct status dnat accept` в forward — ровно как это делал firewalld.
+#
+# Применить:  sudo nft -f /etc/nftables.d/blackwall-base.nft
+# Проверить:  sudo nft list table inet blackwall_base
+# Откатить:   sudo nft delete table inet blackwall_base
+
+define BASE_WAN_IF = "eth0"
+
+# Подсеть и мост podman.
+#   podman network inspect podman -f '{{range .Subnets}}{{.Subnet}}{{end}}'
+#   podman network inspect podman -f '{{.NetworkInterface}}'
+define PODMAN_NET = 10.88.0.0/16
+define PODMAN_IF = "podman0"
+
+table inet blackwall_base
+delete table inet blackwall_base
+
+table inet blackwall_base {
+
+    # Открыто всему интернету. Вход только по ключу
+    # (PasswordAuthentication no в /etc/ssh/sshd_config).
+    #
+    # 9090 (cockpit) убран 2026-08-15: `ss -lntp` показал, что на нём никто не
+    # слушает — cockpit.socket не запущен, снаружи порт в таймаут. Разрешение
+    # осталось от firewalld и держало открытым порт в пустоту. Если будешь
+    # поднимать cockpit — это root-панель управления хостом, всему интернету
+    # её открывать не стоит: заводи по образцу @zuzia_v4 ниже.
+    set public_tcp {
+        type inet_service
+        elements = { 22 }
+    }
+
+    # Адреса, с которых сервис zuzia скрейпит метрики на 9999.
+    # Из документации сервиса, зафиксировано 2026-08-15.
+    #
+    # У этого списка НЕТ автообновления (в отличие от префиксов Cloudflare,
+    # которые тянет blackwall-cf-refresh). Если zuzia сменит адреса, метрики
+    # молча перестанут приходить — сверять при изменениях на их стороне.
+    set zuzia_v4 {
+        type ipv4_addr
+        flags interval
+        auto-merge
+        elements = {
+            45.142.160.163,
+            45.142.160.164,
+            45.142.160.165,
+            198.199.87.8,
+            139.59.105.154
+        }
+    }
+
+    chain input {
+        type filter hook input priority filter; policy drop;
+
+        iif lo accept
+        ct state established,related accept
+        ct state invalid drop
+
+        # Антиспуфинг: адреса подсети контейнеров не могут прийти из интернета.
+        # Нужен до правил ниже, которые доверяют $PODMAN_NET.
+        iifname $BASE_WAN_IF ip saddr $PODMAN_NET counter drop
+
+        # DNS от контейнеров к aardvark-dns на хосте.
+        # У netavark это разрешено в его таблице:
+        #     chain NETAVARK_INPUT { ip saddr 10.88.0.0/16 udp dport 53 accept }
+        # но его accept не спасает: наш policy drop в другой таблице убивает
+        # пакет независимо. Без этих двух строк у контейнеров не резолвятся
+        # имена — молча, с виду «сеть есть, но ничего не работает».
+        iifname $PODMAN_IF ip saddr $PODMAN_NET udp dport 53 counter accept
+        iifname $PODMAN_IF ip saddr $PODMAN_NET tcp dport 53 counter accept
+
+        # ICMP целиком: без icmpv6 ломается IPv6 (neighbor discovery, PMTU),
+        # без icmp — path MTU discovery в IPv4. firewalld пускал их так же.
+        meta l4proto { icmp, ipv6-icmp } accept
+
+        # DHCPv6-клиент — было в firewalld (filter_IN_public_allow).
+        ip6 daddr fe80::/64 udp dport 546 accept
+
+        tcp dport @public_tcp ct state new counter accept
+
+        # Мониторинг zuzia — только с адресов сервиса.
+        tcp dport 9999 ip saddr @zuzia_v4 ct state new counter accept
+
+        # Полезно для blackwall-eye: видно, что и куда стучится.
+        limit rate 5/minute log prefix "[blackwall-base] input-drop " level info
+        counter
+    }
+
+    chain forward {
+        type filter hook forward priority filter; policy drop;
+
+        ct state established,related accept
+        ct state invalid drop
+
+        # КРИТИЧНО для podman: опубликованные порты контейнеров (443 -> 10.88.0.31)
+        # после DNAT идут в forward. Ровно это правило было у firewalld
+        # (`ct status dnat accept` в filter_FORWARD) — без него сайт ляжет.
+        # Фильтрация «кого пускать на 443» живёт в blackwall_wall (prerouting),
+        # то есть срабатывает ДО этого accept.
+        ct status dnat counter accept
+
+        # Контейнеры наружу. Аналог filter_FWD_public_allow { oifname "eth0" accept }.
+        oifname $BASE_WAN_IF ip saddr $PODMAN_NET counter accept
+
+        # Трафик между контейнерами firewalld тоже не пропускал — поведение
+        # сохранено. Раскомментировать, если контейнерам нужно общаться:
+        # iifname "podman0" oifname "podman0" accept
+
+        limit rate 5/minute log prefix "[blackwall-base] fwd-drop " level info
+        counter
+    }
+
+    chain output {
+        type filter hook output priority filter; policy accept;
+    }
+}

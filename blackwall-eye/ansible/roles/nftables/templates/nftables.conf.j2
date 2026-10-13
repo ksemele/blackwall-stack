@@ -1,0 +1,20 @@
+#!/usr/sbin/nft -f
+#
+# Managed by the Ansible role blackwall-eye/nftables. Do not edit by hand.
+#
+# The role owns this file because Ubuntu's stock nftables.conf runs
+# `flush ruleset` on every service start.
+#
+# NO GLOBAL FLUSH HERE — deliberately. A global flush wipes tables this role
+# does not own, and that breaks the host in ways that look like a network
+# outage rather than a firewall change:
+#   - in Docker it destroys the NAT rules for the embedded resolver 127.0.0.11,
+#     so DNS dies inside the container and apt fails with
+#     "Temporary failure resolving ..." while the ruleset looks empty and fine;
+#   - on podman hosts it destroys netavark's `ip nat` / `ip filter` tables,
+#     taking published container ports down with it.
+#
+# Atomicity is handled per-table instead: each file in /etc/nftables.d/ uses the
+# create / delete / define idiom, which replaces only its own table.
+
+include "/etc/nftables.d/*.nft"

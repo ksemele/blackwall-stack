@@ -1,0 +1,17 @@
+[Unit]
+Description=blackwall-voice Telegram Alerter
+Documentation=https://github.com/akrugliak/blackwall
+After=network-online.target wazuh-manager.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/usr/bin/python3 -u {{ alerter_install_dir }}/alerter.py
+Restart=on-failure
+RestartSec=10s
+StandardOutput=append:{{ alerter_log_file }}
+StandardError=append:{{ alerter_log_file }}
+
+[Install]
+WantedBy=multi-user.target

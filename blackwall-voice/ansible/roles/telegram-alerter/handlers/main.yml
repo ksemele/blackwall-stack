@@ -1,0 +1,9 @@
+---
+- name: Reload systemd
+  ansible.builtin.systemd:
+    daemon_reload: true
+
+- name: Restart voice-alerter
+  ansible.builtin.systemd:
+    name: voice-alerter
+    state: restarted

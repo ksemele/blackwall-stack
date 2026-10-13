@@ -1,0 +1,7 @@
+---
+# Deploy telegram-alerter to all Wazuh manager hosts
+- name: blackwall-voice | deploy telegram-alerter
+  hosts: wazuh_managers
+  become: true
+  roles:
+    - telegram-alerter

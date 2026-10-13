@@ -1,0 +1,32 @@
+---
+# verify-agents.yml — Check which agents are registered and connected to the manager.
+#
+# Usage (from blackwall-eye/):
+#   ansible-playbook ansible/playbooks/verify-agents.yml
+#
+# Output: prints agent list from `agent_control -l` and asserts at least one is connected.
+
+- name: Verify Wazuh agent registration and connectivity
+  hosts: wazuh_managers
+  become: true
+
+  tasks:
+    - name: List all registered agents
+      command: /var/ossec/bin/agent_control -l
+      register: agent_list
+      changed_when: false
+
+    - name: Show agent list
+      debug:
+        msg: "{{ agent_list.stdout_lines }}"
+
+    - name: Assert at least one external agent is connected (Active, not server)
+      assert:
+        that:
+          - agent_list.stdout_lines | select('search', 'Active') | reject('search', 'server') | list | length > 0
+        fail_msg: >
+          No external agents are in 'Active' state. Make sure wazuh-agent is installed and
+          running on black-host-01 and that it can reach the manager on port 1514/tcp
+          and 1515/tcp.
+        success_msg: "At least one external agent is Active — enrollment and connectivity verified."
+

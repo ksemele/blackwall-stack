@@ -1,0 +1,72 @@
+---
+# verify-api.yml — Query Wazuh REST API for live agent status.
+# Runs on the manager host itself (API is not exposed externally).
+#
+# Usage (from blackwall-eye/):
+#   ansible-playbook ansible/playbooks/verify-api.yml
+#
+# Override credentials if changed from defaults:
+#   ansible-playbook ansible/playbooks/verify-api.yml \
+#     -e "wazuh_api_user=admin wazuh_api_pass=secret"
+
+- name: Wazuh API — live agent status
+  hosts: wazuh_managers
+  become: true
+  gather_facts: false
+
+  vars:
+    wazuh_api_url: "https://localhost:55000"
+    wazuh_api_user: "wazuh"
+    wazuh_api_pass: "wazuh"
+
+  tasks:
+    - name: Query Wazuh API — agent list and status summary
+      shell: |
+        python3 << 'PYEOF'
+        import urllib.request, ssl, json, base64, sys
+
+        ctx = ssl.create_default_context()
+        ctx.check_hostname = False
+        ctx.verify_mode = ssl.CERT_NONE
+
+        creds = base64.b64encode(b"{{ wazuh_api_user }}:{{ wazuh_api_pass }}").decode()
+        base = "{{ wazuh_api_url }}"
+
+        req = urllib.request.Request(base + "/security/user/authenticate",
+              method="POST", headers={"Authorization": "Basic " + creds})
+        token = json.load(urllib.request.urlopen(req, context=ctx))["data"]["token"]
+
+        hdrs = {"Authorization": "Bearer " + token}
+
+        req = urllib.request.Request(
+              base + "/agents?limit=100&sort=%2Bname&select=id,name,status,ip,lastKeepAlive",
+              headers=hdrs)
+        agents = json.load(urllib.request.urlopen(req, context=ctx))["data"]["affected_items"]
+
+        req = urllib.request.Request(base + "/agents/summary/status", headers=hdrs)
+        conn = json.load(urllib.request.urlopen(req, context=ctx))["data"]["connection"]
+
+        print(json.dumps({"agents": agents, "summary": conn}))
+        PYEOF
+      register: _api
+      changed_when: false
+      no_log: true
+
+    - name: Parse API result
+      set_fact:
+        _result: "{{ _api.stdout | from_json }}"
+
+    - name: Show agent list
+      debug:
+        msg: "{{ '[' + item.status | upper + ']  ' + item.name + '  (ID: ' + item.id + ')  IP: ' + (item.ip | default('n/a')) + '  last seen: ' + (item.lastKeepAlive | default('n/a')) }}"
+      loop: "{{ _result.agents }}"
+      loop_control:
+        label: "{{ item.name }}"
+
+    - name: Show status summary
+      debug:
+        msg:
+          active: "{{ _result.summary.active }}"
+          disconnected: "{{ _result.summary.disconnected }}"
+          never_connected: "{{ _result.summary.never_connected }}"
+          pending: "{{ _result.summary.pending }}"

@@ -1,0 +1,11 @@
+---
+- name: Configure security node (Wazuh manager + indexer + dashboard)
+  hosts: wazuh_managers
+  become: true
+  roles:
+    - role: wazuh-indexer
+      tags: [wazuh-indexer]
+    - role: wazuh-manager
+      tags: [wazuh-manager]
+    - role: wazuh-dashboard
+      tags: [wazuh-dashboard]

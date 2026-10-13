@@ -1,0 +1,12 @@
+[Unit]
+Description=Blackwall: weekly Cloudflare prefix refresh
+
+[Timer]
+OnCalendar=weekly
+# Разброс, чтобы не долбить cloudflare.com/ips ровно в полночь вместе со всеми.
+RandomizedDelaySec=6h
+# Если хост был выключен в момент срабатывания — догнать после загрузки.
+Persistent=true
+
+[Install]
+WantedBy=timers.target

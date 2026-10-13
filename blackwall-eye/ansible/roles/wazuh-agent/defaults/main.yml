@@ -1,0 +1,30 @@
+---
+wazuh_version: "4.14.7"
+wazuh_apt_key_url: "https://packages.wazuh.com/key/GPG-KEY-WAZUH"
+wazuh_apt_repo: "deb https://packages.wazuh.com/4.x/apt/ stable main"
+
+# Agent identity
+wazuh_agent_name: "{{ inventory_hostname }}"
+wazuh_agent_groups: "default"
+# Replaces wazuh_agent_groups when the host runs in a container (/.dockerenv).
+# Must exist on the manager (wazuh_manager_agent_groups); the blackwall TUI
+# flags such agents, since container kernels may lack audit support.
+wazuh_agent_container_group: "docker"
+
+# Master endpoint (override per-target)
+wazuh_manager_host: "172.28.0.10"
+wazuh_manager_port: 1514
+wazuh_manager_protocol: "tcp"
+
+# Enrollment (authd)
+wazuh_enrollment_host: "{{ wazuh_manager_host }}"
+wazuh_enrollment_port: 1515
+wazuh_enrollment_password: ""
+
+# Syscollector (system inventory)
+wazuh_syscollector_interval: "5m"
+
+# Rootcheck (rootkit / anomaly scan) and SCA (CIS benchmark policies bundled
+# with the agent, picked automatically for the host OS)
+wazuh_rootcheck_frequency: 43200
+wazuh_sca_interval: "12h"

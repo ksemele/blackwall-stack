@@ -1,0 +1,20 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ansible-playbook ansible/playbooks/verify-*.yml*)",
+      "Bash(ansible-playbook ansible/playbooks/wazuh-certificates.yml*)",
+      "Bash(ansible all -m wait_for_connection*)",
+      "Bash(ansible-inventory*)",
+      "Bash(docker compose -f tests/docker/docker-compose.yml * config*)",
+      "Bash(docker compose -f tests/docker/docker-compose.yml * ps*)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(go test *)",
+      "Bash(go build *)",
+      "Bash(go vet *)",
+      "Bash(make test *)",
+      "Bash(make lint *)",
+      "Bash(make build *)"
+    ]
+  }
+}

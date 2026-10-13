@@ -1,0 +1,92 @@
+---
+# wazuh-certificates.yml — Generate TLS bundle for Wazuh indexer/dashboard/filebeat.
+#
+# Usage (from blackwall-eye/):
+#   ansible-playbook ansible/playbooks/wazuh-certificates.yml
+#
+# Idempotent: skips generation if ../tests/.wazuh-certs/wazuh-certificates.tar exists
+# on the controller. To rotate, delete that file and re-run.
+
+- name: Generate Wazuh certificate bundle on the master, fetch to controller
+  hosts: wazuh_managers
+  become: true
+  gather_facts: false
+  run_once: true
+
+  vars:
+    wazuh_certs_local_dir: "{{ playbook_dir }}/../../../tests/.wazuh-certs"
+    wazuh_certs_remote_dir: "/root/wazuh-certs"
+    wazuh_certs_tool_url: "https://packages.wazuh.com/4.14/wazuh-certs-tool.sh"
+    wazuh_certs_config_url: "https://packages.wazuh.com/4.14/config.yml"
+
+  tasks:
+    - name: Check if bundle already exists on controller
+      stat:
+        path: "{{ wazuh_certs_local_dir }}/wazuh-certificates.tar"
+      register: _bundle_local
+      delegate_to: localhost
+      become: false
+
+    - name: Stop here if bundle exists (idempotency)
+      meta: end_play
+      when: _bundle_local.stat.exists
+
+    - name: Ensure remote work dir exists
+      file:
+        path: "{{ wazuh_certs_remote_dir }}"
+        state: directory
+        mode: "0700"
+
+    - name: Download wazuh-certs-tool.sh
+      get_url:
+        url: "{{ wazuh_certs_tool_url }}"
+        dest: "{{ wazuh_certs_remote_dir }}/wazuh-certs-tool.sh"
+        mode: "0700"
+
+    - name: Download config.yml template
+      get_url:
+        url: "{{ wazuh_certs_config_url }}"
+        dest: "{{ wazuh_certs_remote_dir }}/config.yml"
+        mode: "0600"
+
+    - name: Customize config.yml for single-node all-in-one (master only)
+      copy:
+        dest: "{{ wazuh_certs_remote_dir }}/config.yml"
+        mode: "0600"
+        content: |
+          nodes:
+            indexer:
+              - name: black-master-00
+                ip: 172.28.0.10
+            server:
+              - name: black-master-00
+                ip: 172.28.0.10
+            dashboard:
+              - name: black-master-00
+                ip: 172.28.0.10
+
+    - name: Generate certificate bundle
+      command: bash ./wazuh-certs-tool.sh -A
+      args:
+        chdir: "{{ wazuh_certs_remote_dir }}"
+        creates: "{{ wazuh_certs_remote_dir }}/wazuh-certificates"
+
+    - name: Tar the bundle for transport
+      command: tar -cf wazuh-certificates.tar wazuh-certificates
+      args:
+        chdir: "{{ wazuh_certs_remote_dir }}"
+        creates: "{{ wazuh_certs_remote_dir }}/wazuh-certificates.tar"
+
+    - name: Ensure local cert dir exists
+      file:
+        path: "{{ wazuh_certs_local_dir }}"
+        state: directory
+        mode: "0700"
+      delegate_to: localhost
+      become: false
+
+    - name: Fetch bundle to controller
+      fetch:
+        src: "{{ wazuh_certs_remote_dir }}/wazuh-certificates.tar"
+        dest: "{{ wazuh_certs_local_dir }}/wazuh-certificates.tar"
+        flat: true

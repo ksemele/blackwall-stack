@@ -1,0 +1,80 @@
+---
+# verify-auditd.yml — Verify auditd role deployment on monitored hosts.
+# Usage (from blackwall-eye/):
+#   ansible-playbook ansible/playbooks/verify-auditd.yml
+
+- name: Verify auditd role deployment
+  hosts: wazuh_agents
+  become: true
+
+  tasks:
+    - name: Detect container environment
+      stat:
+        path: /.dockerenv
+      register: _dockerenv
+
+    - name: Check auditd package is installed
+      command: dpkg -s auditd
+      register: auditd_pkg
+      changed_when: false
+
+    - name: Assert auditd package installed
+      assert:
+        that: auditd_pkg.rc == 0
+        success_msg: "auditd package installed"
+        fail_msg: "auditd package not found"
+
+    - name: Check blackwall.rules file exists
+      stat:
+        path: /etc/audit/rules.d/blackwall.rules
+      register: rules_file
+
+    - name: Assert blackwall.rules deployed
+      assert:
+        that: rules_file.stat.exists
+        success_msg: "blackwall.rules deployed"
+        fail_msg: "blackwall.rules not found at /etc/audit/rules.d/blackwall.rules"
+
+    - name: Read blackwall.rules content
+      command: cat /etc/audit/rules.d/blackwall.rules
+      register: rules_content
+      changed_when: false
+
+    - name: Assert all expected rule keys present
+      assert:
+        that:
+          - "'-k exec' in rules_content.stdout"
+          - "'-k sudo' in rules_content.stdout"
+          - "'-k priv_esc' in rules_content.stdout"
+          - "'-k shadow' in rules_content.stdout"
+          - "'-k sshd_config' in rules_content.stdout"
+        success_msg: "All rule keys present in blackwall.rules"
+        fail_msg: "One or more rule keys missing from blackwall.rules"
+
+    - name: Check log_format in auditd.conf
+      command: grep -E '^\s*log_format\s*=' /etc/audit/auditd.conf
+      register: log_format_line
+      changed_when: false
+
+    - name: Assert log_format is ENRICHED
+      assert:
+        that: "'ENRICHED' in log_format_line.stdout"
+        success_msg: "log_format = ENRICHED confirmed"
+        fail_msg: "log_format is not ENRICHED in auditd.conf"
+
+    - name: Show auditd service status
+      command: systemctl status auditd --no-pager
+      register: auditd_status
+      changed_when: false
+      failed_when: false
+
+    - name: Show auditd status output
+      debug:
+        msg: "{{ auditd_status.stdout_lines }}"
+
+    - name: Assert auditd is active (real hosts only)
+      assert:
+        that: "'active (running)' in auditd_status.stdout"
+        success_msg: "auditd service is active"
+        fail_msg: "auditd service is not running (expected on real hosts)"
+      when: not _dockerenv.stat.exists

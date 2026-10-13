@@ -1,0 +1,56 @@
+---
+- name: Ensure python3 is installed
+  ansible.builtin.package:
+    name: python3
+    state: present
+
+- name: Create brain-analyst install directory
+  ansible.builtin.file:
+    path: "{{ brain_install_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Create brain-analyst state directory
+  ansible.builtin.file:
+    path: "{{ brain_state_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0750"
+
+- name: Create brain-analyst log directory
+  ansible.builtin.file:
+    path: "{{ brain_log_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0750"
+
+- name: Deploy brain analyst script
+  ansible.builtin.template:
+    src: brain.py.j2
+    dest: "{{ brain_install_dir }}/brain.py"
+    owner: root
+    group: root
+    mode: "0750"
+  notify: Restart brain-analyst service
+
+- name: Deploy systemd unit
+  ansible.builtin.template:
+    src: brain.service.j2
+    dest: /etc/systemd/system/brain-analyst.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify:
+    - Reload systemd daemon
+    - Restart brain-analyst service
+
+- name: Enable and start brain-analyst service
+  ansible.builtin.systemd:
+    name: brain-analyst
+    enabled: true
+    state: started
+    daemon_reload: true

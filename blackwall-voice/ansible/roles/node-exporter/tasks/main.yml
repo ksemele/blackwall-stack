@@ -1,0 +1,15 @@
+---
+- name: Install node_exporter via apt
+  ansible.builtin.include_tasks: install-apt.yml
+  when: node_exporter_install_method == 'apt'
+
+- name: Install node_exporter from tarball
+  ansible.builtin.include_tasks: install-tarball.yml
+  when: node_exporter_install_method == 'tarball'
+
+- name: Enable and start node_exporter
+  ansible.builtin.systemd:
+    name: "{{ node_exporter_service_name }}"
+    enabled: true
+    state: started
+    daemon_reload: true
