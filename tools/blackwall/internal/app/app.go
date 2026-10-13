@@ -87,6 +87,10 @@ func (m *Model) Init() tea.Cmd {
 	return m.Active().Init()
 }
 
+// chromeRows is what View() draws around the active view: tab bar, status
+// line and rule on top, rule and key hints at the bottom.
+const chromeRows = 5
+
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// Track terminal size for right-aligned layout and footer pinning.
 	// Broadcast the size to every view (including the help overlay) so an
@@ -95,14 +99,17 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if ws, ok := msg.(tea.WindowSizeMsg); ok {
 		m.width = ws.Width
 		m.height = ws.Height
+		// Views get the body area, not the whole terminal: the chrome rows
+		// rendered in View() are not theirs to fill.
+		body := tea.WindowSizeMsg{Width: ws.Width, Height: max(ws.Height-chromeRows, 1)}
 		for i, v := range m.views {
-			next, _ := v.Update(ws)
+			next, _ := v.Update(body)
 			if vv, ok := next.(views.View); ok {
 				m.views[i] = vv
 			}
 		}
 		if m.helpView != nil {
-			next, _ := m.helpView.Update(ws)
+			next, _ := m.helpView.Update(body)
 			if vv, ok := next.(views.View); ok {
 				m.helpView = vv
 			}

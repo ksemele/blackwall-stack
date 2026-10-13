@@ -15,6 +15,9 @@ import (
 type View struct {
 	list   *Model
 	detail *DetailModel // non-nil while detail is shown
+	// size is the last terminal size seen. The detail model is created on
+	// Enter, after the startup WindowSizeMsg, so it must be handed this.
+	size tea.WindowSizeMsg
 }
 
 // NewView returns a View wrapping a new list Model.
@@ -46,9 +49,16 @@ func (v *View) Init() tea.Cmd {
 }
 
 func (v *View) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if ws, ok := msg.(tea.WindowSizeMsg); ok {
+		v.size = ws
+	}
+
 	// Handle detail push.
 	if sd, ok := msg.(app.SwitchToDetailMsg); ok {
 		v.detail = NewDetail(v.list.client, sd.AgentID)
+		if v.size.Height > 0 {
+			_, _ = v.detail.Update(v.size)
+		}
 		return v, v.detail.Init()
 	}
 

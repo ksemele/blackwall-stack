@@ -97,3 +97,41 @@ func TestApp_QuitsOnQ(t *testing.T) {
 		t.Error("Quit cmd produced nil msg")
 	}
 }
+
+// sizedFakeView renders exactly as many lines as the height it was given, the
+// way a scroll list fills its space.
+type sizedFakeView struct {
+	fakeView
+	height int
+}
+
+func (v *sizedFakeView) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if ws, ok := msg.(tea.WindowSizeMsg); ok {
+		v.height = ws.Height
+	}
+	return v, nil
+}
+
+func (v *sizedFakeView) View() string {
+	return strings.TrimSuffix(strings.Repeat("row\n", v.height), "\n")
+}
+
+// Views get the body size, not the terminal size: a view that fills the height
+// it is given must not push the tab bar and status line off the screen.
+func TestApp_ViewsGetBodyHeight(t *testing.T) {
+	v := &sizedFakeView{fakeView: fakeView{name: ":a"}}
+	m := New(Deps{Views: []views.View{v}, InitialView: ":a"})
+	const height = 40
+	_, _ = m.Update(tea.WindowSizeMsg{Width: 100, Height: height})
+
+	if v.height >= height {
+		t.Fatalf("view got height %d, want less than the terminal's %d", v.height, height)
+	}
+	out := m.View()
+	if got := lipgloss.Height(out); got != height {
+		t.Errorf("rendered %d lines, want exactly %d", got, height)
+	}
+	if !strings.HasPrefix(out, strings.Split(m.View(), "\n")[0]) || strings.HasPrefix(out, "row") {
+		t.Errorf("first line is body, chrome was pushed off:\n%s", strings.Split(out, "\n")[0])
+	}
+}

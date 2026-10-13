@@ -116,9 +116,9 @@ func (m *DetailModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if ws, ok := msg.(tea.WindowSizeMsg); ok {
 		m.width = ws.Width
 		m.height = ws.Height
-		// headerRow (agent name) + tabbar row + newline = 3 fixed rows.
-		// footer rendered by app layer = 1 row.
-		subHeight := max(ws.Height-4, 1)
+		// ws is the body area (the app already took its chrome); the detail
+		// header takes two more rows: agent name and the tab bar.
+		subHeight := max(ws.Height-2, 1)
 		for i, sub := range m.subs {
 			if sv, ok := sub.(sizedView); ok {
 				sv.SetSize(ws.Width, subHeight)
