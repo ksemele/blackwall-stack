@@ -41,6 +41,31 @@ ansible-playbook ansible/playbooks/security-node.yml
 ansible-playbook ansible/playbooks/monitored-host.yml
 ```
 
+### Package source (production)
+
+The roles install Wazuh from `wazuh_apt_repo` (default: the public
+`https://packages.wazuh.com/4.x/apt/`) at the version pinned in `wazuh_version`.
+For a fleet, point it at a company-wide package mirror instead — one variable,
+no role changes:
+
+```yaml
+wazuh_apt_repo: "deb https://apt.internal.example/wazuh/4.14.7 stable main"
+```
+
+A versioned internal mirror (aptly/pulp snapshots, Artifactory or Nexus apt
+remotes, or apt-cacher-ng for a plain cache) gives:
+
+- **reproducible installs** — the exact `.deb` that was tested, even after
+  upstream moves on or pulls a version (we already hit a v4.14.5 asset
+  disappearing upstream);
+- **supply-chain control** — packages are vetted once at the mirror, hosts
+  never talk to the internet directly, egress to `packages.wazuh.com` can be
+  closed;
+- **speed** — ~1.5 GB per manager node from the LAN instead of the internet.
+
+The Docker lab already runs a small version of this: see
+[tests/README.md — apt cache](../tests/README.md#apt-cache).
+
 ## Verify
 
 ```bash

@@ -1,3 +1,6 @@
+# apt-cacher-ng cache of the test environment (survives bw-lab down)
+tests/.apt-cache/
+
 # Wazuh TLS bundle (generated per environment, do not commit)
 tests/.wazuh-certs/*
 

@@ -31,6 +31,7 @@ Each module is independently deployable. A shared Docker test environment lives 
 | `black-dead-98` | agent fixture, stopped on purpose |
 | `black-metrics-00` | Prometheus |
 | `black-grafana-00` | Grafana |
+| `black-aptcache-00` | apt cache (lab only): Wazuh packages are downloaded once |
 
 ### 1. Start the test environment
 

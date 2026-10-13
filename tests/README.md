@@ -9,6 +9,7 @@ Docker environment shared by all Blackwall modules.
 | `black-dead-98` | agent fixture, stopped on purpose (`disconnected` status) |
 | `black-metrics-00` | Prometheus |
 | `black-grafana-00` | Grafana |
+| `black-aptcache-00` | apt-cacher-ng — apt cache for the nodes, lab only |
 
 The three `black-*-NN` nodes are privileged with systemd as PID 1, so service
 management works identically to production hosts. Prometheus and Grafana are
@@ -46,8 +47,10 @@ tests/bin/bw-lab open prometheus    # http://localhost:9090
 tests/bin/bw-lab down
 ```
 
-`bw-lab up` takes roughly 10–20 minutes on a cold start: it builds the image,
-then installs the Wazuh indexer, manager and dashboard over apt.
+`bw-lab up` takes roughly 10–20 minutes on the very first start: it builds the
+images, then downloads ~1.5 GB of Wazuh packages over apt (indexer 832 MB,
+manager 501 MB, dashboard 184 MB). Every later `up`/`reset` takes those packages
+from the local apt cache — see [apt cache](#apt-cache).
 
 To start from a clean slate — volumes gone, certificates regenerated:
 
@@ -108,7 +111,7 @@ tests/bin/bw-check metrics    # just one group
 
 | Check | What it asserts |
 |---|---|
-| `hosts` | the four running containers exist; ansible reaches every systemd node |
+| `hosts` | the five running containers exist (incl. the apt cache); ansible reaches every systemd node |
 | `versions` | `wazuh-*`, `filebeat`, `auditd`, `nftables` are installed (prints versions); `wazuh-agent` version equals `wazuh-manager` |
 | `nft` | `chain input` is `policy drop` and every expected port is in `set public_tcp` |
 | `ports` | expected listeners inside the containers, plus published ports probed from the Mac |
@@ -176,6 +179,7 @@ Unset variables render as empty strings — playbooks still run, delivery just f
 | `black-dead-98` | agent fixture — disconnected | `2202→22` | — | `172.28.0.98` |
 | `black-metrics-00` | Prometheus | — | `9090→9090` | `172.28.0.12` |
 | `black-grafana-00` | Grafana | — | `3000→3000` | `172.28.0.13` |
+| `black-aptcache-00` | apt-cacher-ng | — | — | `172.28.0.14` |
 | `black-ghost-99` | ghost fixture — never_connected | no container | — | `172.28.0.99` |
 
 `black-ghost-99` is a manager-side registration only (no container). It is
@@ -184,6 +188,25 @@ registered via the `broken-agents.yml` playbook and always appears as
 
 `black-dead-98` is a real container that registers as a Wazuh agent; the
 `broken-agents.yml` playbook then stops it so it transitions to `disconnected`.
+
+### apt cache
+
+`black-aptcache-00` runs apt-cacher-ng; the node image sends every apt request
+through it (`/etc/apt/apt.conf.d/01blackwall-aptcache`). The cache is a bind
+mount at `tests/.apt-cache/` (gitignored), so it survives `bw-lab down` and
+`bw-lab reset`, which only drop Docker volumes.
+
+`packages.wazuh.com` is HTTPS-only, and a proxy cannot cache through a CONNECT
+tunnel. So the lab inventory (`tests/inventory/group_vars/all.yml`) points
+`wazuh_apt_repo` at `http://packages.wazuh.com/...`, and the cache remaps that
+to the `https://` upstream (`tests/docker/images/aptcache/blackwall.conf`).
+Packages are still verified by the Wazuh GPG signature on the repo metadata.
+Role defaults keep `https://` — none of this exists outside the lab.
+
+```bash
+du -sh tests/.apt-cache        # what is cached
+rm -rf tests/.apt-cache        # start cold (e.g. to test a fresh download)
+```
 
 ### Container limitations
 
@@ -303,6 +326,7 @@ below narrow it down. All `ansible` commands run from `blackwall-eye/`;
 ```bash
 docker ps --format '{{.Names}}' | sort
 # Expect:
+#   black-aptcache-00
 #   black-dead-98
 #   black-grafana-00
 #   black-host-01
@@ -715,7 +739,8 @@ blackwall/                                  # repo root
 │   │   └── _bw-common.sh                   # shared helpers (sourced)
 │   ├── docker/
 │   │   ├── docker-compose.yml
-│   │   ├── images/ubuntu2204/Dockerfile
+│   │   ├── images/ubuntu2204/Dockerfile    # nodes; apt goes through the cache
+│   │   ├── images/aptcache/                # apt-cacher-ng: Dockerfile + blackwall.conf
 │   │   ├── ssh_config
 │   │   ├── prometheus/prometheus.yml
 │   │   └── grafana/
@@ -725,11 +750,13 @@ blackwall/                                  # repo root
 │   ├── inventory/
 │   │   ├── hosts.yml
 │   │   └── group_vars/                     # loaded because it sits next to the inventory
+│   │       ├── all.yml                     # lab: wazuh_apt_repo via the apt cache
 │   │       ├── wazuh_managers.yml
 │   │       └── wazuh_agents.yml
 │   ├── triggers/
 │   │   ├── bw-trigger                      # synthetic alert events
 │   │   └── broken-agents.yml               # registers ghost + stops dead
+│   ├── .apt-cache/                         # gitignored apt-cacher-ng cache
 │   └── .wazuh-certs/                       # gitignored TLS bundle
 ├── blackwall-eye/
 │   ├── ansible.cfg

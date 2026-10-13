@@ -99,7 +99,7 @@ check_hosts() {
   local running
   running="$(docker ps --format '{{.Names}}')"
   local name
-  for name in black-master-00 black-host-01 black-metrics-00 black-grafana-00; do
+  for name in black-master-00 black-host-01 black-metrics-00 black-grafana-00 black-aptcache-00; do
     if grep -qx "$name" <<<"$running"; then
       bw_pass "container $name is running"
     else

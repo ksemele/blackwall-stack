@@ -19,6 +19,12 @@ RUN sed -i 's|http://ports.ubuntu.com/ubuntu-ports|http://ftp.uni-erlangen.de/ub
   && echo 'root:blackwall' | chpasswd \
   && systemctl enable ssh
 
+# Lab-only: every apt request goes through black-aptcache-00 (apt-cacher-ng),
+# so Wazuh packages are downloaded once, not on every `bw-lab up`. Added after
+# the build-time apt-get above: the image itself builds without the proxy.
+RUN echo 'Acquire::http::Proxy "http://172.28.0.14:3142";' \
+      > /etc/apt/apt.conf.d/01blackwall-aptcache
+
 EXPOSE 22
 
 # entrypoint mounts real cgroup2 before systemd starts
