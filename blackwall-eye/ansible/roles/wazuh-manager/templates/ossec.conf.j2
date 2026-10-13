@@ -1,0 +1,120 @@
+<ossec_config>
+
+  <global>
+    <jsonout_output>yes</jsonout_output>
+    <alerts_log>yes</alerts_log>
+    <logall>no</logall>
+    <logall_json>no</logall_json>
+    <email_notification>no</email_notification>
+    <smtp_server>localhost</smtp_server>
+    <email_from>wazuh@localhost</email_from>
+    <email_to>admin@localhost</email_to>
+    <email_maxperhour>12</email_maxperhour>
+    <email_log_source>alerts.log</email_log_source>
+    <agents_disconnection_time>{{ wazuh_agents_disconnection_time }}</agents_disconnection_time>
+    <agents_disconnection_alert_time>0</agents_disconnection_alert_time>
+  </global>
+
+  <!-- Alerts threshold: only log level 3+ -->
+  <alerts>
+    <log_alert_level>3</log_alert_level>
+    <email_alert_level>12</email_alert_level>
+  </alerts>
+
+  <!-- Remote: listen for agent connections -->
+  <remote>
+    <connection>secure</connection>
+    <port>{{ wazuh_manager_port }}</port>
+    <protocol>{{ wazuh_manager_protocol }}</protocol>
+    <queue_size>131072</queue_size>
+  </remote>
+
+  <!-- Enrollment (authd): auto-register agents -->
+  <auth>
+    <disabled>{{ 'no' if wazuh_authd_enabled == 'yes' else 'yes' }}</disabled>
+    <port>{{ wazuh_authd_port }}</port>
+    <use_source_ip>no</use_source_ip>
+    <purge>yes</purge>
+    <use_password>no</use_password>
+    <ciphers>HIGH:!ADH:!EXP:!MD5:!RC4:!3DES:!CAMELLIA:@STRENGTH</ciphers>
+    <ssl_verify_host>no</ssl_verify_host>
+    <ssl_manager_cert>/var/ossec/etc/sslmanager.cert</ssl_manager_cert>
+    <ssl_manager_key>/var/ossec/etc/sslmanager.key</ssl_manager_key>
+    <ssl_auto_negotiate>no</ssl_auto_negotiate>
+  </auth>
+
+  <!-- Log collection on the manager host itself -->
+  <localfile>
+    <log_format>syslog</log_format>
+    <location>/var/log/auth.log</location>
+  </localfile>
+
+  <localfile>
+    <log_format>syslog</log_format>
+    <location>/var/log/syslog</location>
+  </localfile>
+
+  <localfile>
+    <log_format>syslog</log_format>
+    <location>/var/ossec/logs/active-responses.log</location>
+  </localfile>
+
+  <!-- File Integrity Monitoring on the manager host -->
+  <syscheck>
+    <disabled>no</disabled>
+    <frequency>{{ wazuh_syscheck_frequency }}</frequency>
+    <scan_on_start>yes</scan_on_start>
+    <alert_new_files>yes</alert_new_files>
+    <auto_ignore frequency="10" timeframe="3600">no</auto_ignore>
+
+    <directories realtime="yes">/etc/passwd</directories>
+    <directories realtime="yes">/etc/shadow</directories>
+    <directories realtime="yes">/etc/sudoers</directories>
+    <directories realtime="yes">/etc/ssh/sshd_config</directories>
+
+    <!-- Ignore volatile paths -->
+    <ignore>/etc/mtab</ignore>
+    <ignore>/etc/hosts.deny</ignore>
+    <ignore>/etc/mail/statistics</ignore>
+    <ignore>/etc/random-seed</ignore>
+    <ignore>/etc/random.seed</ignore>
+    <ignore>/etc/adjtime</ignore>
+    <ignore>/etc/httpd/logs</ignore>
+    <ignore>/etc/utmpx</ignore>
+    <ignore>/etc/wtmpx</ignore>
+    <ignore>/etc/cups/certs</ignore>
+    <ignore>/etc/dumpdates</ignore>
+    <ignore>/etc/svc/volatile</ignore>
+  </syscheck>
+
+  <!-- Rootcheck -->
+  <rootcheck>
+    <disabled>no</disabled>
+    <check_files>yes</check_files>
+    <check_trojans>yes</check_trojans>
+    <check_dev>yes</check_dev>
+    <check_sys>yes</check_sys>
+    <check_pids>yes</check_pids>
+    <check_ports>yes</check_ports>
+    <check_if>yes</check_if>
+    <frequency>43200</frequency>
+    <rootkit_files>/var/ossec/etc/shared/rootkit_files.txt</rootkit_files>
+    <rootkit_trojans>/var/ossec/etc/shared/rootkit_trojans.txt</rootkit_trojans>
+    <skip_nfs>yes</skip_nfs>
+  </rootcheck>
+
+  <!-- Active response disabled for Stage 1 -->
+  <active-response>
+    <disabled>yes</disabled>
+  </active-response>
+
+  <!-- Vulnerability detection disabled for Stage 1 -->
+  <vulnerability-detection>
+    <enabled>no</enabled>
+  </vulnerability-detection>
+
+  <logging>
+    <log_format>plain</log_format>
+  </logging>
+
+</ossec_config>

@@ -1,0 +1,4 @@
+---
+- import_playbook: wazuh-certificates.yml
+- import_playbook: security-node.yml
+- import_playbook: monitored-host.yml

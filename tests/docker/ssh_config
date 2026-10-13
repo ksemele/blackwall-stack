@@ -1,0 +1,27 @@
+# SSH aliases for the Blackwall test environment.
+# Source from repo root: ssh -F tests/docker/ssh_config black-master-00
+# Or append to ~/.ssh/config: cat tests/docker/ssh_config >> ~/.ssh/config
+
+Host black-master-00
+    HostName localhost
+    Port 2200
+    User root
+    StrictHostKeyChecking no
+    UserKnownHostsFile /dev/null
+    LogLevel ERROR
+
+Host black-host-01
+    HostName localhost
+    Port 2201
+    User root
+    StrictHostKeyChecking no
+    UserKnownHostsFile /dev/null
+    LogLevel ERROR
+
+Host black-dead-98
+    HostName localhost
+    Port 2202
+    User root
+    StrictHostKeyChecking no
+    UserKnownHostsFile /dev/null
+    LogLevel ERROR

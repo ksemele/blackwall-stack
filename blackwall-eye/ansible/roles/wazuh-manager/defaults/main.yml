@@ -1,0 +1,27 @@
+---
+wazuh_version: "4.14.7"
+wazuh_apt_key_url: "https://packages.wazuh.com/key/GPG-KEY-WAZUH"
+wazuh_apt_repo: "deb https://packages.wazuh.com/4.x/apt/ stable main"
+
+# Manager network settings
+wazuh_manager_port: 1514
+wazuh_manager_protocol: tcp
+
+# Enrollment (authd) settings
+wazuh_authd_port: 1515
+wazuh_authd_enabled: "yes"
+
+# API settings
+wazuh_api_port: 55000
+wazuh_api_enabled: "yes"
+
+# Agent groups created on the manager so agents can enroll into them.
+# "docker" is assigned by the wazuh-agent role to containerised hosts.
+wazuh_manager_agent_groups:
+  - docker
+
+# How long an agent may stay silent before it is marked disconnected
+wazuh_agents_disconnection_time: 10m
+
+# Syscheck settings
+wazuh_syscheck_frequency: 43200

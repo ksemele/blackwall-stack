@@ -1,0 +1,44 @@
+---
+- name: Wait for dpkg lock to be released
+  shell: while fuser /var/lib/dpkg/lock-frontend /var/lib/dpkg/lock >/dev/null 2>&1; do sleep 2; done
+  changed_when: false
+
+- name: Install auditd and audispd-plugins
+  apt:
+    name:
+      - auditd
+      - audispd-plugins
+    state: present
+    update_cache: true
+
+- name: Set log_format to ENRICHED in auditd.conf
+  lineinfile:
+    path: /etc/audit/auditd.conf
+    regexp: '^\s*log_format\s*='
+    line: "log_format = {{ auditd_log_format }}"
+    state: present
+  notify: Restart auditd
+
+- name: Deploy blackwall audit rules
+  template:
+    src: blackwall.rules.j2
+    dest: /etc/audit/rules.d/blackwall.rules
+    owner: root
+    group: root
+    mode: "0640"
+  notify: Restart auditd
+
+- name: Detect container environment (/.dockerenv)
+  stat:
+    path: /.dockerenv
+  register: _dockerenv
+
+# auditd requires kernel audit netlink socket — unavailable in Docker containers.
+# On real hosts this will fail (correctly) if auditd can't start.
+- name: Enable and start auditd service
+  systemd:
+    name: auditd
+    enabled: true
+    state: started
+    daemon_reload: true
+  ignore_errors: "{{ _dockerenv.stat.exists }}"

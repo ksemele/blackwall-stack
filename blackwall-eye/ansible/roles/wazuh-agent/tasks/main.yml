@@ -1,0 +1,78 @@
+---
+- name: Wait for dpkg lock to be released
+  shell: while fuser /var/lib/dpkg/lock-frontend /var/lib/dpkg/lock >/dev/null 2>&1; do sleep 2; done
+  changed_when: false
+
+- name: Detect container environment (/.dockerenv)
+  stat:
+    path: /.dockerenv
+  register: _agent_dockerenv
+
+# A single group, not "default,docker": agents enrolling at the same moment
+# into a not-yet-existing multigroup race inside wazuh-db, and the loser is left
+# registered but broken (no NNN.db, status "Unknown", never reported by the API).
+- name: Resolve enrollment groups
+  set_fact:
+    _wazuh_enroll_groups: >-
+      {{ wazuh_agent_container_group if _agent_dockerenv.stat.exists
+         else wazuh_agent_groups }}
+
+- name: Install prerequisites (gnupg, curl)
+  apt:
+    name:
+      - gnupg
+      - curl
+    state: present
+    update_cache: true
+
+- name: Add Wazuh GPG key
+  apt_key:
+    url: "{{ wazuh_apt_key_url }}"
+    state: present
+
+- name: Add Wazuh apt repository
+  apt_repository:
+    repo: "{{ wazuh_apt_repo }}"
+    state: present
+    filename: wazuh
+
+# Pinned like the server roles: an agent newer than the manager is unsupported.
+- name: Install wazuh-agent package
+  apt:
+    name: "wazuh-agent={{ wazuh_version }}-*"
+    allow_downgrade: true
+    state: present
+    update_cache: true
+
+- name: Deploy ossec.conf from template
+  template:
+    src: ossec.conf.j2
+    dest: /var/ossec/etc/ossec.conf
+    owner: root
+    group: wazuh
+    mode: "0640"
+  notify: Restart wazuh-agent
+
+- name: Write authd.pass when enrollment password set
+  copy:
+    content: "{{ wazuh_enrollment_password }}"
+    dest: /var/ossec/etc/authd.pass
+    owner: root
+    group: wazuh
+    mode: "0640"
+  when: wazuh_enrollment_password | length > 0
+  notify: Restart wazuh-agent
+
+- name: Remove authd.pass when enrollment password unset
+  file:
+    path: /var/ossec/etc/authd.pass
+    state: absent
+  when: wazuh_enrollment_password | length == 0
+  notify: Restart wazuh-agent
+
+- name: Enable and start wazuh-agent service
+  systemd:
+    name: wazuh-agent
+    enabled: true
+    state: started
+    daemon_reload: true

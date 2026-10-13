@@ -1,0 +1,227 @@
+#!/usr/bin/env bash
+#
+# bw-lab — lifecycle of the Blackwall test environment.
+#
+# Usage:   tests/bin/bw-lab up                    # containers + full provisioning
+#          tests/bin/bw-lab down                  # tear down, volumes included
+#          tests/bin/bw-lab reset                 # down + wipe certs + up
+#          tests/bin/bw-lab status                # containers, ports, monitoring health
+#          tests/bin/bw-lab provision nftables    # re-run one playbook
+#
+# Full documentation: tests/README.md
+set -euo pipefail
+
+# shellcheck source=_bw-common.sh
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/_bw-common.sh"
+
+usage() {
+  cat <<USAGE
+bw-lab — lifecycle of the Blackwall test environment
+
+Usage: bw-lab <command> [args]
+
+Commands:
+  up [--no-provision] [--profile P]   start containers, then provision them
+  down [--keep-data]                  stop the environment (volumes removed by default)
+  reset                               down -v + wipe Wazuh certs + up
+  status                              containers, ports, monitoring health
+  provision <target>                  ansible only: eye|nftables|metrics|voice|fixtures|all
+  ssh <host> [command...]             shell into a test container
+  logs <service> [-f]                 compose logs for one service
+  open <target>                       open in a browser: dashboard|grafana|prometheus
+
+Environment:
+  BW_PROFILE        compose profile (default: ubuntu2204)
+  BW_SSH_PASSWORD   root password in the containers (default: blackwall)
+
+Examples:
+  bw-lab up                     # bring everything up and provision it
+  bw-lab up --no-provision      # containers only, run ansible by hand
+  bw-lab provision nftables     # re-apply the firewall role
+  bw-lab ssh black-host-01 'nft list ruleset'
+USAGE
+}
+
+# The broken-agents fixture stops black-dead-98 on purpose. Re-provisioning a
+# single target afterwards must not trip over it, so skip it while it is down.
+bw_live_limit() {
+  if [[ "$(docker inspect -f '{{.State.Running}}' black-dead-98 2>/dev/null)" == "true" ]]; then
+    printf 'all'
+  else
+    printf '!black-dead-98'
+  fi
+}
+
+cmd_provision() {
+  bw_require_ansible
+  local target="${1:-all}"
+  case "$target" in
+    eye)
+      bw_info "provision: blackwall-eye (certs -> indexer/manager/dashboard -> agents)"
+      bw_ansible blackwall-eye ansible/playbooks/all.yml --limit "$(bw_live_limit)"
+      ;;
+    nftables)
+      bw_info "provision: nftables"
+      bw_ansible blackwall-eye ansible/playbooks/nftables.yml --limit "$(bw_live_limit)"
+      ;;
+    metrics)
+      bw_info "provision: node_exporter"
+      bw_ansible blackwall-voice ansible/playbooks/metrics.yml --limit "$(bw_live_limit)"
+      ;;
+    fixtures)
+      bw_info "provision: broken-agent fixtures (ghost-99 never_connected, dead-98 stopped)"
+      bw_ansible blackwall-eye ../tests/triggers/broken-agents.yml
+      ;;
+    voice)
+      bw_info "provision: telegram-alerter"
+      bw_ansible blackwall-voice ansible/playbooks/voice.yml
+      ;;
+    all)
+      # Order matters: nftables runs after the services so the firewall covers
+      # what is already up instead of blocking its install (apt, agent
+      # enrollment); fixtures go last because they stop black-dead-98.
+      cmd_provision eye
+      cmd_provision metrics
+      cmd_provision nftables
+      cmd_provision fixtures
+      ;;
+    *)
+      bw_die "unknown target: $target (eye|nftables|metrics|voice|fixtures|all)"
+      ;;
+  esac
+}
+
+cmd_up() {
+  local provision=1
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --no-provision) provision=0; shift ;;
+      --profile)      BW_PROFILE="${2:?--profile needs a value}"; shift 2 ;;
+      *)              bw_die "unknown flag: $1" ;;
+    esac
+  done
+
+  bw_require_docker
+  bw_info "starting containers (profile $BW_PROFILE)"
+  bw_compose up -d --build
+
+  bw_require_ansible
+  bw_info "waiting for SSH on the systemd nodes"
+  bw_ansible_adhoc blackwall-eye all -m wait_for_connection -a 'timeout=90' \
+    || bw_die "containers are not reachable over SSH"
+
+  if (( provision )); then
+    cmd_provision all
+    bw_info "done — verify with: tests/bin/bw-check all"
+  else
+    bw_info "provisioning skipped (--no-provision)"
+  fi
+}
+
+cmd_down() {
+  local keep_data=0
+  [[ "${1:-}" == "--keep-data" ]] && keep_data=1
+
+  bw_require_docker
+  if (( keep_data )); then
+    bw_info "stopping the environment, keeping volumes"
+    bw_compose down
+  else
+    bw_info "stopping the environment and removing volumes"
+    bw_compose down -v
+  fi
+}
+
+cmd_reset() {
+  bw_require_docker
+  cmd_down
+  # Wazuh certificates are tied to one deployment: keeping a stale bundle makes
+  # the indexer come up with certs the manager and dashboard cannot use.
+  bw_info "wiping Wazuh certificates"
+  rm -rf "$BW_ROOT/tests/.wazuh-certs/wazuh-certificates" \
+         "$BW_ROOT/tests/.wazuh-certs/wazuh-certificates.tar"
+  cmd_up
+}
+
+cmd_status() {
+  bw_require_docker
+  bw_compose ps
+  printf '\n'
+  bw_info "web endpoints"
+
+  local label url auth curl_args
+  while read -r label url auth; do
+    curl_args=(-sf -k -m 3 -o /dev/null)
+    [[ "$auth" != "-" ]] && curl_args+=(-u "$auth")
+    if curl "${curl_args[@]}" "$url"; then
+      printf '  %sok%s    %-11s %s\n' "$BW_GREEN" "$BW_RESET" "$label" "$url"
+    else
+      printf '  %sdown%s  %-11s %s\n' "$BW_RED" "$BW_RESET" "$label" "$url"
+    fi
+  done <<STATUS_TARGETS
+prometheus $BW_PROM_URL/-/ready -
+grafana $BW_GRAFANA_URL/api/health $BW_GRAFANA_AUTH
+dashboard $BW_DASHBOARD_URL/ -
+STATUS_TARGETS
+}
+
+cmd_ssh() {
+  local host="${1:?name a host, e.g. black-host-01}"
+  shift || true
+  [[ -f "$BW_SSH_CONFIG" ]] || bw_die "missing $BW_SSH_CONFIG"
+
+  # sshpass removes the interactive prompt; without it ssh simply asks.
+  if command -v sshpass >/dev/null 2>&1; then
+    sshpass -p "$BW_SSH_PASSWORD" ssh -F "$BW_SSH_CONFIG" "$host" "$@"
+  else
+    printf '%shint:%s root password is %s (install sshpass to skip this prompt)\n' \
+      "$BW_DIM" "$BW_RESET" "$BW_SSH_PASSWORD" >&2
+    ssh -F "$BW_SSH_CONFIG" "$host" "$@"
+  fi
+}
+
+cmd_logs() {
+  bw_require_docker
+  local service="${1:?name a service, e.g. black-metrics-00}"
+  shift || true
+  bw_compose logs "$@" "$service"
+}
+
+cmd_open() {
+  local target="${1:?name a target: dashboard|grafana|prometheus}"
+  local url
+  case "$target" in
+    dashboard)  url="$BW_DASHBOARD_URL" ;;
+    grafana)    url="$BW_GRAFANA_URL" ;;
+    prometheus) url="$BW_PROM_URL" ;;
+    *) bw_die "unknown target: $target (dashboard|grafana|prometheus)" ;;
+  esac
+  bw_info "opening $url"
+  if command -v open >/dev/null 2>&1; then
+    open "$url"
+  elif command -v xdg-open >/dev/null 2>&1; then
+    xdg-open "$url"
+  else
+    printf '%s\n' "$url"
+  fi
+}
+
+main() {
+  local cmd="${1:-}"
+  [[ $# -gt 0 ]] && shift
+  case "$cmd" in
+    up)        cmd_up "$@" ;;
+    down)      cmd_down "$@" ;;
+    reset)     cmd_reset ;;
+    status)    cmd_status ;;
+    provision) cmd_provision "$@" ;;
+    ssh)       cmd_ssh "$@" ;;
+    logs)      cmd_logs "$@" ;;
+    open)      cmd_open "$@" ;;
+    -h|--help|help) usage ;;
+    "")        usage; exit 2 ;;
+    *)         printf 'unknown command: %s\n\n' "$cmd" >&2; usage >&2; exit 2 ;;
+  esac
+}
+
+main "$@"

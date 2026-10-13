@@ -1,0 +1,51 @@
+---
+# broken-agents.yml — Register two "broken" agent fixtures to exercise the
+# never_connected and disconnected Wazuh status codes in the TUI.
+#
+# Usage (from repo root):
+#   tests/bin/bw-lab provision fixtures
+#
+# Runs automatically as the last step of `tests/bin/bw-lab up`
+# (`bw-lab provision fixtures` re-applies just this playbook).
+#
+# What this produces:
+#   black-ghost-99 (IP 172.28.0.99) — registered on manager, no container, status: never_connected
+#   black-dead-98  (IP 172.28.0.98) — registered, was alive, container stopped, status: disconnected
+#
+# Idempotent: safe to run multiple times.
+
+# ── Play 1: register black-ghost-99 on the manager ────────────────────────────
+- name: Register ghost agent (never_connected)
+  hosts: wazuh_managers
+  become: true
+
+  tasks:
+    - name: Check if black-ghost-99 is already registered
+      command: /var/ossec/bin/agent_control -l
+      register: agent_list
+      changed_when: false
+
+    - name: Register black-ghost-99 (no container — will stay never_connected)
+      command: >
+        /var/ossec/bin/manage_agents -a 172.28.0.99 -n black-ghost-99
+      when: "'black-ghost-99' not in agent_list.stdout"
+      changed_when: true
+
+# ── Play 2: stop black-dead-98 so it becomes disconnected ─────────────────────
+- name: Stop dead agent container (disconnected)
+  hosts: localhost
+  gather_facts: false
+
+  tasks:
+    - name: Check if black-dead-98 container is running
+      command: docker inspect --format '{{ '{{' }}.State.Status{{ '}}' }}' black-dead-98
+      register: container_state
+      ignore_errors: true
+      changed_when: false
+
+    - name: Stop black-dead-98 container
+      command: docker stop black-dead-98
+      when:
+        - container_state.rc == 0
+        - container_state.stdout | trim == "running"
+      changed_when: true

@@ -1,0 +1,5 @@
+---
+# nftables (role blackwall-eye/nftables).
+#   22   ssh for ansible
+#   9100 node_exporter, scraped by black-metrics-00
+nft_public_tcp: [22, 9100]

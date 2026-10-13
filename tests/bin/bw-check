@@ -1,0 +1,323 @@
+#!/usr/bin/env bash
+#
+# bw-check — verify the Blackwall test environment.
+#
+# Usage:   tests/bin/bw-check all        # every check
+#          tests/bin/bw-check metrics    # one group
+#
+# Exit code is 0 only when nothing FAILed, so this is usable from CI.
+# `set -e` is deliberately omitted: the point of `bw-check all` is to run every
+# check and show the whole picture, not to stop at the first breakage.
+#
+# Full documentation: tests/README.md
+set -uo pipefail
+
+# shellcheck source=_bw-common.sh
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/_bw-common.sh"
+
+BW_PASS=0
+BW_FAIL=0
+BW_SKIP=0
+
+# black-dead-98 is stopped on purpose by tests/triggers/broken-agents.yml,
+# so host-level checks exclude it.
+BW_LIVE_HOSTS='!black-dead-98'
+
+bw_pass() { BW_PASS=$((BW_PASS + 1)); printf '  %sPASS%s %s\n' "$BW_GREEN"  "$BW_RESET" "$*"; }
+bw_fail() { BW_FAIL=$((BW_FAIL + 1)); printf '  %sFAIL%s %s\n' "$BW_RED"    "$BW_RESET" "$*"; }
+bw_skip() { BW_SKIP=$((BW_SKIP + 1)); printf '  %sSKIP%s %s\n' "$BW_YELLOW" "$BW_RESET" "$*"; }
+
+# bw_run <description> <command...> — PASS on exit 0, FAIL otherwise.
+# Command output is shown only on failure, last 25 lines.
+bw_run() {
+  local desc="$1"
+  shift
+  local out
+  if out="$("$@" 2>&1)"; then
+    bw_pass "$desc"
+  else
+    bw_fail "$desc"
+    printf '%s\n' "$out" | tail -25 | sed 's/^/      /'
+  fi
+}
+
+# bw_json_true <python expression over `d`> — reads JSON on stdin,
+# exits 0 when the expression is truthy. Avoids a hard dependency on jq.
+bw_json_true() {
+  python3 -c '
+import json, sys
+d = json.load(sys.stdin)
+sys.exit(0 if eval(sys.argv[1]) else 1)
+' "$1" 2>/dev/null
+}
+
+# bw_tcp_probe <host> <port> — portable replacement for `nc -z`:
+# macOS and Linux disagree on nc timeout flags, python3 exists on both.
+bw_tcp_probe() {
+  python3 -c '
+import socket, sys
+s = socket.socket()
+s.settimeout(3)
+try:
+    s.connect((sys.argv[1], int(sys.argv[2])))
+except OSError:
+    sys.exit(1)
+finally:
+    s.close()
+' "$1" "$2"
+}
+
+# Surface the per-host debug lines the verify playbooks print.
+bw_show_reports() {
+  grep -oE '"msg": "black-[^"]+"' | sed 's/"msg": "/      /; s/"$//' || true
+}
+
+usage() {
+  cat <<USAGE
+bw-check — verify the Blackwall test environment
+
+Usage: bw-check [check]
+
+Checks:
+  all        run everything (default)
+  hosts      containers are running, ansible can reach them
+  versions   expected packages are installed, with versions
+  nft        applied nftables ruleset and open ports
+  ports      listeners inside containers + published ports from the host
+  wazuh      agent registration, REST API, broken-agent fixtures, dashboard
+  metrics    node_exporter, Prometheus targets, Grafana health and datasource
+  voice      telegram-alerter
+
+Exit code: 0 when nothing failed, 1 otherwise.
+USAGE
+}
+
+check_hosts() {
+  bw_info "hosts"
+  bw_require_docker
+
+  local running
+  running="$(docker ps --format '{{.Names}}')"
+  local name
+  for name in black-master-00 black-host-01 black-metrics-00 black-grafana-00; do
+    if grep -qx "$name" <<<"$running"; then
+      bw_pass "container $name is running"
+    else
+      bw_fail "container $name is not running"
+    fi
+  done
+
+  bw_require_ansible
+  bw_run "ansible reaches the systemd nodes" \
+    bw_ansible_adhoc blackwall-eye all --limit "$BW_LIVE_HOSTS" -m ping
+}
+
+check_versions() {
+  bw_info "package versions"
+  bw_require_ansible
+
+  # Versions are worth seeing on success too, not only on failure.
+  local out rc
+  out="$(bw_ansible blackwall-eye ansible/playbooks/verify-versions.yml \
+           --limit "$BW_LIVE_HOSTS" 2>&1)"
+  rc=$?
+  printf '%s\n' "$out" | bw_show_reports
+  if (( rc == 0 )); then
+    bw_pass "expected packages are installed, agent version matches manager"
+  else
+    bw_fail "packages missing or agent/manager version mismatch"
+    printf '%s\n' "$out" | tail -25 | sed 's/^/      /'
+  fi
+}
+
+check_nft() {
+  bw_info "nftables"
+  bw_require_ansible
+
+  local out
+  if out="$(bw_ansible blackwall-eye ansible/playbooks/verify-nftables.yml \
+              --limit "$BW_LIVE_HOSTS" 2>&1)"; then
+    # Every host ending early means nft is missing — the kernel of the container
+    # runtime has no nf_tables. That is a SKIP, not a FAIL.
+    if grep -q 'ok=1 ' <<<"$out" && ! grep -q 'blackwall_base' <<<"$out"; then
+      bw_skip "nftables unavailable in the containers — kernel without nf_tables"
+    else
+      printf '%s\n' "$out" | bw_show_reports
+      bw_pass "ruleset applied, expected ports are open"
+    fi
+  else
+    bw_fail "ruleset does not match expectations"
+    printf '%s\n' "$out" | tail -25 | sed 's/^/      /'
+  fi
+}
+
+check_ports() {
+  bw_info "open ports"
+  bw_require_ansible
+
+  bw_run "expected listeners inside the containers" \
+    bw_ansible blackwall-eye ansible/playbooks/verify-ports.yml --limit "$BW_LIVE_HOSTS"
+
+  # Published ports are probed from the Mac itself: docker NAT sits between the
+  # host and the container, and a break in it is invisible from the inside.
+  local entry port label
+  for entry in "2200:ssh black-master-00" "2201:ssh black-host-01" \
+               "5601:wazuh-dashboard" "55000:wazuh-api" "9090:prometheus" "3000:grafana"; do
+    port="${entry%%:*}"
+    label="${entry#*:}"
+    if bw_tcp_probe localhost "$port"; then
+      bw_pass "published port $port ($label) reachable from the host"
+    else
+      bw_fail "published port $port ($label) unreachable from the host"
+    fi
+  done
+}
+
+check_wazuh() {
+  bw_info "wazuh"
+  bw_require_ansible
+
+  bw_run "agents are registered on the manager" \
+    bw_ansible blackwall-eye ansible/playbooks/verify-agents.yml
+  bw_run "manager REST API answers" \
+    bw_ansible blackwall-eye ansible/playbooks/verify-api.yml
+
+  check_fixtures
+
+  local code
+  code="$(curl -sk -m 5 -o /dev/null -w '%{http_code}' "$BW_DASHBOARD_URL/" 2>/dev/null)"
+  if [[ "$code" =~ ^(2|3)[0-9][0-9]$ ]]; then
+    bw_pass "dashboard answers ($code) at $BW_DASHBOARD_URL"
+  else
+    bw_fail "dashboard does not answer at $BW_DASHBOARD_URL (code '$code')"
+  fi
+}
+
+# Broken-agent fixtures from `bw-lab provision fixtures`. The manager needs up
+# to wazuh_agents_disconnection_time (1m in the lab) to notice the stopped
+# container, so dead-98 gets a short grace period instead of failing at once.
+check_fixtures() {
+  local agents i
+  for i in $(seq 1 10); do
+    agents="$(bw_ansible_adhoc blackwall-eye wazuh_managers -b \
+                -m command -a '/var/ossec/bin/agent_control -l' 2>&1)"
+    grep -q 'black-dead-98, IP: [^,]*, Disconnected' <<<"$agents" && break
+    sleep 9
+  done
+
+  if grep -q 'black-ghost-99, IP: [^,]*, Never connected' <<<"$agents"; then
+    bw_pass "fixture black-ghost-99 is never_connected"
+  else
+    bw_fail "fixture black-ghost-99 missing (run: bw-lab provision fixtures)"
+  fi
+  if grep -q 'black-dead-98, IP: [^,]*, Disconnected' <<<"$agents"; then
+    bw_pass "fixture black-dead-98 is disconnected"
+  else
+    bw_fail "fixture black-dead-98 is not disconnected (run: bw-lab provision fixtures)"
+    grep 'black-dead-98' <<<"$agents" | sed 's/^/      /'
+  fi
+}
+
+check_metrics() {
+  bw_info "metrics"
+  bw_require_ansible
+
+  bw_run "node_exporter serves metrics on every host" \
+    bw_ansible blackwall-voice ansible/playbooks/verify-metrics.yml --limit "$BW_LIVE_HOSTS"
+
+  local targets
+  if ! targets="$(curl -sf -m 5 "$BW_PROM_URL/api/v1/targets?state=active" 2>/dev/null)"; then
+    bw_fail "prometheus does not answer at $BW_PROM_URL"
+    return
+  fi
+
+  local host
+  for host in black-master-00 black-host-01; do
+    if bw_json_true "any(t['labels']['instance'] == '$host:9100' and t['health'] == 'up'
+                         for t in d['data']['activeTargets'])" <<<"$targets"; then
+      bw_pass "prometheus scrapes $host"
+    else
+      bw_fail "target $host:9100 is not up"
+    fi
+  done
+
+  if curl -sf -m 5 --get --data-urlencode 'query=node_load1' \
+       "$BW_PROM_URL/api/v1/query" 2>/dev/null \
+       | bw_json_true "len(d['data']['result']) > 0"; then
+    bw_pass "query node_load1 returns data"
+  else
+    bw_fail "query node_load1 is empty — metrics are not reaching prometheus"
+  fi
+
+  if curl -sf -m 5 -u "$BW_GRAFANA_AUTH" "$BW_GRAFANA_URL/api/health" 2>/dev/null \
+       | bw_json_true "d['database'] == 'ok'"; then
+    bw_pass "grafana is healthy"
+  else
+    bw_fail "grafana does not answer at $BW_GRAFANA_URL"
+  fi
+
+  if curl -sf -m 5 -u "$BW_GRAFANA_AUTH" "$BW_GRAFANA_URL/api/datasources" 2>/dev/null \
+       | bw_json_true "sum(1 for x in d if x['name'] == 'Prometheus') == 1"; then
+    bw_pass "Prometheus datasource is provisioned"
+  else
+    bw_fail "Prometheus datasource is missing in grafana"
+  fi
+
+  if curl -sf -m 5 -u "$BW_GRAFANA_AUTH" \
+       "$BW_GRAFANA_URL/api/dashboards/uid/blackwall-hosts" 2>/dev/null \
+       | bw_json_true "d['dashboard']['title'] == 'Blackwall hosts'"; then
+    bw_pass "dashboard 'Blackwall hosts' is loaded"
+  else
+    bw_fail "dashboard blackwall-hosts is not loaded in grafana"
+  fi
+}
+
+check_voice() {
+  bw_info "voice"
+  bw_require_ansible
+
+  # voice is opt-in: `bw-lab provision all` leaves it out because the alerter
+  # needs a real Telegram token. Not deployed is a SKIP, deployed but dead is a FAIL.
+  # Probed with `stat`, not `systemctl`: a failing systemctl call makes ansible
+  # echo the command back, and the unit name in that error text would match a
+  # naive grep.
+  local installed
+  installed="$(bw_ansible_adhoc blackwall-voice wazuh_managers -b \
+                 -m stat -a 'path=/etc/systemd/system/voice-alerter.service' 2>&1)"
+  if ! grep -q '"exists": true' <<<"$installed"; then
+    bw_skip "telegram-alerter is not deployed (run: bw-lab provision voice)"
+    return
+  fi
+
+  bw_run "telegram-alerter is running" \
+    bw_ansible blackwall-voice ansible/playbooks/verify-voice.yml
+}
+
+bw_summary() {
+  printf '\n%s%s passed%s, %s%s failed%s, %s%s skipped%s\n' \
+    "$BW_GREEN" "$BW_PASS" "$BW_RESET" \
+    "$BW_RED" "$BW_FAIL" "$BW_RESET" \
+    "$BW_YELLOW" "$BW_SKIP" "$BW_RESET"
+  (( BW_FAIL == 0 ))
+}
+
+main() {
+  case "${1:-all}" in
+    all)
+      check_hosts; check_versions; check_nft; check_ports
+      check_wazuh; check_metrics; check_voice
+      ;;
+    hosts)    check_hosts ;;
+    versions) check_versions ;;
+    nft)      check_nft ;;
+    ports)    check_ports ;;
+    wazuh)    check_wazuh ;;
+    metrics)  check_metrics ;;
+    voice)    check_voice ;;
+    -h|--help|help) usage; exit 0 ;;
+    *) printf 'unknown check: %s\n\n' "$1" >&2; usage >&2; exit 2 ;;
+  esac
+  bw_summary
+}
+
+main "$@"

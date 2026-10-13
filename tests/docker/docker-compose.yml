@@ -1,0 +1,177 @@
+name: blackwall-test
+
+# Multi-distro strategy: Option A — Compose profiles
+#
+# Each distro is a named profile. Select the target distro at runtime:
+#   docker compose --profile ubuntu2204 up -d --build
+#
+# This keeps one compose file and makes distro selection explicit via CLI flag.
+# Each profile group uses services with the same black-NN naming; services for
+# different distros never run simultaneously (port conflicts would occur otherwise).
+#
+# Port ranges by distro:
+#   ubuntu2204:  2200–2202
+#   debian12:    2210–2212  (future)
+#   centos9:     2220–2222  (future)
+#   alpine:      N/A — OpenRC only; incompatible with systemd roles (Wazuh, auditd)
+#
+# To add a new distro:
+#   1. Create tests/docker/images/<distro>/Dockerfile
+#   2. Uncomment the corresponding service block below
+#   3. Add host entries to tests/inventory/hosts.yml
+
+networks:
+  blackwall-test:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.28.0.0/24
+
+# Common settings shared by all test nodes.
+# Override 'build.context' in each service to point at the right image directory.
+x-black-node: &black-node
+  privileged: true
+  cgroup: host        # cgroup v2 (Docker Desktop macOS) — systemd needs host cgroup ns
+  tmpfs:
+    - /run
+    - /run/lock
+  networks:
+    - blackwall-test
+  restart: "no"
+
+services:
+
+  # ── Ubuntu 22.04 ───────────────────────────────────────────────────────────
+  # Profile: ubuntu2204
+  # Base:    geerlingguy/docker-ubuntu2204-ansible (systemd + Python pre-installed)
+  # Ports:
+  #   black-master-00:  2200 (SSH), 5601 (Wazuh dashboard, container :443),
+  #                     55000 (Wazuh API, loopback only — for the blackwall TUI)
+  #   black-host-01:    2201 (SSH)
+
+  black-master-00:
+    <<: *black-node
+    profiles: [ubuntu2204]
+    build:
+      context: ./images/ubuntu2204
+    container_name: black-master-00
+    hostname: black-master-00
+    ports:
+      - "2200:22"
+      - "5601:443"
+      - "127.0.0.1:55000:55000"
+    networks:
+      blackwall-test:
+        ipv4_address: 172.28.0.10
+
+  black-host-01:
+    <<: *black-node
+    profiles: [ubuntu2204]
+    build:
+      context: ./images/ubuntu2204
+    container_name: black-host-01
+    hostname: black-host-01
+    ports:
+      - "2201:22"
+    networks:
+      blackwall-test:
+        ipv4_address: 172.28.0.11
+
+  black-dead-98:
+    <<: *black-node
+    profiles: [ubuntu2204]
+    build:
+      context: ./images/ubuntu2204
+    container_name: black-dead-98
+    hostname: black-dead-98
+    ports:
+      - "2202:22"
+    networks:
+      blackwall-test:
+        ipv4_address: 172.28.0.98
+
+  # ── Monitoring stack: Prometheus + Grafana ────────────────────────────────
+  # Profile: ubuntu2204
+  # Plain containers, not systemd nodes: they need no privileged mode, host
+  # cgroup or tmpfs, so they deliberately do not inherit the *black-node anchor.
+  # Configs are mounted read-only from the repo — no manual steps inside.
+  # Ports:
+  #   black-metrics-00: 9090 (Prometheus UI + API)
+  #   black-grafana-00: 3000 (Grafana, admin / blackwall)
+
+  black-metrics-00:
+    image: prom/prometheus:v2.55.1
+    profiles: [ubuntu2204]
+    container_name: black-metrics-00
+    hostname: black-metrics-00
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.retention.time=24h
+      - --web.enable-lifecycle
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - "9090:9090"
+    networks:
+      blackwall-test:
+        ipv4_address: 172.28.0.12
+    restart: "no"
+
+  black-grafana-00:
+    image: grafana/grafana:11.4.0
+    profiles: [ubuntu2204]
+    container_name: black-grafana-00
+    hostname: black-grafana-00
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: blackwall
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on:
+      - black-metrics-00
+    ports:
+      - "3000:3000"
+    networks:
+      blackwall-test:
+        ipv4_address: 172.28.0.13
+    restart: "no"
+
+  # ── Debian 12 (future) ────────────────────────────────────────────────────
+  # Profile: debian12 — uncomment when tests/docker/images/debian12/Dockerfile exists.
+  # Ports: 2210 (SSH), 5611 (dashboard) for master; 2211 (SSH) for host.
+  #
+  # black-master-00-debian:
+  #   <<: *black-node
+  #   profiles: [debian12]
+  #   build:
+  #     context: ./images/debian12
+  #   container_name: black-master-00-debian
+  #   hostname: black-master-00-debian
+  #   ports:
+  #     - "2210:22"
+  #     - "5611:443"
+  #   networks:
+  #     blackwall-test:
+  #       ipv4_address: 172.28.0.20
+  #
+  # black-host-01-debian:
+  #   <<: *black-node
+  #   profiles: [debian12]
+  #   build:
+  #     context: ./images/debian12
+  #   container_name: black-host-01-debian
+  #   hostname: black-host-01-debian
+  #   ports:
+  #     - "2211:22"
+  #   networks:
+  #     blackwall-test:
+  #       ipv4_address: 172.28.0.21
+
+  # ── CentOS Stream 9 (future) ──────────────────────────────────────────────
+  # Profile: centos9 — same shape as debian12, ports 2220/5621 (master), 2221 (host).
+  # Add when tests/docker/images/centos9/Dockerfile exists.
+
+  # ── Alpine: not supported (OpenRC, no systemd) ─────────────────────────────

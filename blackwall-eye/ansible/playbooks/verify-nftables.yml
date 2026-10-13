@@ -1,0 +1,55 @@
+---
+- name: Verify nftables ruleset
+  hosts: all
+  become: true
+  gather_facts: false
+
+  tasks:
+    - name: Check nft binary is available
+      ansible.builtin.command: which nft
+      register: nft_bin
+      changed_when: false
+      failed_when: false
+
+    - name: Skip host when nftables is unavailable
+      ansible.builtin.meta: end_host
+      when: nft_bin.rc != 0
+
+    # JSON output parses more reliably than text: it does not depend on line
+    # wrapping or on how a given nft version prints a set.
+    - name: Dump table as JSON
+      ansible.builtin.command: nft -j list table inet blackwall_base
+      register: nft_json
+      changed_when: false
+
+    - name: Extract chain input and set public_tcp
+      ansible.builtin.set_fact:
+        nft_objects: "{{ (nft_json.stdout | from_json).nftables }}"
+
+    - name: Resolve input chain policy
+      ansible.builtin.set_fact:
+        nft_input_policy: >-
+          {{ nft_objects | selectattr('chain', 'defined') | map(attribute='chain')
+             | selectattr('name', 'eq', 'input') | map(attribute='policy')
+             | first | default('missing') }}
+        nft_open_ports: >-
+          {{ nft_objects | selectattr('set', 'defined') | map(attribute='set')
+             | selectattr('name', 'eq', 'public_tcp') | map(attribute='elem')
+             | first | default([]) }}
+
+    - name: Assert input policy is drop
+      ansible.builtin.assert:
+        that: nft_input_policy == 'drop'
+        fail_msg: >-
+          chain input has policy '{{ nft_input_policy }}', expected 'drop' —
+          the firewall is not protecting {{ inventory_hostname }}
+
+    - name: Assert every expected port is open
+      ansible.builtin.assert:
+        that: item in nft_open_ports
+        fail_msg: "port {{ item }} is missing from set public_tcp on {{ inventory_hostname }}"
+      loop: "{{ nft_public_tcp }}"
+
+    - name: Report open ports
+      ansible.builtin.debug:
+        msg: "{{ inventory_hostname }}: policy={{ nft_input_policy }} open={{ nft_open_ports }}"

@@ -1,0 +1,100 @@
+<ossec_config>
+
+  <client>
+    <server>
+      <address>{{ wazuh_manager_host }}</address>
+      <port>{{ wazuh_manager_port }}</port>
+      <protocol>{{ wazuh_manager_protocol }}</protocol>
+    </server>
+    <crypto_method>aes</crypto_method>
+    <notify_time>10</notify_time>
+    <time-reconnect>60</time-reconnect>
+    <auto_restart>yes</auto_restart>
+    <enrollment>
+      <enabled>yes</enabled>
+      <manager_address>{{ wazuh_enrollment_host }}</manager_address>
+      <port>{{ wazuh_enrollment_port }}</port>
+      <agent_name>{{ wazuh_agent_name }}</agent_name>
+      <groups>{{ _wazuh_enroll_groups }}</groups>
+{% if wazuh_enrollment_password | length > 0 %}
+      <authorization_pass_path>/var/ossec/etc/authd.pass</authorization_pass_path>
+{% endif %}
+    </enrollment>
+  </client>
+
+  <client_buffer>
+    <disabled>no</disabled>
+    <queue_size>5000</queue_size>
+    <events_per_second>500</events_per_second>
+  </client_buffer>
+
+  <!-- Log collection -->
+  <localfile>
+    <log_format>syslog</log_format>
+    <location>/var/log/auth.log</location>
+  </localfile>
+
+  <localfile>
+    <log_format>syslog</log_format>
+    <location>/var/log/syslog</location>
+  </localfile>
+
+  <!-- File Integrity Monitoring -->
+  <syscheck>
+    <disabled>no</disabled>
+    <frequency>43200</frequency>
+    <scan_on_start>yes</scan_on_start>
+
+    <directories realtime="yes">/etc/passwd</directories>
+    <directories realtime="yes">/etc/shadow</directories>
+    <directories realtime="yes">/etc/sudoers</directories>
+    <directories realtime="yes">/etc/ssh/sshd_config</directories>
+  </syscheck>
+
+  <!-- Rootkit and system anomaly detection -->
+  <rootcheck>
+    <disabled>no</disabled>
+    <check_files>yes</check_files>
+    <check_trojans>yes</check_trojans>
+    <check_dev>yes</check_dev>
+    <check_sys>yes</check_sys>
+    <check_pids>yes</check_pids>
+    <check_ports>yes</check_ports>
+    <check_if>yes</check_if>
+    <frequency>{{ wazuh_rootcheck_frequency }}</frequency>
+    <rootkit_files>etc/shared/rootkit_files.txt</rootkit_files>
+    <rootkit_trojans>etc/shared/rootkit_trojans.txt</rootkit_trojans>
+    <skip_nfs>yes</skip_nfs>
+  </rootcheck>
+
+  <!-- Security Configuration Assessment: default policies for the host OS -->
+  <sca>
+    <enabled>yes</enabled>
+    <scan_on_start>yes</scan_on_start>
+    <interval>{{ wazuh_sca_interval }}</interval>
+    <skip_nfs>yes</skip_nfs>
+  </sca>
+
+  <!-- System inventory: hardware, processes, packages, network -->
+  <wodle name="syscollector">
+    <disabled>no</disabled>
+    <interval>{{ wazuh_syscollector_interval | default('5m') }}</interval>
+    <scan_on_start>yes</scan_on_start>
+    <hardware>yes</hardware>
+    <os>yes</os>
+    <network>yes</network>
+    <packages>yes</packages>
+    <ports all="no">yes</ports>
+    <processes>yes</processes>
+  </wodle>
+
+  <!-- Active response disabled for Stage 1 -->
+  <active-response>
+    <disabled>yes</disabled>
+  </active-response>
+
+  <logging>
+    <log_format>plain</log_format>
+  </logging>
+
+</ossec_config>

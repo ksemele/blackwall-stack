@@ -1,0 +1,16 @@
+---
+wazuh_version: "4.14.7"
+wazuh_apt_key_url: "https://packages.wazuh.com/key/GPG-KEY-WAZUH"
+wazuh_apt_repo: "deb https://packages.wazuh.com/4.x/apt/ stable main"
+
+# Network
+wazuh_indexer_node_name: "{{ inventory_hostname }}"
+wazuh_indexer_network_host: "172.28.0.10"
+wazuh_indexer_http_port: 9200
+
+# Certificates (paths on the controller — fetched by wazuh-certificates.yml)
+wazuh_certs_local_dir: "{{ playbook_dir }}/../../../tests/.wazuh-certs"
+
+# Credentials (override in group_vars/wazuh_managers.yml)
+wazuh_indexer_admin_user: "admin"
+wazuh_indexer_admin_password: "Blackwall1!"

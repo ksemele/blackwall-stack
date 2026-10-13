@@ -1,0 +1,29 @@
+---
+# Analysis threshold: only analyze alerts with rule.level >= this value
+analysis_threshold: 7
+
+# Seconds between reads of the alert log tail
+poll_interval: 5
+
+# Alert log source on manager host (line-buffered JSON, one event per line)
+brain_alert_log: /var/ossec/logs/alerts/alerts.json
+
+# State file: tracks processed alert IDs for deduplication across restarts
+brain_state_dir: /var/lib/brain-analyst
+brain_state_file: "{{ brain_state_dir }}/sent_ids.txt"
+
+# Log directory for the brain-analyst service itself
+brain_log_dir: /var/log/brain-analyst
+brain_log_file: "{{ brain_log_dir }}/analyst.log"
+
+# Install directory for the analyst script
+brain_install_dir: /opt/brain-analyst
+
+# Claude API settings
+claude_api_key: ""
+claude_model: "claude-haiku-5-5"
+max_tokens: 300
+
+# Telegram credentials — MUST be overridden (use ansible-vault in production)
+telegram_bot_token: ""
+telegram_chat_id: ""

@@ -1,0 +1,125 @@
+---
+- name: Wait for dpkg lock to be released
+  shell: while fuser /var/lib/dpkg/lock-frontend /var/lib/dpkg/lock >/dev/null 2>&1; do sleep 2; done
+  changed_when: false
+
+- name: Install prerequisites (gnupg, curl)
+  apt:
+    name:
+      - gnupg
+      - curl
+    state: present
+    update_cache: true
+
+- name: Add Wazuh GPG key
+  apt_key:
+    url: "{{ wazuh_apt_key_url }}"
+    state: present
+
+- name: Add Wazuh apt repository
+  apt_repository:
+    repo: "{{ wazuh_apt_repo }}"
+    state: present
+    filename: wazuh
+
+- name: Install wazuh-manager package
+  apt:
+    name: "wazuh-manager={{ wazuh_version }}-*"
+    state: present
+    update_cache: true
+
+- name: Deploy ossec.conf from template
+  template:
+    src: ossec.conf.j2
+    dest: /var/ossec/etc/ossec.conf
+    owner: root
+    group: wazuh
+    mode: "0640"
+  notify: Restart wazuh-manager
+
+- name: Enable and start wazuh-manager service
+  systemd:
+    name: wazuh-manager
+    enabled: true
+    state: started
+    daemon_reload: true
+
+# Enrollment into a group the manager does not know is rejected, so groups
+# must exist before any agent registers.
+- name: List agent groups
+  command: /var/ossec/bin/agent_groups -l
+  register: _agent_groups
+  changed_when: false
+
+- name: Create agent groups
+  command: /var/ossec/bin/agent_groups -a -g {{ item }} -q
+  loop: "{{ wazuh_manager_agent_groups }}"
+  when: ("  " ~ item ~ " (") not in _agent_groups.stdout
+
+- name: Install filebeat (Wazuh-shipped variant)
+  apt:
+    name: "filebeat={{ wazuh_filebeat_version | default('7.10.2-2') }}"
+    state: present
+    update_cache: true
+
+- name: Download Wazuh filebeat module for v4.x
+  get_url:
+    url: "https://packages.wazuh.com/4.x/filebeat/wazuh-filebeat-0.5.tar.gz"
+    dest: /tmp/wazuh-filebeat-0.5.tar.gz
+    mode: "0644"
+
+- name: Remove old wazuh filebeat module (if any) to allow 0.5 overwrite
+  file:
+    path: /usr/share/filebeat/module/wazuh
+    state: absent
+
+- name: Unpack Wazuh filebeat module 0.5
+  unarchive:
+    src: /tmp/wazuh-filebeat-0.5.tar.gz
+    dest: /usr/share/filebeat/module/
+    remote_src: true
+    creates: /usr/share/filebeat/module/wazuh/_meta/config.yml
+
+- name: Download Wazuh filebeat template
+  get_url:
+    url: "https://raw.githubusercontent.com/wazuh/wazuh/v{{ wazuh_version }}/extensions/elasticsearch/7.x/wazuh-template.json"
+    dest: /etc/filebeat/wazuh-template.json
+    mode: "0644"
+
+- name: Ensure /etc/filebeat/certs dir exists
+  file:
+    path: /etc/filebeat/certs
+    state: directory
+    owner: root
+    group: root
+    mode: "0500"
+
+- name: Copy filebeat TLS certs (reuse master node bundle)
+  copy:
+    src: "/tmp/wazuh-certificates/{{ item.src }}"
+    dest: "/etc/filebeat/certs/{{ item.dest }}"
+    owner: root
+    group: root
+    mode: "0400"
+    remote_src: true
+  loop:
+    - { src: "root-ca.pem",            dest: "root-ca.pem" }
+    - { src: "black-master-00.pem",    dest: "black-master-00.pem" }
+    - { src: "black-master-00-key.pem", dest: "black-master-00-key.pem" }
+  notify: Restart filebeat
+
+- name: Deploy filebeat.yml
+  template:
+    src: filebeat.yml.j2
+    dest: /etc/filebeat/filebeat.yml
+    owner: root
+    group: root
+    mode: "0640"
+  notify: Restart filebeat
+
+- name: Enable and start filebeat
+  systemd:
+    name: filebeat
+    enabled: true
+    state: started
+    daemon_reload: true

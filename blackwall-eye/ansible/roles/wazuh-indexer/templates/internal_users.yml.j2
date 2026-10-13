@@ -1,0 +1,18 @@
+---
+# Wazuh / OpenSearch security internal users config.
+# Passwords are bcrypt hashes (templated at deploy time).
+_meta:
+  type: "internalusers"
+  config_version: 2
+
+{{ wazuh_indexer_admin_user }}:
+  hash: "{{ wazuh_indexer_admin_password | password_hash('bcrypt') }}"
+  reserved: true
+  backend_roles:
+    - "admin"
+  description: "Wazuh admin user"
+
+kibanaserver:
+  hash: "{{ wazuh_indexer_admin_password | password_hash('bcrypt') }}"
+  reserved: true
+  description: "Dashboard service user (uses same secret as admin in test env)"
