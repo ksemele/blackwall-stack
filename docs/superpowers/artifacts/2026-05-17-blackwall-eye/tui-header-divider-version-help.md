@@ -24,4 +24,4 @@
 - `q` from the help view calls `tea.Quit` (not `BackMsg`); `ESC` pops back to the previous view — matches conventional terminal-app behaviour
 
 ## Open questions
-- нет
+- none

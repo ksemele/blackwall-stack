@@ -1,58 +1,58 @@
-# Миграция firewalld → nftables на fehu.dev
+# Migrating firewalld → nftables on fehu.dev
 
-Замена работающего периметра на живом хосте. Читать целиком до начала.
+Replacing a working perimeter on a live host. Read it all before starting.
 
-Исходное состояние:
+Starting state:
 
 ```
 firewalld.service   enabled, active (running)
 nftables.service    disabled, inactive (dead)
 ```
 
-Целевое: `nftables.service` основной, firewalld выключен и замаскирован.
+Target: `nftables.service` is the primary firewall, firewalld is disabled and masked.
 
-## Что должно сохраниться
+## What must be preserved
 
-| Что | Откуда сейчас | Куда переезжает |
+| What | Where it is now | Where it moves |
 |---|---|---|
-| 22 SSH отовсюду | `filter_IN_public_allow` | `blackwall_base` input |
-| 9090 cockpit | `filter_IN_public_allow` | **убрано** — никто не слушает |
-| 9999 zuzia | `filter_IN_public_allow` | `blackwall_base`, только с `@zuzia_v4` |
-| 443 → контейнер | DNAT netavark + `ct status dnat accept` | `blackwall_base` forward |
-| контейнеры наружу | `filter_FWD_public_allow { oifname eth0 }` | `blackwall_base` forward |
+| 22 SSH from anywhere | `filter_IN_public_allow` | `blackwall_base` input |
+| 9090 cockpit | `filter_IN_public_allow` | **removed** — nothing listens |
+| 9999 zuzia | `filter_IN_public_allow` | `blackwall_base`, only from `@zuzia_v4` |
+| 443 → container | netavark DNAT + `ct status dnat accept` | `blackwall_base` forward |
+| containers going out | `filter_FWD_public_allow { oifname eth0 }` | `blackwall_base` forward |
 | ICMP/ICMPv6 | `meta l4proto { icmp, ipv6-icmp } accept` | `blackwall_base` input |
 | DHCPv6 | `ip6 daddr fe80::/64 udp dport 546` | `blackwall_base` input |
-| фильтр CF на 80/443 | — (не было) | `blackwall_wall` prerouting |
+| CF filter on 80/443 | — (did not exist) | `blackwall_wall` prerouting |
 
-Проверено на стенде (две сети, DNAT в бэкенд-контейнер):
+Verified on a test bench (two networks, DNAT into a backend container):
 
 ```
 22/9999 -> OPEN          8080, 53 -> blocked
-443 не-CF    -> blocked  443 из cf_v4 -> OPEN
-контейнер -> интернет: OPEN
+443 non-CF   -> blocked  443 from cf_v4 -> OPEN
+container -> internet: OPEN
 ```
 
-## Две мины, на которые уже наступили
+## Two mines already stepped on
 
-**1. `ct status dnat accept` — несущее правило.** Проверено удалением: без него
-443 через DNAT сразу `blocked`. Не убирать из forward.
+**1. `ct status dnat accept` is load-bearing.** Verified by removing it: without
+it, 443 via DNAT is `blocked` immediately. Don't remove it from forward.
 
-**2. Штатный `nftables.service` делает `flush ruleset`:**
+**2. The stock `nftables.service` runs `flush ruleset`:**
 
 ```
 ExecReload=/sbin/nft 'flush ruleset; include "/etc/sysconfig/nftables.conf";'
 ExecStop=/sbin/nft flush ruleset
 ```
 
-`flush ruleset` сносит **все** таблицы, включая netavark'овские. На стенде это
-воспроизведено: после штатного reload таблица podman исчезает и 443 становится
-`blocked`, при этом SSH остаётся жив (он в нашей таблице). Поэтому ставится
-drop-in `systemd/nftables.service.d/blackwall.conf`, ограничивающий службу
-собственными таблицами. **Без drop-in'а миграцию не делать.**
+`flush ruleset` wipes **all** tables, including netavark's. Reproduced on the
+bench: after a stock reload the podman table disappears and 443 becomes
+`blocked`, while SSH stays alive (it is in our table). Hence the drop-in
+`systemd/nftables.service.d/blackwall.conf`, which limits the service to our
+own tables. **Don't migrate without the drop-in.**
 
-## Что куда ложится
+## What goes where
 
-| В репозитории | На хосте |
+| In the repo | On the host |
 |---|---|
 | `nftables/blackwall-base.nft` | `/etc/nftables.d/blackwall-base.nft` |
 | `nftables/blackwall-wall.nft` | `/etc/nftables.d/blackwall-wall.nft` |
@@ -62,24 +62,25 @@ drop-in `systemd/nftables.service.d/blackwall.conf`, ограничивающи�
 | `blackwall-cf-refresh.default` | `/etc/default/blackwall-cf-refresh` |
 | `systemd/blackwall-cf-refresh.service` | `/etc/systemd/system/` |
 | `systemd/blackwall-cf-refresh.timer` | `/etc/systemd/system/` |
-| `nginx/cf-realip.conf` | не копировать вручную — его пишет `blackwall-cf-refresh` по пути `REALIP_OUT` |
+| `nginx/cf-realip.conf` | don't copy by hand — `blackwall-cf-refresh` writes it to `REALIP_OUT` |
 
-`/etc/sysconfig/nftables.conf` уже существует (идёт в пакете `nftables`, внутри
-закомментированный пример) — мы его перезаписываем, поэтому ниже он бэкапится.
+`/etc/sysconfig/nftables.conf` already exists (it ships with the `nftables`
+package, containing a commented-out example) — we overwrite it, so it is backed
+up below.
 
-## Порядок
+## Procedure
 
-Нужны две SSH-сессии: рабочая и запасная (не закрывать до конца).
+You need two SSH sessions: a working one and a spare (keep it open until the end).
 
 ```bash
-# --- 0. Перенос файлов со своей машины на хост ---
-# выполняется ЛОКАЛЬНО, из корня репозитория blackwall
+# --- 0. Copy the files from your machine to the host ---
+# run LOCALLY, from the root of the blackwall repo
 scp -r hosts/fehu.dev root@93.115.20.111:/root/blackwall-fw
 ssh root@93.115.20.111
-cd /root/blackwall-fw          # дальше всё выполняется здесь, на хосте
+cd /root/blackwall-fw          # everything below runs here, on the host
 
-# --- 1. Файлы ---
-# бэкап того, что перезаписываем
+# --- 1. Files ---
+# back up what we overwrite
 sudo cp -a /etc/sysconfig/nftables.conf /etc/sysconfig/nftables.conf.bak-$(date +%F)
 
 sudo install -d -m 0755 /etc/nftables.d
@@ -94,80 +95,80 @@ sudo install -m 0644 systemd/blackwall-cf-refresh.service /etc/systemd/system/
 sudo install -m 0644 systemd/blackwall-cf-refresh.timer   /etc/systemd/system/
 sudo systemctl daemon-reload
 
-# --- 2. Переменные ---
-# Сверено на хосте 2026-08-15 — значения в файлах уже верные, править не нужно:
+# --- 2. Variables ---
+# Checked on the host 2026-08-15 — the values in the files are already correct:
 #   BASE_WAN_IF / WALL_WAN_IF = "eth0"       (ip -o -4 route show to default)
 #   PODMAN_NET = 10.88.0.0/16                (podman network inspect podman)
-# Перепроверить, если менялась сеть хоста или podman:
+# Re-check if the host or podman networking has changed:
 ip -o -4 route show to default | awk '{print $5}'
 podman network inspect podman -f '{{range .Subnets}}{{.Subnet}}{{end}}'
 
-# Остаётся только ADMIN_ALLOW — свои IP для прямого доступа к origin мимо CF.
-# Пусто — безопасно: на SSH не влияет, просто не будет прямого входа на 80/443
-# для деплоя и отладки.
+# Only ADMIN_ALLOW is left — your IPs for direct origin access bypassing CF.
+# Empty is safe: it doesn't affect SSH, there's just no direct 80/443 access
+# for deploys and debugging.
 sudo vi /etc/default/blackwall-cf-refresh
 
-# --- 3. Синтаксис, ничего не применяя ---
+# --- 3. Syntax check, applying nothing ---
 sudo nft -c -f /etc/nftables.d/blackwall-base.nft
 sudo nft -c -f /etc/nftables.d/blackwall-wall.nft
 
-# --- 4. Страховка: автооткат через 10 минут ---
-# systemd-run, а не `sleep &` — переживёт обрыв SSH-сессии.
+# --- 4. Safety net: automatic rollback in 10 minutes ---
+# systemd-run rather than `sleep &` — survives a dropped SSH session.
 sudo systemd-run --on-active=600 --unit=fw-rollback /bin/sh -c '
   nft delete table inet blackwall_base 2>/dev/null
   nft delete table inet blackwall_wall 2>/dev/null
   systemctl unmask firewalld
   systemctl start firewalld'
 
-# --- 5. Применить ПОВЕРХ работающего firewalld ---
-# Обе таблицы сосуществуют: наши правила разрешают ровно то же, что зона public.
+# --- 5. Apply ON TOP of the running firewalld ---
+# Both tables coexist: our rules allow exactly what the public zone allows.
 sudo nft -f /etc/sysconfig/nftables.conf
-sudo nft list tables      # ждём: ip nat, ip filter, inet firewalld, inet blackwall_base, inet blackwall_wall
+sudo nft list tables      # expect: ip nat, ip filter, inet firewalld, inet blackwall_base, inet blackwall_wall
 ```
 
-**Стоп. Проверить из ЗАПАСНОЙ сессии — новое SSH-подключение, не существующее:**
+**Stop. Check from the SPARE session — a new SSH connection, not an existing one:**
 
 ```bash
-ssh root@93.115.20.111 true && echo "SSH жив"
-curl -sI https://fehu.dev | head -1          # сайт через CF
-curl -sI --max-time 5 https://93.115.20.111  # прямо на origin -> должно виснуть
+ssh root@93.115.20.111 true && echo "SSH alive"
+curl -sI https://fehu.dev | head -1          # site through CF
+curl -sI --max-time 5 https://93.115.20.111  # straight to origin -> must hang
 ```
 
-Если что-то не так — `sudo nft delete table inet blackwall_base` и разбираться.
-Если всё хорошо:
+If anything is wrong — `sudo nft delete table inet blackwall_base` and investigate.
+If all is well:
 
 ```bash
-# --- 6. Снять firewalld ---
+# --- 6. Remove firewalld ---
 sudo systemctl disable --now firewalld
 sudo systemctl mask firewalld
-sudo nft list tables      # inet firewalld должен исчезнуть
+sudo nft list tables      # inet firewalld must be gone
 
-# --- 7. Снова проверить из запасной сессии (пункт выше) ---
+# --- 7. Check again from the spare session (step above) ---
 
-# --- 8. Включить nftables как основной ---
+# --- 8. Enable nftables as the primary firewall ---
 sudo systemctl enable --now nftables
 sudo systemctl enable --now blackwall-cf-refresh.timer
 
-# --- 9. Снять страховку ---
+# --- 9. Remove the safety net ---
 sudo systemctl stop fw-rollback.timer 2>/dev/null
 sudo systemctl reset-failed fw-rollback.service 2>/dev/null
 ```
 
-## Проверка после ребута
+## Post-reboot check
 
-Единственное, что по-настоящему подтверждает миграцию:
+The only thing that truly confirms the migration:
 
 ```bash
 sudo reboot
-# ... ждём ...
+# ... wait ...
 ssh root@93.115.20.111 'nft list tables; systemctl is-active nftables podman'
 curl -sI https://fehu.dev | head -1
 ```
 
-Ждём все пять таблиц: `ip nat`, `ip filter` (пересоздал podman),
+Expect the tables `ip nat`, `ip filter` (recreated by podman),
 `inet blackwall_base`, `inet blackwall_wall`.
 
-## Откат
+## Rollback
 
 ```bash
 sudo systemctl disable --now nftables
@@ -175,21 +176,21 @@ sudo nft delete table inet blackwall_wall
 sudo nft delete table inet blackwall_base
 sudo systemctl unmask firewalld
 sudo systemctl enable --now firewalld
-sudo systemctl restart podman   # netavark перевесит свои правила
+sudo systemctl restart podman   # netavark re-installs its rules
 
-# вернуть исходный конфиг пакета (если понадобится ставить nftables заново)
+# restore the package's original config (if nftables ever needs reinstalling)
 sudo cp -a /etc/sysconfig/nftables.conf.bak-* /etc/sysconfig/nftables.conf
 ```
 
-## Осталось на подумать
+## Left to think about
 
-**9090 (cockpit) — убран.** `ss -lntp` показал, что на нём никто не слушает
-(cockpit.socket не запущен), снаружи порт уходит в таймаут. Разрешение осталось
-от firewalld и держало открытым порт в пустоту.
+**9090 (cockpit) — removed.** `ss -lntp` showed nothing listening on it
+(cockpit.socket not running), the port times out from outside. The rule was
+left over from firewalld and kept a port open to nowhere.
 
-**9999 (zuzia) — ограничен адресами сервиса.** Мониторинг скрейпит хост со
-своих серверов и публикует список адресов; они лежат в set `zuzia_v4` в
-`blackwall-base.nft`. **Заполнить до применения** — пустой set закроет 9999
-для всех, и мониторинг перестанет собирать данные.
+**9999 (zuzia) — limited to the service's addresses.** The monitoring service
+scrapes the host from its own servers and publishes their addresses; they live
+in the `zuzia_v4` set in `blackwall-base.nft`. **Fill it in before applying** —
+an empty set closes 9999 for everyone and monitoring stops collecting data.
 
-SSH остаётся открытым отовсюду — вход по ключу.
+SSH stays open to everyone — key-only login.

@@ -1,174 +1,179 @@
 # hosts/fehu.dev — origin cloaking
 
-Закрывает прямой доступ к origin `93.115.20.111` мимо Cloudflare: на TCP/80 и
-TCP/443 пускаются только префиксы CF, остальное дропается.
+Closes direct access to the origin `93.115.20.111` that bypasses Cloudflare:
+only CF prefixes may reach TCP/80 and TCP/443, everything else is dropped.
 
-Конфиги ручные (хост пока не под Ansible). Про перевод в Ansible — в конце.
+The configs are manual (the host is not under Ansible yet). Moving it to
+Ansible is covered at the end.
 
-## Как устроен хост
+## How the host is set up
 
-Из `nft list ruleset` на самом хосте:
+From `nft list ruleset` on the host itself:
 
-| Таблица | Кто управляет | Трогаем? |
+| Table | Managed by | Do we touch it? |
 |---|---|---|
-| `ip nat`, `ip filter` | netavark (podman), помечены "do not touch" | нет |
-| `inet firewalld` | firewalld — **снимается**, см. MIGRATION.md | заменяется |
-| `inet blackwall_base` | этот каталог, замена firewalld | да |
-| `inet blackwall_wall` | этот каталог, фильтр Cloudflare | да |
+| `ip nat`, `ip filter` | netavark (podman), marked "do not touch" | no |
+| `inet firewalld` | firewalld — **being removed**, see MIGRATION.md | replaced |
+| `inet blackwall_base` | this directory, replaces firewalld | yes |
+| `inet blackwall_wall` | this directory, Cloudflare filter | yes |
 
-Что открыто наружу:
+What is open to the outside:
 
-- **22** — SSH отовсюду; **9999** — zuzia, только с адресов сервиса
-  (9090/cockpit убран: никто не слушал)
-- **443** — мимо firewalld, через DNAT podman на контейнер `10.88.0.31:443`
-- **80** — закрыт (нет ни в DNAT, ни в allow-цепочке)
+- **22** — SSH from anywhere; **9999** — zuzia, only from the service's addresses
+  (9090/cockpit removed: nothing was listening)
+- **443** — bypasses firewalld, via podman DNAT to the container `10.88.0.31:443`
+- **80** — closed (neither in DNAT nor in the allow chain)
 
-## Почему hook prerouting, а не input
+## Why hook prerouting and not input
 
-nginx работает в контейнере, netavark вешает DNAT в prerouting:
+nginx runs in a container, and netavark installs DNAT in prerouting:
 
 ```
 chain NETAVARK-HOSTPORT-DNAT { tcp dport 443 ... }
 chain NETAVARK-DN-...        { tcp dport 443 ... dnat to 10.88.0.31:443 }
 ```
 
-После DNAT адрес назначения — контейнер, пакет уходит в **forward**, а не в
-input. Правила на `hook input` по нему не отработают. Проверено на стенде,
-воспроизводящем эту топологию (клиент → хост с DNAT → бэкенд-контейнер):
+After DNAT the destination is the container, so the packet goes to **forward**,
+not input. Rules on `hook input` never see it. Verified on a test bench that
+reproduces this topology (client → host with DNAT → backend container):
 
-| Конструкция | Трафик | Счётчик drop |
+| Construct | Traffic | Drop counter |
 |---|---|---|
-| `hook input priority -10` | проходит | `packets 0` — правило его не видит |
-| `hook prerouting priority -150` | блокируется | `packets 3` |
-| `prerouting`, источник в `cf_v4` | проходит | — |
+| `hook input priority -10` | passes | `packets 0` — the rule never sees it |
+| `hook prerouting priority -150` | blocked | `packets 3` |
+| `prerouting`, source in `cf_v4` | passes | — |
 
-Раскладка приоритетов в prerouting:
+Priority layout in prerouting:
 
 ```
--200  conntrack       <- раньше него ct state недоступен
--150  blackwall_wall  <- мы
+-200  conntrack       <- before it, ct state is not available
+-150  blackwall_wall  <- us
 -100  dstnat          <- netavark DNAT
  -90  firewalld nat_PREROUTING
 ```
 
-## Почему это не делается через firewalld
+## Why this isn't done with firewalld
 
-В `filter_FORWARD` у firewalld стоит `ct status dnat accept` — весь DNAT-трафик
-проскакивает мимо зон. Поэтому портов 80/443 нет в `filter_IN_public_allow`, а
-443 снаружи при этом открыт. Rich-rule в зоне `public` эту дыру не закроет.
+firewalld's `filter_FORWARD` has `ct status dnat accept` — all DNAT traffic
+slips past the zones. That is why 80/443 are absent from
+`filter_IN_public_allow`, yet 443 is open from outside. A rich rule in the
+`public` zone won't close that hole.
 
-## Состав
+## Contents
 
-| Файл | Назначение |
+| File | Purpose |
 |---|---|
-| `nftables/blackwall-base.nft` | основной firewall хоста, замена firewalld |
-| `nftables/blackwall-wall.nft` | фильтр Cloudflare на 80/443 (prerouting) |
-| `nftables/sysconfig-nftables.conf` | что грузит `nftables.service` (`/etc/sysconfig/nftables.conf`) |
-| `systemd/nftables.service.d/blackwall.conf` | drop-in: убирает `flush ruleset` из reload/stop |
-| `bin/blackwall-cf-refresh` | обновление префиксов CF в nft и nginx `real_ip` |
-| `systemd/blackwall-cf-refresh.{service,timer}` | еженедельный запуск обновления |
-| `nginx/cf-realip.conf` | снапшот `set_real_ip_from` |
+| `nftables/blackwall-base.nft` | the host's main firewall, replaces firewalld |
+| `nftables/blackwall-wall.nft` | Cloudflare filter for 80/443 (prerouting) |
+| `nftables/sysconfig-nftables.conf` | what `nftables.service` loads (`/etc/sysconfig/nftables.conf`) |
+| `systemd/nftables.service.d/blackwall.conf` | drop-in: removes `flush ruleset` from reload/stop |
+| `bin/blackwall-cf-refresh` | refreshes CF prefixes in nft and nginx `real_ip` |
+| `systemd/blackwall-cf-refresh.{service,timer}` | weekly refresh run |
+| `nginx/cf-realip.conf` | `set_real_ip_from` snapshot |
 
-Обе таблицы грузит `nftables.service` через `include`. Отдельного юнита под
-`blackwall_wall` нет — он был бы вторым владельцем той же таблицы.
+Both tables are loaded by `nftables.service` via `include`. There is no
+separate unit for `blackwall_wall` — it would be a second owner of the same table.
 
-## Установка
+## Installation
 
-Хост сейчас под firewalld, поэтому установка = миграция. Пошаговая процедура
-со страховкой и откатом: **[MIGRATION.md](MIGRATION.md)**.
+The host currently runs firewalld, so installing means migrating. Step-by-step
+procedure with a safety net and rollback: **[MIGRATION.md](MIGRATION.md)**.
 
-Перед началом обязательно вписать свой IP в `ADMIN_ALLOW`
-(`/etc/default/blackwall-cf-refresh`) — иначе прямой доступ к origin для
-деплоя и отладки пропадёт вместе с чужим.
+Before starting, put your own IP into `ADMIN_ALLOW`
+(`/etc/default/blackwall-cf-refresh`) — otherwise your direct origin access for
+deploys and debugging disappears along with everyone else's.
 
-## Проверка
+## Verification
 
 ```bash
-# счётчики должны расти на accept, а не только на drop
+# counters must grow on accept, not only on drop
 sudo nft list chain inet blackwall_wall prerouting
 
-# сайт через Cloudflare — должен работать
+# the site through Cloudflare — must work
 curl -sI https://fehu.dev | head -1
 
-# прямо на origin с чужого адреса — должно виснуть в таймаут
+# straight to the origin from a foreign address — must hang until timeout
 curl -sI --max-time 5 --resolve fehu.dev:443:93.115.20.111 https://fehu.dev
 
-# кто ломится напрямую
+# who is knocking directly
 sudo journalctl -k -g 'blackwall-wall' -n 50
 ```
 
-`origin-direct` в логах — это уже готовый источник событий для blackwall-eye.
+`origin-direct` in the logs is a ready-made event source for blackwall-eye.
 
-## Откат
+## Rollback
 
-Только фильтр Cloudflare (базовый firewall остаётся):
+Only the Cloudflare filter (the base firewall stays):
 
 ```bash
 sudo nft delete table inet blackwall_wall
 ```
 
-Полный откат на firewalld — в [MIGRATION.md](MIGRATION.md).
+Full rollback to firewalld — see [MIGRATION.md](MIGRATION.md).
 
-## Чего нельзя делать
+## Don'ts
 
-- **Не убирать `ct status dnat accept` из forward** в `blackwall-base.nft`.
-  Проверено: без него 443 через DNAT сразу перестаёт отвечать.
-- **Не ставить `nftables.service` без drop-in'а** `nftables.service.d/blackwall.conf`.
-  Штатные `ExecReload`/`ExecStop` делают `flush ruleset` и сносят таблицы
-  netavark вместе с нашими — сеть контейнеров умрёт до `systemctl restart podman`.
-- **Не заводить один и тот же `define` в обоих .nft-файлах.** Они включаются
-  вместе, и `nft` падает с `redefinition of symbol`, откатывая всю транзакцию.
-  Поэтому переменные названы `BASE_WAN_IF` и `WALL_WAN_IF`.
+- **Don't remove `ct status dnat accept` from forward** in `blackwall-base.nft`.
+  Verified: without it, 443 via DNAT stops answering immediately.
+- **Don't install `nftables.service` without the drop-in**
+  `nftables.service.d/blackwall.conf`. The stock `ExecReload`/`ExecStop` run
+  `flush ruleset` and wipe netavark's tables along with ours — container
+  networking dies until `systemctl restart podman`.
+- **Don't define the same `define` in both .nft files.** They are included
+  together, and `nft` fails with `redefinition of symbol`, rolling back the
+  whole transaction. That is why the variables are named `BASE_WAN_IF` and `WALL_WAN_IF`.
 
 ## real_ip
 
-После включения whitelist'а весь трафик приходит с адресов CF. Без `real_ip` в
-логах nginx, в `limit_req`/`limit_conn` и во всём, что видит `$remote_addr`,
-клиентом будет Cloudflare — ломается и разбор инцидентов, и rate-limit.
+Once the whitelist is on, all traffic arrives from CF addresses. Without
+`real_ip`, nginx logs, `limit_req`/`limit_conn` and anything else that sees
+`$remote_addr` treat Cloudflare as the client — breaking both incident analysis
+and rate limiting.
 
-nginx здесь в контейнере, поэтому `nginx/cf-realip.conf` нужно класть в
-каталог, смонтированный в контейнер как `/etc/nginx/conf.d`. Путь и имя
-контейнера — в `/etc/default/blackwall-cf-refresh` (`REALIP_OUT`,
-`NGINX_CONTAINER`). Пока `NGINX_CONTAINER` пуст, скрипт этот шаг пропускает.
+nginx runs in a container here, so `nginx/cf-realip.conf` must go into the
+directory mounted into the container as `/etc/nginx/conf.d`. The path and the
+container name are set in `/etc/default/blackwall-cf-refresh` (`REALIP_OUT`,
+`NGINX_CONTAINER`). While `NGINX_CONTAINER` is empty, the script skips this step.
 
-Найти монтирования:
+Find the mounts:
 
 ```bash
 podman ps --format '{{.Names}}\t{{.Ports}}'
 podman inspect <container> --format '{{range .Mounts}}{{.Source}} -> {{.Destination}}{{"\n"}}{{end}}'
 ```
 
-## Что осталось незакрытым
+## Still open
 
-- **Порт 9999 (zuzia) зависит от внешнего списка адресов.** Сервис публикует
-  свои IP; при их смене мониторинг молча перестанет собирать данные, пока не
-  обновишь set `zuzia_v4`. Автообновления, как у префиксов Cloudflare, здесь нет.
-- **SSH/22 открыт отовсюду** — по твоему решению, вход только по ключу.
-  Стоит убедиться, что это подкреплено конфигом: `PasswordAuthentication no`
-  и `PermitRootLogin prohibit-password` в `/etc/ssh/sshd_config`.
-- **Второй хост 192.227.212.28** (ravencraft.dev) — по твоему решению не трогаем.
-- **Ротация IP origin.** Firewall закрывает доступ, но сам IP уже утёк в
-  CT-логи и historical DNS — он останется известным навсегда. Полное решение —
-  сменить IP origin (или уйти на Cloudflare Tunnel, где входящих портов нет
-  вообще) и с первого дня держать его за whitelist'ом.
+- **Port 9999 (zuzia) depends on an external address list.** The service
+  publishes its IPs; if they change, monitoring silently stops collecting data
+  until the `zuzia_v4` set is updated. Unlike the Cloudflare prefixes, there is
+  no auto-update here.
+- **SSH/22 is open to everyone** — by the owner's decision, key-only login.
+  Make sure the config backs this up: `PasswordAuthentication no` and
+  `PermitRootLogin prohibit-password` in `/etc/ssh/sshd_config`.
+- **The second host 192.227.212.28** (ravencraft.dev) — left alone by the owner's decision.
+- **Origin IP rotation.** The firewall closes access, but the IP itself has
+  already leaked into CT logs and historical DNS — it stays known forever. The
+  complete fix is to change the origin IP (or move to Cloudflare Tunnel, which
+  has no inbound ports at all) and keep it behind the whitelist from day one.
 
-## Про Ansible
+## About Ansible
 
-Бэкпортить существующие таблицы **не нужно** — там нечего версионировать:
-`ip nat`/`ip filter` пересоздаёт netavark при каждом старте контейнера, а
-`inet firewalld` — это вывод firewalld, а не конфиг.
+There is **no need** to backport the existing tables — there is nothing to
+version: `ip nat`/`ip filter` are recreated by netavark on every container
+start, and `inet firewalld` is firewalld's output, not a config.
 
-После миграции вопрос упрощается: firewalld больше нет, и весь периметр
-описан файлами из этого каталога. Роль сводится к их раскладке:
+After the migration it gets simpler: firewalld is gone, and the whole perimeter
+is described by the files in this directory. A role just has to lay them out:
 
-| Ansible-ресурс | Чем управляет |
+| Ansible resource | Manages |
 |---|---|
-| `ansible.builtin.template` | `blackwall-base.nft` (WAN_IF, PODMAN_NET, список портов — переменные) |
-| `ansible.builtin.copy` + `systemd` | drop-in, таймер, `blackwall-cf-refresh` |
-| `containers.podman.podman_container` / quadlet | контейнер nginx и публикация 443 |
+| `ansible.builtin.template` | `blackwall-base.nft` (WAN_IF, PODMAN_NET, port list as variables) |
+| `ansible.builtin.copy` + `systemd` | drop-in, timer, `blackwall-cf-refresh` |
+| `containers.podman.podman_container` / quadlet | the nginx container and publishing 443 |
 
-`blackwall-wall.nft` в Ansible не нужен — его генерирует `blackwall-cf-refresh`
-на хосте; версионируется шаблон и скрипт, а не результат.
+`blackwall-wall.nft` doesn't belong in Ansible — `blackwall-cf-refresh`
+generates it on the host; the template and the script are versioned, not the result.
 
-Разложить это лучше в `blackwall-eye/ansible/roles/` — по правилу изоляции
-модулей из корневого `CLAUDE.md`. Пока хост ручной, каталог живёт здесь.
+These belong in `blackwall-eye/ansible/roles/`, per the module isolation rule
+in the root `CLAUDE.md`. While the host is manual, the directory lives here.

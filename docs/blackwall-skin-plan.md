@@ -1,209 +1,212 @@
-# Blackwall — модуль внешнего сканера периметра (codename Skin → **blackwall-scan**)
+# Blackwall — external perimeter scanner module (codename Skin → **blackwall-scan**)
 
-> Attack surface = «кожа» системы: то, чем она соприкасается с внешним миром.
-> Модуль смотрит на твою инфру **снаружи контура** глазами атакующего и сравнивает
-> с тем, что должно быть открыто (inside-out ground truth).
+> Attack surface = the system's "skin": the part of it that touches the outside world.
+> The module looks at your infrastructure **from outside the perimeter**, through an
+> attacker's eyes, and compares it with what is supposed to be open (inside-out ground truth).
 
-Статус: **фаза 1 (MVP) — реализована** в [\`blackwall-scan/\`](../blackwall-scan/)… Фазы 2-6 — впереди; документ остаётся планом и референсом.
-
----
-
-## 0. Позиционирование
-
-Класс системы — **CESM / Continuous External Attack Surface Monitoring** для
-**собственного** периметра (не internet-wide intelligence, как CVE.GLOBAL/Shodan).
-
-Ключевые следствия для нас:
-- **Легально без оговорок** — сканируем свои активы.
-- **Есть ground truth изнутри**, которого нет ни у одного публичного сканера
-  (Terraform state, cloud API, DNS-зоны, k8s Ingress). Главная ценность модуля —
-  **дифф между "должно быть открыто" и "реально видно снаружи"**, а не сам скан.
-- MVP не требует инфраструктурных вложений: asset-centric подход (домен/ASN →
-  discovery → fingerprint → CVE → дифф во времени) даёт ~80% ценности.
-
-**Тематическое имя:** в плане было `blackwall-skin` (кожа/поверхность = attack surface).
-По решению владельца модуль назван **blackwall-scan** (2026-08).
+Status: **phase 1 (MVP) — implemented** in [\`blackwall-scan/\`](../blackwall-scan/)… Phases 2–6 are ahead; this document stays a plan and a reference.
 
 ---
 
-## 1. Инструментарий (с ссылками)
+## 0. Positioning
 
-### 1.1 Discovery — сбор скоупа и активов
+The system class is **CESM / Continuous External Attack Surface Monitoring** for
+**our own** perimeter (not internet-wide intelligence like CVE.GLOBAL/Shodan).
 
-| Тул | Назначение | Ссылка |
+Key consequences for us:
+- **Legal without caveats** — we scan our own assets.
+- **We have inside ground truth** that no public scanner has
+  (Terraform state, cloud APIs, DNS zones, k8s Ingress). The module's main value
+  is **the diff between "should be open" and "actually visible from outside"**,
+  not the scan itself.
+- The MVP needs no infrastructure investment: an asset-centric approach
+  (domain/ASN → discovery → fingerprint → CVE → diff over time) gives ~80% of the value.
+
+**Thematic name:** the plan used `blackwall-skin` (skin/surface = attack surface).
+By the owner's decision the module is named **blackwall-scan** (2026-08).
+
+---
+
+## 1. Tooling (with links)
+
+### 1.1 Discovery — collecting scope and assets
+
+| Tool | Purpose | Link |
 |---|---|---|
-| **subfinder** | Пассивный перебор поддоменов (десятки API) | https://github.com/projectdiscovery/subfinder |
-| **OWASP Amass** | Эталон asset discovery + граф связей | https://github.com/owasp-amass/amass |
-| **asnmap** | Домен/орг → ASN → CIDR-префиксы | https://github.com/projectdiscovery/asnmap |
-| **dnsx** | Быстрый DNS-резолвер, CNAME/A/AAAA, wildcard | https://github.com/projectdiscovery/dnsx |
-| **massdns** | Массовый брутфорс поддоменов | https://github.com/blechschmidt/massdns |
-| **uncover** | Обёртка над Shodan/Censys/FOFA/Quake API | https://github.com/projectdiscovery/uncover |
-| **bgp.tools / RIPEstat** | ASN → префиксы (ручная сверка) | https://bgp.tools · https://stat.ripe.net |
+| **subfinder** | Passive subdomain enumeration (dozens of APIs) | https://github.com/projectdiscovery/subfinder |
+| **OWASP Amass** | Reference asset discovery + relationship graph | https://github.com/owasp-amass/amass |
+| **asnmap** | Domain/org → ASN → CIDR prefixes | https://github.com/projectdiscovery/asnmap |
+| **dnsx** | Fast DNS resolver, CNAME/A/AAAA, wildcard | https://github.com/projectdiscovery/dnsx |
+| **massdns** | Mass subdomain brute force | https://github.com/blechschmidt/massdns |
+| **uncover** | Wrapper over the Shodan/Censys/FOFA/Quake APIs | https://github.com/projectdiscovery/uncover |
+| **bgp.tools / RIPEstat** | ASN → prefixes (manual cross-check) | https://bgp.tools · https://stat.ripe.net |
 
 ### 1.2 Port / service discovery (L3-L4)
 
-| Тул | Назначение | Ссылка |
+| Tool | Purpose | Link |
 |---|---|---|
-| **naabu** | Быстрый SYN-портскан, дружит с pd-стеком | https://github.com/projectdiscovery/naabu |
-| **masscan** | Stateless-скан на больших скоростях | https://github.com/robertdavidgraham/masscan |
-| **ZMap** | Академический internet-wide сканер | https://github.com/zmap/zmap |
-| **nmap** | Version detection, UDP, NSE-скрипты | https://github.com/nmap/nmap |
+| **naabu** | Fast SYN port scan, plays well with the pd stack | https://github.com/projectdiscovery/naabu |
+| **masscan** | Stateless scanning at high speeds | https://github.com/robertdavidgraham/masscan |
+| **ZMap** | Academic internet-wide scanner | https://github.com/zmap/zmap |
+| **nmap** | Version detection, UDP, NSE scripts | https://github.com/nmap/nmap |
 
 ### 1.3 L7 grab / probing
 
-| Тул | Назначение | Ссылка |
+| Tool | Purpose | Link |
 |---|---|---|
-| **httpx** | HTTP-тулкит: коды, титлы, tech, редиректы | https://github.com/projectdiscovery/httpx |
-| **tlsx** | TLS-граббинг: SAN, expiry, шифры, JARM | https://github.com/projectdiscovery/tlsx |
-| **testssl.sh** | Глубокий аудит TLS-конфига | https://github.com/testssl/testssl.sh |
-| **zgrab2** | Application-layer banner grab (пара к ZMap) | https://github.com/zmap/zgrab2 |
+| **httpx** | HTTP toolkit: status codes, titles, tech, redirects | https://github.com/projectdiscovery/httpx |
+| **tlsx** | TLS grabbing: SAN, expiry, ciphers, JARM | https://github.com/projectdiscovery/tlsx |
+| **testssl.sh** | Deep TLS config audit | https://github.com/testssl/testssl.sh |
+| **zgrab2** | Application-layer banner grab (pairs with ZMap) | https://github.com/zmap/zgrab2 |
 
 ### 1.4 Fingerprinting
 
-| Тул | Назначение | Ссылка |
+| Tool | Purpose | Link |
 |---|---|---|
-| **wappalyzergo** | Определение технологий по HTTP | https://github.com/projectdiscovery/wappalyzergo |
-| **JARM** | Активный TLS-фингерпринт сервера | https://github.com/salesforce/jarm |
-| **JA4+** | Семейство сетевых фингерпринтов (JA4/JA4S/…) | https://github.com/FoxIO-LLC/ja4 |
-| favicon mmh3-hash | На нём построена половина Shodan-дорков | (реализуется скриптом; см. httpx `-favicon`) |
+| **wappalyzergo** | Technology detection over HTTP | https://github.com/projectdiscovery/wappalyzergo |
+| **JARM** | Active TLS server fingerprint | https://github.com/salesforce/jarm |
+| **JA4+** | Family of network fingerprints (JA4/JA4S/…) | https://github.com/FoxIO-LLC/ja4 |
+| favicon mmh3 hash | Half of all Shodan dorks are built on it | (scripted; see httpx `-favicon`) |
 
-### 1.5 Уязвимости и мисконфиги
+### 1.5 Vulnerabilities and misconfigurations
 
-| Тул | Назначение | Ссылка |
+| Tool | Purpose | Link |
 |---|---|---|
-| **nuclei** + templates | Шаблонный сканер: exposures/, misconfig/, takeovers/, default-logins/ | https://github.com/projectdiscovery/nuclei · https://github.com/projectdiscovery/nuclei-templates |
-| **EPSS** | Вероятность эксплуатации CVE (приоритизация) | https://www.first.org/epss/ |
-| **CISA KEV** | Каталог реально эксплуатируемых уязвимостей | https://www.cisa.gov/known-exploited-vulnerabilities-catalog |
-| **NVD / OSV** | База CVE / open-source уязвимости | https://nvd.nist.gov · https://osv.dev |
+| **nuclei** + templates | Template scanner: exposures/, misconfig/, takeovers/, default-logins/ | https://github.com/projectdiscovery/nuclei · https://github.com/projectdiscovery/nuclei-templates |
+| **EPSS** | Probability of CVE exploitation (prioritisation) | https://www.first.org/epss/ |
+| **CISA KEV** | Catalog of actually exploited vulnerabilities | https://www.cisa.gov/known-exploited-vulnerabilities-catalog |
+| **NVD / OSV** | CVE database / open-source vulnerabilities | https://nvd.nist.gov · https://osv.dev |
 
 ### 1.6 Certificate Transparency & takeover
 
-| Тул | Назначение | Ссылка |
+| Tool | Purpose | Link |
 |---|---|---|
-| **crt.sh** | Публичный поисковик по CT-логам (есть API) | https://crt.sh |
-| **certstream** | Real-time поток новых сертификатов | https://github.com/CaliDog/certstream-server |
-| **Cert Spotter** | Алерт на неавторизованные серты по твоим доменам | https://sslmate.com/certspotter/ |
-| **nuclei takeover-шаблоны** | Detection dangling DNS / subdomain takeover | (в составе nuclei-templates) |
+| **crt.sh** | Public CT log search engine (has an API) | https://crt.sh |
+| **certstream** | Real-time stream of new certificates | https://github.com/CaliDog/certstream-server |
+| **Cert Spotter** | Alerts on unauthorized certs for your domains | https://sslmate.com/certspotter/ |
+| **nuclei takeover templates** | Detecting dangling DNS / subdomain takeover | (part of nuclei-templates) |
 
-### 1.7 Оркестрация и фреймворки
+### 1.7 Orchestration and frameworks
 
-| Тул | Назначение | Ссылка |
+| Tool | Purpose | Link |
 |---|---|---|
-| **reNgine** | Готовый recon-фреймворк с web-UI | https://github.com/yogeshojha/rengine |
-| **SpiderFoot** | OSINT-автоматизация | https://github.com/smicallef/spiderfoot |
-| **OWASP Nettacker** | Автоматизированный recon/скан | https://github.com/OWASP/Nettacker |
-| **Axiom** | Распределённый скан по эфемерным VPS | https://github.com/pry0cc/axiom |
-| **Faraday** | Агрегатор находок / single pane of glass | https://github.com/infobyte/faraday |
+| **reNgine** | Ready-made recon framework with a web UI | https://github.com/yogeshojha/rengine |
+| **SpiderFoot** | OSINT automation | https://github.com/smicallef/spiderfoot |
+| **OWASP Nettacker** | Automated recon/scanning | https://github.com/OWASP/Nettacker |
+| **Axiom** | Distributed scanning over ephemeral VPSes | https://github.com/pry0cc/axiom |
+| **Faraday** | Findings aggregator / single pane of glass | https://github.com/infobyte/faraday |
 
-### 1.8 Готовые сервисы (если не строить своё)
+### 1.8 Ready-made services (if not building our own)
 
-| Сервис | Роль | Ссылка |
+| Service | Role | Link |
 |---|---|---|
-| **Shodan Monitor** | Подписка на изменения по твоим IP/ASN | https://monitor.shodan.io |
-| **Censys** (free tier / research) | Данные скана + история | https://search.censys.io |
-| **Rapid7 Project Doppler** | Бесплатный external exposure взгляд | https://www.rapid7.com |
-| **Intruder.io / Detectify** | Коммерческий EASM для периметра | https://www.intruder.io · https://detectify.com |
-| **Microsoft Defender EASM** | Enterprise EASM (бывш. RiskIQ) | https://azure.microsoft.com |
+| **Shodan Monitor** | Subscription to changes on your IPs/ASN | https://monitor.shodan.io |
+| **Censys** (free tier / research) | Scan data + history | https://search.censys.io |
+| **Rapid7 Project Doppler** | Free external exposure view | https://www.rapid7.com |
+| **Intruder.io / Detectify** | Commercial EASM for the perimeter | https://www.intruder.io · https://detectify.com |
+| **Microsoft Defender EASM** | Enterprise EASM (formerly RiskIQ) | https://azure.microsoft.com |
 
-### 1.9 Открытые датасеты (прототип корреляции без своего сканера)
+### 1.9 Open datasets (prototyping correlation without our own scanner)
 
-| Источник | Заметка | Ссылка |
+| Source | Note | Link |
 |---|---|---|
-| **Censys bulk data / research access** | Дневные снапшоты, ~5 лет истории | https://search.censys.io/data |
-| **scans.io (Stanford)** | Публичный архив internet-scan датасетов (non-commercial) | https://scans.io |
-| Rapid7 Project Sonar | ⚠️ Публичный доступ **закрыт** с фев. 2022 | https://www.rapid7.com/research/project-sonar/ |
+| **Censys bulk data / research access** | Daily snapshots, ~5 years of history | https://search.censys.io/data |
+| **scans.io (Stanford)** | Public archive of internet-scan datasets (non-commercial) | https://scans.io |
+| Rapid7 Project Sonar | ⚠️ Public access **closed** since Feb 2022 | https://www.rapid7.com/research/project-sonar/ |
 
 ---
 
-## 2. План модуля `blackwall-scan`
+## 2. The `blackwall-scan` module plan
 
-### 2.1 Основная идея — дифф двух источников
+### 2.1 Core idea — diffing two sources
 
 ```
-inside-out (ground truth)          outside-in (реальность)
-что ДОЛЖНО быть открыто             что ВИДНО снаружи
+inside-out (ground truth)          outside-in (reality)
+what SHOULD be open                 what is VISIBLE from outside
 ─────────────────────────          ─────────────────────
 • Terraform state                  • subfinder/amass → dnsx
-• cloud API (SG, GCP Asset Inv.)   • naabu/masscan (все 65535)
-• Route53 / Cloud DNS зоны         • httpx / tlsx
+• cloud API (SG, GCP Asset Inv.)   • naabu/masscan (all 65535)
+• Route53 / Cloud DNS zones        • httpx / tlsx
 • k8s Ingress + LB Services        • nuclei (exposures/misconfig)
              \                    /
               \                  /
                ▼   DIFF ENGINE ▼
-   • есть снаружи, нет в ground truth → shadow IT / забытый staging
-   • dangling DNS → risk takeover
-   • новый порт/поддомен со вчера → drift
-   • cert expiry < 14d, сервис 200 без auth
+   • visible outside, absent in ground truth → shadow IT / forgotten staging
+   • dangling DNS → takeover risk
+   • new port/subdomain since yesterday → drift
+   • cert expiry < 14d, service returns 200 without auth
 ```
 
-Всё из правой колонки, чего нет в левой = **shadow IT, забытый стейдж, dangling
-DNS, руками открытый порт**. Это drift detection для периметра.
+Everything in the right column that is missing from the left = **shadow IT, a
+forgotten staging, dangling DNS, a port opened by hand**. This is drift
+detection for the perimeter.
 
-### 2.2 Архитектура (по слоям)
+### 2.2 Architecture (by layer)
 
-1. **Scope/seed** — ASN → префиксы (asnmap/RDAP), домены → CT-логи (crt.sh/certstream)
-   + passive DNS + massdns-брут. SAN из TLS-сертов **возвращаются в seed** → граф
-   расширяет сам себя.
-2. **L3/L4 discovery** — naabu/masscan, полные 65535 TCP + `nmap -sU --top-ports 100`.
-   Обязательно **IPv4 и IPv6** (частая дыра: firewall на v4, v6 нараспашку).
+1. **Scope/seed** — ASN → prefixes (asnmap/RDAP), domains → CT logs (crt.sh/certstream)
+   + passive DNS + massdns brute force. SANs from TLS certs **feed back into the
+   seed** → the graph grows by itself.
+2. **L3/L4 discovery** — naabu/masscan, all 65535 TCP + `nmap -sU --top-ports 100`.
+   Always **IPv4 and IPv6** (a common hole: firewall on v4, v6 wide open).
 3. **L7 grab** — httpx / tlsx.
-4. **Fingerprinting** — wappalyzergo, favicon-hash, JARM/JA4S, nmap version.
-5. **CVE-корреляция** — version→CPE → NVD/OSV, приоритизация EPSS + CISA KEV.
-   ⚠️ Главный источник FP — **бэкпортированные патчи**: баннер "nginx 1.18", а
-   CVE давно закрыт вендором. Не алертить по баннеру вслепую.
-6. **Хранение** — observations в **ClickHouse** (`first_seen`/`last_seen`, дельты).
-   Граф связей domain↔IP↔ASN↔cert можно в Postgres рёбрами (Neo4j — оверкилл на старте).
-7. **Дифф + алерты** → интеграция с `blackwall-voice`.
+4. **Fingerprinting** — wappalyzergo, favicon hash, JARM/JA4S, nmap version.
+5. **CVE correlation** — version→CPE → NVD/OSV, prioritised with EPSS + CISA KEV.
+   ⚠️ The main source of FPs is **backported patches**: the banner says
+   "nginx 1.18", but the vendor fixed the CVE long ago. Don't alert on banners blindly.
+6. **Storage** — observations in **ClickHouse** (`first_seen`/`last_seen`, deltas).
+   The domain↔IP↔ASN↔cert relationship graph can live in Postgres as edges
+   (Neo4j is overkill at the start).
+7. **Diff + alerts** → integration with `blackwall-voice`.
 
-### 2.3 Чек-лист «наш же стек» (классика утечек)
+### 2.3 "Our own stack" checklist (classic leaks)
 
-Отдельные высокоприоритетные проверки, а не общий nuclei:
-- Prometheus `9090`, Alertmanager `9093` — без auth это готовая карта инфры
+Dedicated high-priority checks rather than generic nuclei:
+- Prometheus `9090`, Alertmanager `9093` — without auth they are a ready-made map of the infrastructure
 - Grafana `3000` (anonymous auth), ClickHouse `8123/9000`
-- kubelet `10255` (read-only) и `10250`, Docker API `2375`, etcd `2379`
+- kubelet `10255` (read-only) and `10250`, Docker API `2375`, etcd `2379`
 - Redis `6379`, node_exporter `9100`
 
-### 2.4 Алерты, которые реально стоят того
+### 2.4 Alerts actually worth having
 
-- новый открытый порт, которого не было вчера
-- новый A/CNAME или поддомен в CT-логах (быстрее любого брутфорса)
-- cert expires < 14d (включая внутренние, что никто не мониторит)
-- сервис отвечает 200 без auth на пути из блэклиста
-- dangling CNAME → risk subdomain takeover
+- a new open port that wasn't there yesterday
+- a new A/CNAME or subdomain in CT logs (faster than any brute force)
+- cert expires < 14d (including internal ones nobody monitors)
+- a service answers 200 without auth on a blacklisted path
+- dangling CNAME → subdomain takeover risk
 
-### 2.5 Интеграция в существующий Blackwall
+### 2.5 Integration into the existing Blackwall
 
 ```
-blackwall-scan (CronJob на ВНЕШНЕМ VPS)
+blackwall-scan (CronJob on an EXTERNAL VPS)
    → JSONL observations → ClickHouse
-   → diff engine → pushgateway метрики
-   → blackwall-voice (Telegram/Slack/webhook алерты)
-   → (позже) blackwall-brain: LLM-объяснение "что появилось и почему опасно"
+   → diff engine → pushgateway metrics
+   → blackwall-voice (Telegram/Slack/webhook alerts)
+   → (later) blackwall-brain: LLM explanation of "what appeared and why it is dangerous"
 ```
 
-Модуль остаётся **независимо деплоимым** (правило изоляции): свой `ansible/`,
-свой контейнер с pd-тулзами, свой `STATUS.md`.
+The module stays **independently deployable** (the isolation rule): its own
+`ansible/`, its own container with the pd tools, its own `STATUS.md`.
 
-### 2.6 Фазы
+### 2.6 Phases
 
-| Фаза | Что | Критерий готовности |
+| Phase | What | Definition of done |
 |---|---|---|
-| **0** | Скелет модуля: `STATUS.md (pending)`, `README.md`, `ansible/`, `tools/` | Структура по шаблону eye/voice |
-| **1 — MVP asset-centric** | Контейнер pd-стека (subfinder+dnsx+naabu+httpx+tlsx) + запуск с внешнего VPS, вывод JSONL | Один прогон по своему домену даёт список host:port:service |
-| **2 — Хранение + дифф** | ClickHouse-схема, загрузка observations, детекция «что появилось/исчезло» | Второй прогон показывает дельту |
-| **3 — Алерты** | Правила из 2.4 → pushgateway → blackwall-voice | Тестовый алерт долетает в Telegram |
-| **4 — CVE + чек-лист стека** | nuclei (exposures/misconfig/takeover) + чек-лист 2.3 + EPSS/KEV приоритизация | Находки ранжированы, FP-фильтр по бэкпортам |
-| **5 — CT-мониторинг** | certstream/crt.sh watcher по своим доменам | Новый серт → поддомен в seed в реальном времени |
-| **6 — inside-out дифф** | Подтяжка ground truth (TF state / cloud API / DNS зоны), полный drift-дифф | «Снаружи видно X, в ground truth нет» → алерт |
+| **0** | Module skeleton: `STATUS.md (pending)`, `README.md`, `ansible/`, `tools/` | Structure follows the eye/voice template |
+| **1 — asset-centric MVP** | pd stack container (subfinder+dnsx+naabu+httpx+tlsx) + run from an external VPS, JSONL output | One run over our domain yields a host:port:service list |
+| **2 — Storage + diff** | ClickHouse schema, loading observations, detecting "what appeared/disappeared" | The second run shows the delta |
+| **3 — Alerts** | Rules from 2.4 → pushgateway → blackwall-voice | A test alert reaches Telegram |
+| **4 — CVE + stack checklist** | nuclei (exposures/misconfig/takeover) + checklist 2.3 + EPSS/KEV prioritisation | Findings are ranked, backport FP filter in place |
+| **5 — CT monitoring** | certstream/crt.sh watcher for our domains | New cert → subdomain into the seed in real time |
+| **6 — inside-out diff** | Pulling ground truth (TF state / cloud API / DNS zones), full drift diff | "X is visible outside but not in ground truth" → alert |
 
-### 2.7 ClickHouse — набросок схемы (фаза 2)
+### 2.7 ClickHouse — schema sketch (phase 2)
 
 ```sql
 CREATE TABLE skin_observations (
     scan_id      UUID,
     ts           DateTime,
-    host         String,      -- fqdn или ip
-    ip           IPv6,        -- нормализуем v4→v6-mapped
+    host         String,      -- fqdn or ip
+    ip           IPv6,        -- normalise v4→v6-mapped
     port         UInt16,
     proto        LowCardinality(String),   -- tcp/udp
     service      LowCardinality(String),
@@ -217,118 +220,121 @@ CREATE TABLE skin_observations (
     source_vp    LowCardinality(String)    -- vantage point (eu/us/asia)
 ) ENGINE = MergeTree ORDER BY (host, port, ts);
 
--- first_seen/last_seen считаются агрегатом; дифф = LEFT ANTI JOIN двух прогонов
+-- first_seen/last_seen are computed by aggregation; diff = LEFT ANTI JOIN of two runs
 ```
 
 ---
 
-## 3. Операционка и безопасность (не техника — тут проекты и умирают)
+## 3. Operations and safety (not technology — this is where projects die)
 
-### 3.1 Откуда сканировать — scan-friendly хостинг
+### 3.1 Where to scan from — scan-friendly hosting
 
-**Ключевой факт:** abuse-жалоба приходит от цели скана. Цель — ты сам. Жаловаться
-некому. Вопрос сводится не к ToS цели, а к автоматике провайдера на **исходящий** трафик.
+**Key fact:** an abuse complaint comes from the scan target. The target is you.
+There is nobody to complain. So the question is not the target's ToS but the
+provider's automation on **outgoing** traffic.
 
-Для задачи «свой периметр, десятки-сотни хостов, раз в сутки»:
+For "our own perimeter, tens to hundreds of hosts, once a day":
 
-| Провайдер | Заметка |
+| Provider | Note |
 |---|---|
-| **Hetzner** CX22 (~€4) | Дёшево, стабильно |
-| **OVH / SoYouStart** (~€4) | Своя сеть, высокий порог реакции, не «серый» |
-| **Netcup / Scaleway Stardust** | Бюджетные альтернативы |
-| DigitalOcean / Linode | Лояльны к security research (Linode — по тикету) |
-| ⚠️ Vultr | «Только с явной авторизацией destination» + авто-suspend |
+| **Hetzner** CX22 (~€4) | Cheap, stable |
+| **OVH / SoYouStart** (~€4) | Own network, high reaction threshold, not "grey" |
+| **Netcup / Scaleway Stardust** | Budget alternatives |
+| DigitalOcean / Linode | Tolerant of security research (Linode — via a ticket) |
+| ⚠️ Vultr | "Only with explicit authorization from the destination" + auto-suspend |
 
-Правила гигиены:
-- **Не сканировать из того же облака/ASN, где стоит цель** — внутренние маршруты
-  и SG-исключения дадут ложно-чистую картину.
-- Держать разумный rate (`masscan --rate 1000`, не 100k).
-- **2-3 vantage point в разных регионах** (EU/US/Asia): Cloudflare-правила,
-  geo-блоки и ASN-фильтры дают разную картину; один источник врёт.
-- PTR + внятный whois на сканирующем IP → SOC/MDR не потратит день на инцидент.
-- Scan-source IP → в документацию и exception-лист IDS, **но НЕ в firewall
-  allow-list** (иначе теряется весь смысл).
-- Для агрессивного/регулярного full-range — открыть тикет заранее:
+Hygiene rules:
+- **Don't scan from the same cloud/ASN as the target** — internal routes and SG
+  exceptions give a falsely clean picture.
+- Keep a sane rate (`masscan --rate 1000`, not 100k).
+- **2–3 vantage points in different regions** (EU/US/Asia): Cloudflare rules,
+  geo-blocks and ASN filters give different pictures; a single source lies.
+- PTR + a clear whois on the scanning IP → the SOC/MDR won't waste a day on an incident.
+- Scan-source IPs → into the documentation and the IDS exception list, **but NOT
+  into the firewall allow-list** (otherwise the whole point is lost).
+- For aggressive/regular full-range scans — open a ticket in advance:
   *"continuous external attack surface assessment of infrastructure owned by us,
   target ranges attached"*.
 
-**НЕ надо:** offshore/DMCA-ignored хостинг с рекламой «mass scanning allowed» —
-не по этике, а технически: мусорная репутация ASN, их режут Cloudflare/Spamhaus
-DROP/AWS WAF, и твой же периметр половину таких префиксов геоблочит →
-получаешь **ложно-чистый** скан («порт закрыт» вместо «отфильтрован на подходе»).
+**DON'T:** offshore/DMCA-ignored hosting advertising "mass scanning allowed" —
+not on ethical grounds but technical ones: the ASN has a junk reputation,
+Cloudflare/Spamhaus DROP/AWS WAF cut it, and your own perimeter geo-blocks half
+of those prefixes → you get a **falsely clean** scan ("port closed" instead of
+"filtered on the way in").
 
-### 3.2 Грабли
+### 3.2 Pitfalls
 
-- **Cloudflare/CDN маскирует origin**: снаружи видишь WAF, а прод торчит голым IP.
-  Ищи origin через историч. DNS, SAN сертов, favicon-hash в Censys → закрывай SG
-  только на префиксы Cloudflare.
-- **IPv6**: сканируй оба стека.
-- **Rate limit**: полный masscan по проду в пик — плохо. Обкатай на staging.
-- **AWS/GCP** давно не требуют разрешения на тест своих ресурсов, но abuse-политика
-  на исходящий скан из их VM есть → отсюда внешний VPS.
+- **Cloudflare/CDN hides the origin**: from outside you see the WAF while prod
+  sticks out as a bare IP. Find the origin via historical DNS, cert SANs,
+  favicon hash in Censys → restrict the SG to Cloudflare prefixes only.
+- **IPv6**: scan both stacks.
+- **Rate limit**: a full masscan of prod at peak is bad. Try it on staging first.
+- **AWS/GCP** have long stopped requiring permission to test your own resources,
+  but they do have an abuse policy for outgoing scans from their VMs → hence the external VPS.
 
-### 3.3 Правовая граница
+### 3.3 The legal line
 
-- Пассивный баннер-граббинг ≠ запуск nuclei по чужим хостам (несанкц. доступ,
-  ст. 272 УК РФ / CFAA).
-- Сканируем **только свой скоуп** или с письменным разрешением.
-- Зафиксировать письменную авторизацию даже самому себе — если инфра клиентская
-  или в облаке партнёра, это единственное, что отделяет аудит от 272-й.
+- Passive banner grabbing ≠ running nuclei against other people's hosts
+  (unauthorized access, Art. 272 of the Russian Criminal Code / CFAA).
+- Scan **only your own scope** or with written permission.
+- Record written authorization even for yourself — if the infrastructure is a
+  client's or in a partner's cloud, it is the only thing separating an audit
+  from Art. 272.
 
 ---
 
-## 4. Дополнительные материалы по теме
+## 4. Further reading
 
-### 4.1 Сообщества (Reddit)
+### 4.1 Communities (Reddit)
 
-- **r/netsec** — технический security-контент, разборы методологий: https://reddit.com/r/netsec
-- **r/AskNetsec** — практические вопросы: https://reddit.com/r/AskNetsec
-- **r/bugbounty** — recon/attack surface на практике: https://reddit.com/r/bugbounty
-- **r/blueteamsec** — защита/детект: https://reddit.com/r/blueteamsec
-- **r/cybersecurity** — общее: https://reddit.com/r/cybersecurity
+- **r/netsec** — technical security content, methodology write-ups: https://reddit.com/r/netsec
+- **r/AskNetsec** — practical questions: https://reddit.com/r/AskNetsec
+- **r/bugbounty** — recon/attack surface in practice: https://reddit.com/r/bugbounty
+- **r/blueteamsec** — defence/detection: https://reddit.com/r/blueteamsec
+- **r/cybersecurity** — general: https://reddit.com/r/cybersecurity
 
-### 4.2 Методология и практика
+### 4.2 Methodology and practice
 
-- **The Bug Hunter's Methodology (TBHM)**, Jason Haddix — референс по recon:
-  https://github.com/jhaddix/tbhm (+ активный Discord с ежемес. коллаб-хантами)
+- **The Bug Hunter's Methodology (TBHM)**, Jason Haddix — the recon reference:
+  https://github.com/jhaddix/tbhm (+ an active Discord with monthly collab hunts)
 - **NahamSec — Resources for Beginner Bug Bounty Hunters**:
   https://github.com/nahamsec/Resources-for-Beginner-Bug-Bounty-Hunters
-- **0xpatrik** — глубокие статьи по recon/passive DNS/Sonar:
+- **0xpatrik** — in-depth articles on recon/passive DNS/Sonar:
   https://0xpatrik.com
-- **ProjectDiscovery docs** — как собрать пайплайн из их тулов:
+- **ProjectDiscovery docs** — how to build a pipeline from their tools:
   https://docs.projectdiscovery.io
 
-### 4.3 Академические первоисточники
+### 4.3 Academic primary sources
 
-- **ZMap** paper (USENIX Security 2013) — как устроен быстрый скан:
+- **ZMap** paper (USENIX Security 2013) — how fast scanning works:
   https://zmap.io/paper.html
-- **Censys** paper (CCS 2015 / обновл. 2025) — «карта интернет-хостов»:
+- **Censys** paper (CCS 2015 / updated 2025) — "a map of internet hosts":
   https://censys.io/publications
-- **EPSS** (FIRST) — модель приоритизации эксплуатации: https://www.first.org/epss/
+- **EPSS** (FIRST) — exploitation prioritisation model: https://www.first.org/epss/
 
-### 4.4 Про «форумы в даркнете»
+### 4.4 About "darknet forums"
 
-Честно: для защиты **своего** периметра туда лезть не нужно и вредно.
-- Вся релевантная экспертиза (EASM, recon, fingerprinting, CVE-корреляция)
-  лежит **в открытом доступе** — GitHub, Reddit, конференции, paper'ы выше.
-- Даркнет-форумы по этой теме — это криминальный сегмент (доступы, эксплойты,
-  «пробив»). Заходить туда = юридический риск (ст. 272/273) + opsec-риск
-  (сам станешь целью) при **нулевой** пользе для defensive-задачи.
-- Легальный «underground-adjacent», где реально сидят практики recon —
-  это **Discord TBHM / NahamSec**, приватные bug-bounty комьюнити и
-  профильные Telegram-каналы, а не Tor-форумы.
+Honestly: to defend **your own** perimeter there is no need to go there, and it is harmful.
+- All the relevant expertise (EASM, recon, fingerprinting, CVE correlation) is
+  **openly available** — GitHub, Reddit, conferences, the papers above.
+- Darknet forums on this topic are the criminal segment (access, exploits,
+  "lookups"). Going there = legal risk (Art. 272/273) + opsec risk (you become a
+  target yourself) with **zero** benefit for a defensive task.
+- The legal "underground-adjacent" places where recon practitioners actually
+  hang out are **the TBHM / NahamSec Discords**, private bug bounty communities
+  and specialised Telegram channels, not Tor forums.
 
-Если интересует именно *threat intelligence* (что о твоей инфре знают/продают
-снаружи) — это делается через легальные CTI-сервисы и leak-мониторинг
-(напр. HaveIBeenPwned, LeakIX, Intelligence X), а не через личное присутствие
-на криминальных площадках.
+If you are interested specifically in *threat intelligence* (what is known or
+sold about your infrastructure outside), that is done via legal CTI services and
+leak monitoring (e.g. HaveIBeenPwned, LeakIX, Intelligence X), not via personal
+presence on criminal marketplaces.
 
 ---
 
-## 5. Рекомендация по старту
+## 5. Recommendation for getting started
 
-MVP (фазы 0-1) **asset-centric**, без своей скан-инфры на весь IPv4:
-`домен/ASN → subfinder+dnsx → naabu → httpx/tlsx → JSONL`, запуск с одного
-Hetzner/OVH VPS раз в сутки через CronJob. Это ~80% ценности при околонулевой
-инфраструктуре и без войны с abuse-департаментами. Дифф во времени (фаза 2) —
-первая по-настоящему полезная фича; с неё начинается реальная защита.
+An **asset-centric** MVP (phases 0–1), without our own scanning infrastructure for all of IPv4:
+`domain/ASN → subfinder+dnsx → naabu → httpx/tlsx → JSONL`, run from a single
+Hetzner/OVH VPS once a day via a CronJob. That is ~80% of the value with
+near-zero infrastructure and no war with abuse departments. Diffing over time
+(phase 2) is the first truly useful feature; real protection starts there.

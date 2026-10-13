@@ -1,57 +1,57 @@
 #!/usr/sbin/nft -f
 #
-# blackwall-wall — origin cloaking для fehu.dev (93.115.20.111)
+# blackwall-wall — origin cloaking for fehu.dev (93.115.20.111)
 #
-# Пускает на TCP/80 и TCP/443 только префиксы Cloudflare, остальное дропает.
-# Кто узнал прямой IP из CT-логов / historical DNS / favicon-hash — упирается
-# в firewall вместо origin nginx.
+# Lets only Cloudflare prefixes reach TCP/80 and TCP/443, drops the rest.
+# Whoever learned the direct IP from CT logs / historical DNS / favicon hash hits
+# the firewall instead of the origin nginx.
 #
 #
-# ПОЧЕМУ hook prerouting, А НЕ input
+# WHY hook prerouting AND NOT input
 # ---------------------------------
-# На этом хосте nginx работает в контейнере podman (10.88.0.31), и netavark
-# вешает DNAT в prerouting:
+# On this host nginx runs in a podman container (10.88.0.31), and netavark
+# installs DNAT in prerouting:
 #
 #     chain NETAVARK-HOSTPORT-DNAT { tcp dport 443 ... }
 #     chain NETAVARK-DN-...        { tcp dport 443 ... dnat to 10.88.0.31:443 }
 #
-# После DNAT адрес назначения — контейнер, поэтому пакет идёт в forward, а не
-# в input. Правила на hook input по нему НЕ отработают: они будут выглядеть
-# применёнными, но counter останется нулевым, а origin — открытым.
+# After DNAT the destination is the container, so the packet goes to forward,
+# not input. Rules on hook input will NOT match it: they look applied, but the
+# counter stays at zero and the origin stays open.
 #
-# priority -150 (mangle) выбран сознательно:
-#     -200  conntrack        <- раньше него ct state ещё не определён
-#     -150  МЫ
+# priority -150 (mangle) is chosen deliberately:
+#     -200  conntrack        <- before it, ct state is not yet known
+#     -150  US
 #     -100  dstnat           <- netavark DNAT
 #      -90  firewalld nat_PREROUTING
-# То есть мы видим исходные dst-порт и src-адрес до всякой трансляции.
+# So we see the original dst port and src address before any translation.
 #
 #
-# ПОЧЕМУ ЭТОГО НЕ СДЕЛАТЬ ЧЕРЕЗ FIREWALLD
+# WHY THIS CAN'T BE DONE WITH FIREWALLD
 # ---------------------------------------
-# В filter_FORWARD у firewalld стоит `ct status dnat accept` — весь DNAT-трафик
-# проскакивает мимо зон. Поэтому в filter_IN_public_allow портов 80/443 нет,
-# а 443 снаружи при этом открыт. Rich-rule в зоне public эту дыру не закроет.
+# firewalld's filter_FORWARD has `ct status dnat accept` — all DNAT traffic
+# slips past the zones. That's why filter_IN_public_allow has no 80/443,
+# yet 443 is open from outside. A rich rule in the public zone won't close that hole.
 #
 #
-# ЧТО ЭТОТ ФАЙЛ НЕ ТРОГАЕТ
+# WHAT THIS FILE DOES NOT TOUCH
 # ------------------------
-#   - policy accept, матчим ТОЛЬКО tcp dport 80/443 на внешнем интерфейсе.
-#   - SSH/22, cockpit/9090, 9999 — не затрагиваются вообще.
-#   - table inet firewalld, table ip nat и table ip filter (netavark) остаются
-#     нетронутыми; обе помечены "managed by ... do not touch".
-#   => Залочить себя по SSH этим файлом невозможно — это сделано намеренно.
+#   - policy accept, matches ONLY tcp dport 80/443 on the external interface.
+#   - SSH/22, cockpit/9090, 9999 — not affected at all.
+#   - table inet firewalld, table ip nat and table ip filter (netavark) stay
+#     untouched; both are marked "managed by ... do not touch".
+#   => You cannot lock yourself out of SSH with this file — by design.
 #
-# Применить:  sudo nft -f /etc/nftables.d/blackwall-wall.nft
-# Проверить:  sudo nft list table inet blackwall_wall
-# Откатить:   sudo nft delete table inet blackwall_wall
+# Apply:     sudo nft -f /etc/nftables.d/blackwall-wall.nft
+# Check:     sudo nft list table inet blackwall_wall
+# Roll back: sudo nft delete table inet blackwall_wall
 
-# Внешний интерфейс. Проверить: ip -o -4 route show to default | awk '{print $5}'
-# Если здесь окажется неверное имя — правила просто ничего не будут фильтровать
-# (fail-open), сайт при этом не ляжет.
+# External interface. Check: ip -o -4 route show to default | awk '{print $5}'
+# If the name here is wrong, the rules simply filter nothing
+# (fail-open), and the site stays up.
 define WALL_WAN_IF = "eth0"
 
-# Идиома атомарной перезагрузки: создать (если нет), удалить, определить заново.
+# Atomic reload idiom: create (if missing), delete, define again.
 table inet blackwall_wall
 delete table inet blackwall_wall
 
@@ -95,9 +95,9 @@ table inet blackwall_wall {
         }
     }
 
-    # Твои IP для прямого доступа к origin в обход CF (деплой, отладка,
-    # health-check мониторинга). Пусто = никто.
-    # Заполняется через ADMIN_ALLOW в /etc/default/blackwall-cf-refresh.
+    # Your IPs for direct origin access bypassing CF (deploys, debugging,
+    # monitoring health checks). Empty = nobody.
+    # Filled from ADMIN_ALLOW in /etc/default/blackwall-cf-refresh.
     set admin_v4 {
         type ipv4_addr
         flags interval
@@ -107,22 +107,22 @@ table inet blackwall_wall {
     chain prerouting {
         type filter hook prerouting priority -150; policy accept;
 
-        # Полицейщина только на внешнем интерфейсе. Без этого мы бы дропали
-        # исходящий HTTPS самих контейнеров: пакет 10.88.0.31 -> internet:443
-        # тоже проходит prerouting, и по dport 443 / src не-CF попал бы под drop.
+        # Police the external interface only. Without this we'd drop the
+        # containers' own outgoing HTTPS: a 10.88.0.31 -> internet:443 packet
+        # also passes prerouting and, with dport 443 / non-CF src, would be dropped.
         iifname != $WALL_WAN_IF accept
 
-        # Уже установленные соединения не рвём при перезагрузке правил.
+        # Don't break established connections when rules are reloaded.
         ct state established,related accept
 
-        # --- разрешённые источники ---
+        # --- allowed sources ---
         tcp dport { 80, 443 } ip  saddr @cf_v4    counter accept
         tcp dport { 80, 443 } ip6 saddr @cf_v6    counter accept
         tcp dport { 80, 443 } ip  saddr @admin_v4 counter accept
 
-        # --- всё остальное на 80/443 — в мусор ---
-        # Лог с rate-limit: видно попытки прямого доступа к origin, но journald
-        # не заливает. Готовый источник событий для blackwall-eye.
+        # --- everything else on 80/443 goes to the bin ---
+        # Rate-limited log: shows direct-to-origin attempts without flooding
+        # journald. A ready event source for blackwall-eye.
         tcp dport { 80, 443 } limit rate 10/minute \
             log prefix "[blackwall-wall] origin-direct " level info
 

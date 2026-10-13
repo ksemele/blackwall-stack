@@ -3,9 +3,9 @@ Description=Blackwall: weekly Cloudflare prefix refresh
 
 [Timer]
 OnCalendar=weekly
-# Разброс, чтобы не долбить cloudflare.com/ips ровно в полночь вместе со всеми.
+# Jitter, so we don't hit cloudflare.com/ips exactly at midnight along with everyone else.
 RandomizedDelaySec=6h
-# Если хост был выключен в момент срабатывания — догнать после загрузки.
+# If the host was off when the timer was due, catch up after boot.
 Persistent=true
 
 [Install]

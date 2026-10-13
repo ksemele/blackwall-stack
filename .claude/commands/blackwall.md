@@ -18,7 +18,7 @@ Blackwall module. Read every `STATUS.md` found.
 
 **Edge case:** If no subdirectories with `STATUS.md` are found, display:
 ```
-BLACKWALL — нет модулей. Создайте директорию модуля с файлом STATUS.md (status: pending).
+BLACKWALL — no modules. Create a module directory with a STATUS.md file (status: pending).
 ```
 and stop.
 
@@ -27,12 +27,12 @@ and stop.
 Parse the YAML front-matter from each `STATUS.md` and render a status table:
 
 ```
-BLACKWALL — статус модулей
+BLACKWALL — module status
 ──────────────────────────
 [<badge>] <module>    Stage <stage> | <next_task>
 ```
 
-**Note on pending modules:** For modules with `status: pending`, the `next_task` field may be empty — display `Не начат` instead.
+**Note on pending modules:** For modules with `status: pending`, the `next_task` field may be empty — display `Not started` instead.
 
 Status badge format:
 - `pending`     → `[·····]`
@@ -42,10 +42,10 @@ Status badge format:
 
 Example output:
 ```
-BLACKWALL — статус модулей
+BLACKWALL — module status
 ──────────────────────────
-[>>>>·] blackwall-eye    Stage 1 | Следующее: Ansible роль wazuh-agent
-[·····] blackwall-voice  Не начат
+[>>>>·] blackwall-eye    Stage 1 | Next: wazuh-agent Ansible role
+[·····] blackwall-voice  Not started
 ```
 
 ## Step 3: Present options and wait
@@ -54,11 +54,11 @@ After the status table, show numbered options. Do NOT auto-select.
 Do NOT proceed without explicit user input.
 
 ```
-Что делаем?
-  1. Продолжить <module> — <next_task>      (for each in_progress module)
-  2. Начать <module>                         (for each pending module)
-  3. Показать детали модуля [имя]
-  4. Ничего, только статус
+What next?
+  1. Continue <module> — <next_task>        (for each in_progress module)
+  2. Start <module>                          (for each pending module)
+  3. Show module details [name]
+  4. Nothing, status only
 ```
 
 Rules:
@@ -69,7 +69,7 @@ Rules:
 
 **Edge case — all modules done:** If all modules have `status: done`, display:
 ```
-✅ Все модули завершены.
+✅ All modules are done.
 ```
 and only offer options 3 and 4.
 
@@ -79,7 +79,7 @@ If the user selects action 1 or 2, use the Agent tool to spawn a subagent.
 Use `model: haiku` (or the value of `subagent_model` above) when calling Agent.
 The user can override this per-session by passing `model=<name>` in the command args.
 
-**Special handling for option 3 (показать детали):** If user chose option 3, read and display the full content of `<module>/STATUS.md` inline — do not dispatch a subagent.
+**Special handling for option 3 (show details):** If user chose option 3, read and display the full content of `<module>/STATUS.md` inline — do not dispatch a subagent.
 
 Construct the subagent prompt as follows:
 1. Include full content of `<module>/CLAUDE.md`
@@ -94,7 +94,9 @@ Construct the subagent prompt as follows:
 >
 > ## Git rules (apply to every subagent invocation)
 > - Commit your work as you go, on the current branch (`claude-dev`). Multiple small commits are fine.
-> - Commit messages must be super-brief: one line, conventional-commit style (`feat(scope): …`, `fix(scope): …`, `docs: …`), under ~70 characters. No body, no co-author trailer, no HEREDOC. Example: `feat(eye): add wazuh-indexer install task`.
+> - Commit messages must be super-brief: one line, conventional-commit style (`feat(scope): …`, `fix(scope): …`, `docs: …`), under ~70 characters, in English. No body, no HEREDOC. Example: `feat(eye): add wazuh-indexer install task`.
+> - No AI attribution anywhere: no `Co-Authored-By`, no `Claude-Session`, no "Generated with" lines in commits.
+> - Everything written into the repo (docs, STATUS.md, comments, artifacts) is in English.
 > - NEVER push. No `git push` under any circumstances. No `--no-verify`, no `--amend` of pushed commits, no force-push.
 > - Never create a new branch. Stay on `claude-dev`.
 >
@@ -133,10 +135,10 @@ Construct the subagent prompt as follows:
 >    - Set `last_updated` to today's date
 >    - Update `status` if appropriate (e.g. set to `blocked` if stuck)
 > 3. Return a brief report in this format:
->    ✓ Выполнено: <what was done>
->    → Следующее: <next_task you wrote>
->    📄 Артефакт: <path to artifact md>
->    ⚠ Вопросы: <open questions, or "нет">
+>    ✓ Done: <what was done>
+>    → Next: <next_task you wrote>
+>    📄 Artifact: <path to artifact md>
+>    ⚠ Questions: <open questions, or "none">
 
 ## Step 5: Display report and stop
 

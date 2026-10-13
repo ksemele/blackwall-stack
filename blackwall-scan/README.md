@@ -1,14 +1,16 @@
 # blackwall-scan
 
-External attack surface scanner — смотрит на твою инфру **снаружи контура**
-глазами атакующего. Модуль Blackwall (см. `../CLAUDE.md`, план: `../docs/blackwall-skin-plan.md`).
+External attack surface scanner — looks at your infrastructure **from outside
+the perimeter**, through an attacker's eyes. A Blackwall module (see
+`../CLAUDE.md`, plan: `../docs/blackwall-skin-plan.md`).
 
-> **Только свой скоуп.** Сканируй лишь активы, которыми владеешь, или с письменным
-> разрешением. Скан чужих хостов = несанкц. доступ (ст. 272 УК РФ / CFAA).
+> **Your own scope only.** Scan only assets you own, or with written
+> permission. Scanning other people's hosts is unauthorized access
+> (Art. 272 of the Russian Criminal Code / CFAA).
 
-## Что делает (Phase 1)
+## What it does (Phase 1)
 
-Пайплайн в Docker-контейнере:
+A pipeline inside a Docker container:
 
 ```
 targets.txt ─┬─ domains ─> subfinder (passive subdomains)
@@ -19,50 +21,51 @@ targets.txt ─┬─ domains ─> subfinder (passive subdomains)
                           -> output/<timestamp>/  (JSONL + SUMMARY.txt)
 ```
 
-Инструменты: ProjectDiscovery (subfinder, dnsx, asnmap, naabu, httpx, tlsx, nuclei)
-+ nmap/masscan в рантайме.
+Tools: ProjectDiscovery (subfinder, dnsx, asnmap, naabu, httpx, tlsx, nuclei)
+plus nmap/masscan in the runtime image.
 
-## Требования
+## Requirements
 
-- Docker (на macOS — OrbStack или Docker Desktop; демон должен быть запущен).
+- Docker (on macOS — OrbStack or Docker Desktop; the daemon must be running).
 
-## Запуск
+## Running
 
 ```bash
 cd blackwall-scan
-./run.sh                  # top-1000 портов, без nuclei
-RUN_NUCLEI=1 ./run.sh     # + проверки exposure/misconfig/takeover
-PORTS="-p -" ./run.sh     # полный скан 65535 TCP (долго)
-./run.sh --build          # пересобрать образ
+./run.sh                  # top 1000 ports, no nuclei
+RUN_NUCLEI=1 ./run.sh     # + exposure/misconfig/takeover checks
+PORTS="-p -" ./run.sh     # full scan of all 65535 TCP ports (slow)
+./run.sh --build          # rebuild the image
 ```
 
-Цели — в `targets.txt` (по одной на строку, домен или IPv4).
+Targets go in `targets.txt` (one per line, a domain or an IPv4 address).
 
-Результаты — в `output/<timestamp>/`:
-- `SUMMARY.txt` — человекочитаемая сводка
-- `ports.jsonl`, `http.jsonl`, `tls.jsonl`, `dns.jsonl`, `nuclei.jsonl` — сырьё (JSONL)
-- `san_discovered.txt` — поддомены из SAN сертификатов (seed для следующего прогона)
+Results land in `output/<timestamp>/`:
+- `SUMMARY.txt` — human-readable summary
+- `ports.jsonl`, `http.jsonl`, `tls.jsonl`, `dns.jsonl`, `nuclei.jsonl` — raw data (JSONL)
+- `san_discovered.txt` — subdomains found in certificate SANs (seed for the next run)
 
-## Переменные
+## Variables
 
-| Env | Default | Назначение |
+| Env | Default | Purpose |
 |---|---|---|
-| `PORTS` | `-top-ports 1000` | Спек портов naabu (`-p -` = все 65535) |
-| `RUN_NUCLEI` | `0` | `1` — включить nuclei |
-| `NUCLEI_TAGS` | `exposure,misconfig,takeover,default-login` | Теги nuclei |
+| `PORTS` | `-top-ports 1000` | naabu port spec (`-p -` = all 65535) |
+| `RUN_NUCLEI` | `0` | `1` enables nuclei |
+| `NUCLEI_TAGS` | `exposure,misconfig,takeover,default-login` | nuclei tags |
 | `RATE` | `1000` | naabu packet rate |
 
-## Заметки
+## Notes
 
-- naabu использует **connect-scan** (`-s c`) — не требует привилегий. Для SYN-скана
-  (быстрее) добавь `--cap-add=NET_ADMIN,NET_RAW` в `run.sh`.
-- **Один vantage point** (твой ISP). Полноты ради — позже гонять и с внешнего VPS.
-- **Cloudflare/CDN**: домен за CF (напр. `fehu.dev`) резолвится в edge — скан домена
-  бьёт по Cloudflare, не по origin. Origin проверяй по прямым IP.
-- IPv6 пока не сканируется (TODO).
-- `output/` в `.gitignore` — результаты не коммитятся.
+- naabu uses a **connect scan** (`-s c`) — no privileges needed. For a SYN scan
+  (faster), add `--cap-add=NET_ADMIN,NET_RAW` in `run.sh`.
+- **A single vantage point** (your ISP). For completeness, later also run it
+  from an external VPS.
+- **Cloudflare/CDN**: a domain behind CF (e.g. `fehu.dev`) resolves to the edge —
+  scanning the domain hits Cloudflare, not the origin. Check the origin by its direct IPs.
+- IPv6 is not scanned yet (TODO).
+- `output/` is in `.gitignore` — results are not committed.
 
-## Статус
+## Status
 
-См. `STATUS.md`. Phase 1 (MVP-сканер) — в работе. Дальше: хранение + дифф во
-времени (ClickHouse), алерты через `blackwall-voice`, inside-out ground-truth дифф.
+See `STATUS.md`. Phase 1 (MVP scanner) is in progress. Next: storage + diffing
+over time (ClickHouse), alerts via `blackwall-voice`, inside-out ground-truth diff.

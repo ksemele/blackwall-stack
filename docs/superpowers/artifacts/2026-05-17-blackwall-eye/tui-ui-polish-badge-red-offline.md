@@ -20,4 +20,4 @@
 - The QF1012 lint fix and Task C2 landed in the same commit since both touched `agents/list.go` on adjacent lines.
 
 ## Open questions
-- нет
+- none

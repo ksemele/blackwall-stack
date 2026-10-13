@@ -3,88 +3,86 @@ module: blackwall-voice
 status: in_progress
 stage: 2
 last_updated: 2026-08-31
-last_task: "Роль node-exporter + Prometheus/Grafana как compose-сервисы стенда; метрики трёх хостов доезжают, дашборд Blackwall hosts провижинится из репозитория"
-next_task: "Настроить реальный Telegram bot token + chat_id через ansible-vault и протестировать end-to-end доставку алертов"
+last_task: "node-exporter role + Prometheus/Grafana as lab compose services; metrics from three hosts arrive, the Blackwall hosts dashboard is provisioned from the repo"
+next_task: "Set a real Telegram bot token + chat_id via ansible-vault and test end-to-end alert delivery"
 blockers: []
 ---
 
-## Что сделано
+## Done
 
-### Stage 2 — метрики хостов
+### Stage 2 — host metrics
 
-- **`ansible/roles/node-exporter/`** — ставит `prometheus-node-exporter` из apt
-  (`node_exporter_install_method: apt`), с фолбэком на tarball с GitHub.
-  Слушает `0.0.0.0:9100`, systemd enabled + started.
-- **`ansible/playbooks/metrics.yml`** — раскатка на всю группу `all`.
-- **`ansible/playbooks/verify-metrics.yml`** — юнит active + `/metrics` отдаёт
-  `node_load1` и `node_memory_MemTotal_bytes`.
-- **Prometheus + Grafana — compose-сервисы стенда** (`black-metrics-00`,
-  `black-grafana-00`), конфиги в `tests/docker/prometheus/` и
-  `tests/docker/grafana/`: scrape-конфиг, datasource и дашборд
-  «Blackwall hosts» провижинятся из репозитория, ручных шагов нет.
-- Проверено на живом стенде: `metrics.yml` ok=7 на трёх хостах, Prometheus
-  скрейпит `black-master-00` и `black-host-01`, `node_load1` возвращает данные.
-
-### Stage 2 — Telegram Alerter
+- **`ansible/roles/node-exporter/`** — installs `prometheus-node-exporter` from apt
+  (`node_exporter_install_method: apt`), with a fallback to the GitHub tarball.
+  Listens on `0.0.0.0:9100`, systemd enabled + started.
+- **`ansible/playbooks/metrics.yml`** — rollout to the whole `all` group.
+- **`ansible/playbooks/verify-metrics.yml`** — unit active + `/metrics` serves
+  `node_load1` and `node_memory_MemTotal_bytes`.
+- **Prometheus + Grafana as lab compose services** (`black-metrics-00`,
+  `black-grafana-00`), configs in `tests/docker/prometheus/` and
+  `tests/docker/grafana/`: the scrape config, datasource and the
+  "Blackwall hosts" dashboard are provisioned from the repo, no manual steps.
+- Verified on the live lab: `metrics.yml` ok=7 on three hosts, Prometheus
+  scrapes `black-master-00` and `black-host-01`, `node_load1` returns data.
 
 ### Stage 2 — Telegram Alerter
 
-- **`ansible/roles/telegram-alerter/defaults/main.yml`** — все переменные с defaults:
+- **`ansible/roles/telegram-alerter/defaults/main.yml`** — all variables with defaults:
   `severity_threshold`, `poll_interval`, `alerter_state_file`, `alerter_log_file`,
   `alerter_install_dir`, `telegram_bot_token`, `telegram_chat_id`
 
-- **`ansible/roles/telegram-alerter/tasks/main.yml`** — задачи:
-  создание директорий, деплой скрипта + unit, `daemon_reload` + enable + start
+- **`ansible/roles/telegram-alerter/tasks/main.yml`** — tasks:
+  create directories, deploy the script + unit, `daemon_reload` + enable + start
 
-- **`ansible/roles/telegram-alerter/handlers/main.yml`** — хендлеры:
+- **`ansible/roles/telegram-alerter/handlers/main.yml`** — handlers:
   `Reload systemd`, `Restart voice-alerter`
 
-- **`ansible/roles/telegram-alerter/templates/alerter.py.j2`** — Python 3 скрипт:
-  - Tail-follow `/var/ossec/logs/alerts/alerts.json` (seek to EOF при старте)
-  - Фильтрация по `rule.level >= severity_threshold`
-  - Дедупликация по `id` через state file
-  - Форматирование Telegram-сообщения (hostname, level, description, timestamp)
-  - Отправка через `urllib.request` (без внешних pip-зависимостей)
-  - Обнаружение замены файла (inode rotation) — автоматически переоткрывает лог
-  - Логирование в stdout (systemd захватывает в `alerter_log_file`)
+- **`ansible/roles/telegram-alerter/templates/alerter.py.j2`** — Python 3 script:
+  - Tail-follows `/var/ossec/logs/alerts/alerts.json` (seeks to EOF at start)
+  - Filters on `rule.level >= severity_threshold`
+  - Deduplicates by `id` via a state file
+  - Formats the Telegram message (hostname, level, description, timestamp)
+  - Sends via `urllib.request` (no external pip dependencies)
+  - Detects file replacement (inode rotation) — reopens the log automatically
+  - Logs to stdout (systemd captures it into `alerter_log_file`)
 
 - **`ansible/roles/telegram-alerter/templates/alerter.service.j2`** — systemd unit:
   `User=root`, `Restart=on-failure`, `RestartSec=10s`, `PYTHONUNBUFFERED=1`
 
-- **`ansible/playbooks/voice.yml`** — деплой `telegram-alerter` на `wazuh_managers`
+- **`ansible/playbooks/voice.yml`** — deploys `telegram-alerter` to `wazuh_managers`
 
-- **`ansible/playbooks/verify-voice.yml`** — верификация:
+- **`ansible/playbooks/verify-voice.yml`** — verification:
   - `systemctl is-active voice-alerter`
-  - Инъекция синтетического алерта (level=10) в `alerts.json` через `printf >> `
-  - Ожидание `poll_interval + 3` секунд
-  - Проверка лога алертера (grep по synthetic ID)
-  - Проверка state file (ignore_errors=true при недействительном токене)
+  - Injects a synthetic alert (level=10) into `alerts.json` via `printf >> `
+  - Waits `poll_interval + 3` seconds
+  - Checks the alerter log (grep for the synthetic ID)
+  - Checks the state file (ignore_errors=true with an invalid token)
 
-### Результаты тестирования
+### Test results
 
 - `ansible-playbook voice.yml` → `ok=9, changed=2, failed=0`
 - `ansible-playbook verify-voice.yml` → `ok=13, changed=1, failed=0`
-- Сервис `voice-alerter` активен на `black-master-00` (Docker test env; на момент теста назывался `black-00`)
-- Алертер корректно читает реальные Wazuh-алерты из `alerts.json`
-- Синтетические алерты (level=10) подхватываются и логируются
-- Telegram 404 ожидаем (токен в hosts.yml невалиден)
+- The `voice-alerter` service is active on `black-master-00` (Docker test env; it was called `black-00` at the time of the test)
+- The alerter correctly reads real Wazuh alerts from `alerts.json`
+- Synthetic alerts (level=10) are picked up and logged
+- Telegram 404 is expected (the token in hosts.yml was invalid)
 
-## Открытые вопросы
+## Open questions
 
-- `telegram_bot_token` и `telegram_chat_id`: на стенде берутся из env (`BW_TELEGRAM_*` в `.envrc`, direnv); из истории git вычищены 2026-10-12. Для прода — ansible-vault.
-- State file (`sent_ids.txt`) растёт неограниченно — в будущем нужна ротация/TTL.
+- `telegram_bot_token` and `telegram_chat_id`: in the lab they come from env (`BW_TELEGRAM_*` in `.envrc`, direnv); scrubbed from git history on 2026-10-12. For prod — ansible-vault.
+- The state file (`sent_ids.txt`) grows without bound — needs rotation/TTL eventually.
 
-## Решения
+## Decisions
 
-- Wazuh не отдаёт Prometheus-метрики нативно — экспортер для него не делали.
-  «Поступление метрик» проверяется по node_exporter, здоровье агентов — через
+- Wazuh exposes no Prometheus metrics natively — no exporter was built for it.
+  "Metrics are arriving" is checked via node_exporter, agent health via the
   Wazuh API (`tests/bin/bw-check wazuh`).
-- Prometheus/Grafana живут в compose стенда, а не в ansible-ролях: это
-  инфраструктура тестовой среды, а не то, что раскатывается на прод-хосты.
-  node_exporter — наоборот, роль: он ставится на реальные хосты.
-- `bw-check voice` даёт SKIP, если алертер не раскатан: `bw-lab provision all`
-  намеренно не включает voice — ему нужен настоящий Telegram-токен.
-- Дедупликация: `id` → `sent_ids.txt` (персистентно между рестартами)
-- Inode rotation detection: сервис переоткрывает файл при замене (линейный файл vs log rotate)
-- Логирование: Python → stdout → systemd `StandardOutput=append:` (один путь, без дублирования)
-- Dashboard (OpenSearch) отложен — не входит в Stage 2
+- Prometheus/Grafana live in the lab compose file, not in ansible roles: they
+  are test-environment infrastructure, not something rolled out to prod hosts.
+  node_exporter is the opposite — a role, installed on real hosts.
+- `bw-check voice` gives SKIP when the alerter is not deployed: `bw-lab provision all`
+  deliberately leaves voice out — it needs a real Telegram token.
+- Dedup: `id` → `sent_ids.txt` (persistent across restarts)
+- Inode rotation detection: the service reopens the file when it is replaced (linear file vs log rotate)
+- Logging: Python → stdout → systemd `StandardOutput=append:` (one path, no duplication)
+- Dashboard (OpenSearch) deferred — not part of Stage 2
