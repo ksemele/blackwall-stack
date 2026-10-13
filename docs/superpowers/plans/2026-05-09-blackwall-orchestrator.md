@@ -169,7 +169,7 @@ Each such directory is a Blackwall module. Read every `STATUS.md` found.
 Parse the YAML front-matter from each `STATUS.md` and render this table:
 
 ```
-BLACKWALL — статус модулей
+BLACKWALL — module status
 ──────────────────────────
 [<status>] <module>    Stage <stage> | <next_task>
 ...
@@ -183,10 +183,10 @@ Status badge format:
 
 Example:
 ```
-BLACKWALL — статус модулей
+BLACKWALL — module status
 ──────────────────────────
-[>>>>·] blackwall-eye    Stage 1 | Следующее: Ansible роль wazuh-agent
-[·····] blackwall-voice  Не начат
+[>>>>·] blackwall-eye    Stage 1 | Next: wazuh-agent Ansible role
+[·····] blackwall-voice  Not started
 ```
 
 ## Step 3: Present options and wait
@@ -195,11 +195,11 @@ After the status table, show numbered options and wait for the user's choice.
 Do NOT auto-select. Do NOT proceed without user input.
 
 ```
-Что делаем?
-  1. Продолжить <in_progress-module> — <next_task>
-  2. Начать <pending-module>
-  3. Показать детали модуля [имя]
-  4. Ничего, только статус
+What next?
+  1. Continue <in_progress-module> — <next_task>
+  2. Start <pending-module>
+  3. Show module details [name]
+  4. Nothing, status only
 ```
 
 Only show option 1 for modules with status `in_progress`.
@@ -227,9 +227,9 @@ Include this instruction to the subagent:
 >    set `next_task` to what should happen next, update `last_updated`,
 >    update `status` if appropriate.
 > 2. Return a brief report (3-5 lines):
->    ✓ Выполнено: <what was done>
->    → Следующее: <next_task>
->    ⚠ Вопросы: <open questions, if any>
+>    ✓ Done: <what was done>
+>    → Next: <next_task>
+>    ⚠ Questions: <open questions, if any>
 
 ## Step 5: Show report and return to idle
 
@@ -370,26 +370,26 @@ module: blackwall-eye
 status: in_progress
 stage: 1
 last_updated: 2026-05-09
-last_task: "Создан ARCHITECTURE.md и базовая структура документации"
-next_task: "Создать Ansible роль wazuh-manager: установка пакетов, базовый ossec.conf, systemd unit"
+last_task: "Created ARCHITECTURE.md and the base documentation structure"
+next_task: "Create the wazuh-manager Ansible role: package install, base ossec.conf, systemd unit"
 blockers: []
 ---
 
-## Что сделано
+## Done
 
-- `docs/ARCHITECTURE.md` — полная архитектура, компоненты, detection coverage, deployment model
-- Структура репозитория спроектирована (см. ARCHITECTURE.md → Repository Layout)
+- `docs/ARCHITECTURE.md` — full architecture, components, detection coverage, deployment model
+- Repository structure designed (see ARCHITECTURE.md → Repository Layout)
 
-## Открытые вопросы
+## Open questions
 
-- Версия Wazuh: зафиксировать на 4.x (current stable) или конкретный minor?
-- Molecule driver: docker или vagrant для тестов Ansible-ролей?
+- Wazuh version: pin to 4.x (current stable) or a specific minor?
+- Molecule driver: docker or vagrant for Ansible role tests?
 
-## Решения
+## Decisions
 
 - Target OS: Ubuntu 22.04 LTS / Debian 12 (primary), Rocky Linux 9 (secondary)
-- Deployment: Ansible only, без Terraform на первом этапе
-- Alerting: Telegram/Slack/webhook (реализуется в blackwall-voice, не здесь)
+- Deployment: Ansible only, no Terraform at the first stage
+- Alerting: Telegram/Slack/webhook (implemented in blackwall-voice, not here)
 ```
 
 - [ ] **Step 2: Verify YAML front-matter is valid**
@@ -421,7 +421,7 @@ cd /path/to/blackwall
 
 Type `/blackwall` and verify the output:
 - Status table appears with `blackwall-eye` shown as `[>>>>·]` (in_progress)
-- `next_task` shown correctly: "Создать Ansible роль wazuh-manager..."
+- `next_task` shown correctly: "Create the wazuh-manager Ansible role..."
 - Options list appears with option 1 to continue `blackwall-eye`
 - Orchestrator waits — does NOT auto-proceed
 

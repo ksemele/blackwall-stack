@@ -19,8 +19,8 @@
   - `app.TestApp_PinsFooterToBottomOnResize` — asserts rendered height matches `WindowSizeMsg.Height` and the second-to-last line is the horizontal rule
 
 ## Deviations
-- Tab badge uses the same colour as the context badge (yellow) per the user's request "сделать выделение также как контекст, фоном". Two yellow elements coexist in the top chrome; can be split later if it reads as visually noisy.
-- Columns are not yet user-configurable — the request was forward-looking ("колонки будут потом меняться или конфигурироваться"); the helper is structured so column specs are passed in by each view, which is the natural extension point.
+- Tab badge uses the same colour as the context badge (yellow) per the user's request "make the highlight the same as the context, as a background". Two yellow elements coexist in the top chrome; can be split later if it reads as visually noisy.
+- Columns are not yet user-configurable — the request was forward-looking ("columns will change or become configurable later"); the helper is structured so column specs are passed in by each view, which is the natural extension point.
 
 ## Open questions
-- нет
+- none

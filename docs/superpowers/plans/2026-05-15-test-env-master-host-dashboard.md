@@ -1972,10 +1972,10 @@ blockers: []
 ---
 ```
 
-Also append a bullet to the "Что сделано" body section:
+Also append a bullet to the "Done" body section:
 
 ```markdown
-- 2026-05-15: переработана тестовая среда — `black-master-00` (manager + indexer + dashboard) + `black-host-01` (agent). Добавлены роли `wazuh-indexer`, `wazuh-dashboard`. Manager научен шипить алерты в indexer через filebeat. Сертификаты генерируются разово через `wazuh-certificates.yml`. Дашборд доступен на `https://localhost:5601` (admin / Blackwall1!). Агент полностью параметризован: `wazuh_manager_host`/`port`/`protocol`/`enrollment_*` — позволяет указать любого мастера через `-e` или group_vars. Spec: `docs/superpowers/specs/2026-05-15-test-env-master-host-dashboard-design.md`. Plan: `docs/superpowers/plans/2026-05-15-test-env-master-host-dashboard.md`.
+- 2026-05-15: test environment reworked — `black-master-00` (manager + indexer + dashboard) + `black-host-01` (agent). Added the `wazuh-indexer` and `wazuh-dashboard` roles. The manager ships alerts to the indexer via filebeat. Certificates are generated once via `wazuh-certificates.yml`. The dashboard is at `https://localhost:5601` (admin / Blackwall1!). The agent is fully parametrised: `wazuh_manager_host`/`port`/`protocol`/`enrollment_*` — any master can be targeted via `-e` or group_vars. Spec: `docs/superpowers/specs/2026-05-15-test-env-master-host-dashboard-design.md`. Plan: `docs/superpowers/plans/2026-05-15-test-env-master-host-dashboard.md`.
 ```
 
 - [ ] **Step 2: Commit**
