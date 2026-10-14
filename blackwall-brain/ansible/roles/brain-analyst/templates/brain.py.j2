@@ -23,6 +23,7 @@ POLL_INTERVAL      = {{ poll_interval }}
 CLAUDE_API_KEY     = "{{ claude_api_key }}"
 CLAUDE_MODEL       = "{{ claude_model }}"
 MAX_TOKENS         = {{ max_tokens }}
+CLAUDE_EFFORT      = "{{ claude_effort }}"
 BOT_TOKEN          = "{{ telegram_bot_token }}"
 CHAT_ID            = "{{ telegram_chat_id }}"
 TELEGRAM_URL       = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
@@ -88,6 +89,8 @@ def call_claude(alert: dict) -> str | None:
     payload = json.dumps({
         "model": CLAUDE_MODEL,
         "max_tokens": MAX_TOKENS,
+        # One-line classification: low effort keeps thinking short and cheap.
+        "output_config": {"effort": CLAUDE_EFFORT},
         "messages": [
             {"role": "user", "content": prompt}
         ],
@@ -105,7 +108,12 @@ def call_claude(alert: dict) -> str | None:
     try:
         with urllib.request.urlopen(req, timeout=30) as resp:
             body = json.loads(resp.read())
-            return body["content"][0]["text"].strip()
+        # Thinking blocks come first on current models; take the text block.
+        text = next((b["text"] for b in body.get("content", []) if b.get("type") == "text"), "")
+        if not text.strip():
+            log.error("Claude API returned no text (stop_reason=%s)", body.get("stop_reason"))
+            return None
+        return text.strip()
     except urllib.error.HTTPError as exc:
         log.error("Claude API HTTP error %d: %s", exc.code, exc.read()[:200])
         return None

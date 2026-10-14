@@ -92,7 +92,8 @@ blackwall-brain/
 | `poll_interval` | `5` | Seconds between log tail reads |
 | `claude_api_key` | `""` | Anthropic API key — must be set |
 | `claude_model` | `claude-haiku-5-5` | Claude model for analysis |
-| `max_tokens` | `300` | Max tokens in Claude response |
+| `claude_effort` | `low` | Effort (thinking depth) for the one-line classification |
+| `max_tokens` | `2048` | Max tokens in Claude response, thinking included |
 | `brain_state_file` | `/var/lib/brain-analyst/sent_ids.txt` | Dedup state |
 | `brain_log_file` | `/var/log/brain-analyst/analyst.log` | Service log |
 | `brain_alert_log` | `/var/ossec/logs/alerts/alerts.json` | Alert source |
