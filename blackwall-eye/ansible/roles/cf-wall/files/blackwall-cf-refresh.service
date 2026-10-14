@@ -7,8 +7,6 @@ Wants=network-online.target
 [Service]
 Type=oneshot
 ExecStart=/usr/local/sbin/blackwall-cf-refresh
-EnvironmentFile=-/etc/default/blackwall-cf-refresh
-
-# The script changes nothing on error (it loads before persisting); there is no point failing
-# the systemd unit on a network glitch — the next timer run will catch up.
-SuccessExitStatus=0
+# The script sources /etc/default/blackwall-cf-refresh itself.
+# A failed refresh (network glitch, bad data, rejected ruleset) changes nothing
+# and leaves this unit failed: that is the visible signal. The next timer run retries.

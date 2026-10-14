@@ -13,8 +13,16 @@
 
 set -euo pipefail
 
+# The defaults file sets plain assignments; a value passed in the environment
+# by the caller must still win over it.
+_caller_wan_if="${WAN_IF-}"
+_caller_v4_url="${V4_URL-}"
+_caller_v6_url="${V6_URL-}"
 # shellcheck source=/dev/null
 [ -r /etc/default/blackwall-cf-refresh ] && . /etc/default/blackwall-cf-refresh
+[ -z "$_caller_wan_if" ] || WAN_IF="$_caller_wan_if"
+[ -z "$_caller_v4_url" ] || V4_URL="$_caller_v4_url"
+[ -z "$_caller_v6_url" ] || V6_URL="$_caller_v6_url"
 
 TABLE="${TABLE:-blackwall_wall}"
 RULES_OUT="${RULES_OUT:-/etc/nftables.d/blackwall-wall.nft}"

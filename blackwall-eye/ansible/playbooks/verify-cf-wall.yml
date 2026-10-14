@@ -116,3 +116,18 @@
       ansible.builtin.assert:
         that: before.stat.checksum == after_fail.stat.checksum
         fail_msg: "a failed run changed {{ wall_file }}"
+
+    # The timer's own path: the unit must run the script successfully.
+    - name: Run the refresh through systemd
+      ansible.builtin.command: systemctl start blackwall-cf-refresh.service
+      changed_when: false
+
+    - name: Unit is not failed
+      ansible.builtin.command: systemctl is-failed blackwall-cf-refresh.service
+      register: unit_failed
+      changed_when: false
+      failed_when: unit_failed.stdout | trim == 'failed'
+
+    - name: Wall file is still valid after the systemd run
+      ansible.builtin.command: nft -c -f {{ wall_file }}
+      changed_when: false

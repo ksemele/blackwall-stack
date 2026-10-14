@@ -1,11 +1,11 @@
 # Managed by the Ansible role blackwall-eye/cf-wall. Do not edit by hand.
-# Read by /usr/local/sbin/blackwall-cf-refresh.
+# Sourced by /usr/local/sbin/blackwall-cf-refresh (plain assignments only).
 
 # Sources allowed straight to the origin on the filtered ports (space-separated).
 ADMIN_ALLOW="{{ cfwall_admin_allow | join(' ') }}"
 
 # External interface; empty = from the default route.
-WAN_IF="${WAN_IF:-{{ cfwall_wan_if }}}"
+WAN_IF="{{ cfwall_wan_if }}"
 
 # Filtered TCP ports.
 PORTS="{{ cfwall_ports | join(' ') }}"
