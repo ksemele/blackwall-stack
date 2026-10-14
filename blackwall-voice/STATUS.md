@@ -2,13 +2,27 @@
 module: blackwall-voice
 status: in_progress
 stage: 2
-last_updated: 2026-08-31
-last_task: "node-exporter role + Prometheus/Grafana as lab compose services; metrics from three hosts arrive, the Blackwall hosts dashboard is provisioned from the repo"
-next_task: "Set a real Telegram bot token + chat_id via ansible-vault and test end-to-end alert delivery"
+last_updated: 2026-10-14
+last_task: "End-to-end Telegram delivery verified in the lab (real bot, threshold 10); alerter logs Telegram error bodies and retries failed sends"
+next_task: "ansible-vault for prod Telegram secrets; rotation/TTL for sent_ids.txt"
 blockers: []
 ---
 
 ## Done
+
+### 2026-10-14 — end-to-end Telegram delivery
+
+- Verified in the lab with a real bot: `bw-check voice` PASS, the synthetic
+  level-10 alert arrived in Telegram.
+- Root cause of the earlier 403: `telegram_chat_id` was the bot's own id
+  (Telegram: "the bot can't send messages to the bot"). README explains how to
+  get the right id.
+- `alerter.py`: logs the Telegram error body; a failed send is retried
+  3 times and then logged as dropped (the old "will retry next cycle" never
+  retried — the tail had already moved past the line).
+- `verify-voice.yml`: the delivery assert is strict when a token is set.
+- Lab inventory: `severity_threshold: 10` (level-7 provisioning noise,
+  ~280 alerts/day at the default 5).
 
 ### Stage 2 — host metrics
 
