@@ -114,11 +114,32 @@
     <check_pids>yes</check_pids>
     <check_ports>yes</check_ports>
     <check_if>yes</check_if>
-    <frequency>43200</frequency>
-    <rootkit_files>/var/ossec/etc/shared/rootkit_files.txt</rootkit_files>
-    <rootkit_trojans>/var/ossec/etc/shared/rootkit_trojans.txt</rootkit_trojans>
+    <frequency>{{ wazuh_rootcheck_frequency }}</frequency>
+    <rootkit_files>etc/rootcheck/rootkit_files.txt</rootkit_files>
+    <rootkit_trojans>etc/rootcheck/rootkit_trojans.txt</rootkit_trojans>
     <skip_nfs>yes</skip_nfs>
   </rootcheck>
+
+  <!-- Security Configuration Assessment on the manager host (agent 000) -->
+  <sca>
+    <enabled>yes</enabled>
+    <scan_on_start>yes</scan_on_start>
+    <interval>{{ wazuh_sca_interval }}</interval>
+    <skip_nfs>yes</skip_nfs>
+  </sca>
+
+  <!-- System inventory of the manager host (agent 000): hardware, processes, packages, network -->
+  <wodle name="syscollector">
+    <disabled>no</disabled>
+    <interval>{{ wazuh_syscollector_interval }}</interval>
+    <scan_on_start>yes</scan_on_start>
+    <hardware>yes</hardware>
+    <os>yes</os>
+    <network>yes</network>
+    <packages>yes</packages>
+    <ports all="no">yes</ports>
+    <processes>yes</processes>
+  </wodle>
 
   <!-- Active response disabled for Stage 1 -->
   <active-response>
