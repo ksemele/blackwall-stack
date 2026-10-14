@@ -23,13 +23,19 @@
     mode: "0755"
 
 - name: Render ruleset to a staging path
-  ansible.builtin.include_tasks: render.yml
+  ansible.builtin.include_tasks:
+    file: render.yml
+    apply:
+      # The staging dotfile does not match the *.nft include glob, so writing
+      # it in a --check dry run is harmless and lets the steps below run.
+      check_mode: false
   vars:
     nft_render_dest: /etc/nftables.d/.blackwall-base.nft.new
 
 - name: Syntax-check the rendered ruleset
   ansible.builtin.command: nft -c -f /etc/nftables.d/.blackwall-base.nft.new
   changed_when: false
+  check_mode: false
 
 - name: Install checked ruleset
   ansible.builtin.copy:
@@ -46,6 +52,7 @@
     path: /etc/nftables.d/.blackwall-base.nft.new
     state: absent
   changed_when: false
+  check_mode: false
 
 - name: Install nftables.conf
   ansible.builtin.template:

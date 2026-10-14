@@ -105,6 +105,9 @@ ansible-playbook ansible/playbooks/nftables.yml
 ansible-playbook ansible/playbooks/verify-nftables.yml
 ```
 
+The policy, port and no-`flush` checks run on every host; the reload/stop and
+container-DNS part runs only in the lab (`bw_lab: true`).
+
 | Variable | Default | Purpose |
 |---|---|---|
 | `nft_enabled` | `true` | set to `false` to skip the host entirely |

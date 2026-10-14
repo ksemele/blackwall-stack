@@ -1,4 +1,9 @@
 ---
+- name: Real-IP output path is required with an nginx container
+  ansible.builtin.assert:
+    that: cfwall_nginx_container == '' or cfwall_realip_out != ''
+    fail_msg: cfwall_nginx_container is set but cfwall_realip_out is empty
+
 # Rocky ships curl-minimal, which conflicts with the curl package: install
 # curl only when no curl binary is present.
 - name: Look for curl
@@ -6,6 +11,7 @@
   register: curl_probe
   changed_when: false
   failed_when: false
+  check_mode: false
 
 - name: Install curl
   ansible.builtin.package:
@@ -13,11 +19,16 @@
     state: present
   when: curl_probe.rc != 0
 
-- name: Require nftables from the nftables role
+- name: Require the nftables role first
   ansible.builtin.stat:
-    path: /etc/nftables.d
-  register: nft_dir
-  failed_when: not nft_dir.stat.exists
+    path: "{{ item }}"
+  register: nft_req
+  failed_when: not nft_req.stat.exists
+  loop:
+    - /etc/nftables.d
+    - /etc/systemd/system/nftables.service.d/blackwall.conf
+  loop_control:
+    label: "{{ item }}"
 
 - name: Install blackwall-cf-refresh
   ansible.builtin.copy:

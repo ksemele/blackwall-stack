@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 # blackwall-cf-refresh — refreshes the Cloudflare prefix lists in two places:
-#   1) nftables sets inet blackwall_wall {cf_v4,cf_v6}  (who may reach 80/443)
+#   1) nftables sets inet blackwall_wall {cf_v4,cf_v6}  (who may reach the filtered ports)
 #   2) nginx set_real_ip_from                         (whose IP counts as the client)
 #
 # Both lists must stay in sync: if CF adds a prefix and we don't update —
@@ -86,6 +86,10 @@ fetch "$V6_URL" > "$tmp/v6.raw"
 # HTML placeholders, captive-portal redirects and junk in the response.
 grep -Ex '([0-9]{1,3}\.){3}[0-9]{1,3}/[0-9]{1,2}'  "$tmp/v4.raw" > "$tmp/v4" || true
 grep -Eix '[0-9a-f:]+(:[0-9a-f]*)*/[0-9]{1,3}'     "$tmp/v6.raw" > "$tmp/v6" || true
+
+# Reject absurdly short prefixes (0.0.0.0/0, ::/0 ...): they would open the origin.
+awk -F/ '$2 < 8 { bad=1 } END { exit bad }' "$tmp/v4" || die "suspicious IPv4 prefix (length < 8) — update aborted"
+awk -F/ '$2 < 12 { bad=1 } END { exit bad }' "$tmp/v6" || die "suspicious IPv6 prefix (length < 12) — update aborted"
 
 n4="$(wc -l < "$tmp/v4" | tr -d ' ')"
 n6="$(wc -l < "$tmp/v6" | tr -d ' ')"

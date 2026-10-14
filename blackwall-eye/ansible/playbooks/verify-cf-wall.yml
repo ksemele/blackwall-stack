@@ -36,8 +36,11 @@
       changed_when: false
 
     - name: Timer is enabled and active
-      ansible.builtin.command: systemctl is-enabled blackwall-cf-refresh.timer
+      ansible.builtin.command: "systemctl {{ item }} blackwall-cf-refresh.timer"
       changed_when: false
+      loop:
+        - is-enabled
+        - is-active
 
     # A refresh that fetches junk must abort and leave the live rules alone.
     - name: Checksum before a bad refresh

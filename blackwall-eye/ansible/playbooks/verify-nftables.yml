@@ -67,18 +67,23 @@
           {{ inventory_hostname }} — it would wipe tables the role does not own
           (Docker NAT in the lab, netavark on podman hosts)
 
-    # Docker's embedded DNS lives in the container's `ip nat` table. A global
-    # flush kills it; resolving another container's name proves it survived.
-    - name: Reload nftables
-      ansible.builtin.systemd:
-        name: nftables
-        state: reloaded
+    # Lab only: reloads/stops the firewall and probes lab container names, which
+    # is unsafe on a real host. The lab sets bw_lab: true in its group_vars.
+    - name: Reload/stop survival checks (lab only)
+      when: bw_lab | default(false) | bool
+      block:
+      # Docker's embedded DNS lives in the container's `ip nat` table. A global
+      # flush kills it; resolving another container's name proves it survived.
+      - name: Reload nftables
+        ansible.builtin.systemd:
+          name: nftables
+          state: reloaded
 
-    - name: Stop and start nftables
-      ansible.builtin.shell: systemctl stop nftables && systemctl start nftables
-      changed_when: false
+      - name: Stop and start nftables
+        ansible.builtin.shell: systemctl stop nftables && systemctl start nftables
+        changed_when: false
 
-    - name: Container DNS still resolves after reload/stop
-      ansible.builtin.command: >-
-        getent hosts {{ 'black-host-01' if inventory_hostname == 'black-master-00' else 'black-master-00' }}
-      changed_when: false
+      - name: Container DNS still resolves after reload/stop
+        ansible.builtin.command: >-
+          getent hosts {{ 'black-host-01' if inventory_hostname == 'black-master-00' else 'black-master-00' }}
+        changed_when: false

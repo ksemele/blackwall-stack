@@ -1,4 +1,7 @@
 ---
+# Marks the lab: enables the destructive parts of verify-nftables.yml.
+bw_lab: true
+
 # Lab-only: fetch Wazuh packages through the apt cache (black-aptcache-00).
 # packages.wazuh.com is HTTPS-only, and apt-cacher-ng cannot cache through a
 # CONNECT tunnel; the cache remaps this http:// URL to the https:// upstream

@@ -19,7 +19,7 @@ which its config includes, and a service drop-in that also removes
 | Variable | Default | Meaning |
 |---|---|---|
 | `cfwall_ports` | `[80, 443]` | TCP ports reachable only from Cloudflare and `cfwall_admin_allow` |
-| `cfwall_admin_allow` | `[]` | sources allowed straight to the origin, e.g. `["203.0.113.7", "198.51.100.0/24"]` |
+| `cfwall_admin_allow` | `[]` | IPv4 only: sources allowed straight to the origin, e.g. `["203.0.113.7", "198.51.100.0/24"]` |
 | `cfwall_wan_if` | `""` | external interface; empty = from the default route. Set it explicitly on production hosts; the script aborts if it cannot be detected or does not exist |
 | `cfwall_nginx_container` | `""` | podman container running nginx; empty = skip real_ip |
 | `cfwall_realip_out` | `""` | host path of `cf-realip.conf` (directory mounted as `/etc/nginx/conf.d`) |

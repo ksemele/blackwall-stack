@@ -12,7 +12,7 @@ Docker environment shared by all Blackwall modules.
 | `black-grafana-00` | Grafana |
 | `black-aptcache-00` | apt-cacher-ng — apt cache for the nodes, lab only |
 
-The three `black-*-NN` nodes are privileged with systemd as PID 1, so service
+The `black-*-NN` nodes are privileged with systemd as PID 1, so service
 management works identically to production hosts. Prometheus and Grafana are
 plain containers configured entirely from files in this repository.
 
