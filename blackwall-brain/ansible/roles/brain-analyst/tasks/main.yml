@@ -48,9 +48,9 @@
     - Reload systemd daemon
     - Restart brain-analyst service
 
-- name: Enable and start brain-analyst service
+- name: Enable and start brain-analyst (brain_enabled) or stop and disable it
   ansible.builtin.systemd:
     name: brain-analyst
-    enabled: true
-    state: started
+    enabled: "{{ brain_enabled | bool }}"
+    state: "{{ 'started' if brain_enabled | bool else 'stopped' }}"
     daemon_reload: true

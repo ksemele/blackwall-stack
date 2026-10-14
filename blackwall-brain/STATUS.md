@@ -2,7 +2,7 @@
 module: blackwall-brain
 status: in_progress
 stage: 3
-last_updated: 2026-10-14
+last_updated: 2026-10-15
 last_task: "Lab deploy with a real key: text-block parsing for thinking models, low effort, real retries, optional workspace id header, strict verify-brain, bw-lab/bw-check brain targets"
 next_task: "ansible-vault for prod secrets; decide whether voice should skip brain verify alerts"
 blockers: []
@@ -10,6 +10,9 @@ blockers: []
 
 ## Done
 
+- 2026-10-15: `brain_enabled` toggle (default `true`): `false` stops and
+  disables the service, files stay; `bw-lab provision brain -e
+  brain_enabled=false`, `bw-check brain` SKIPs while off.
 - 2026-10-14: end-to-end verified in the lab — `bw-check brain` PASS, Claude
   (`claude-haiku-5-5`) classified the synthetic alert and the analysis arrived
   in Telegram. Claude's answer is now Markdown-escaped (categories like

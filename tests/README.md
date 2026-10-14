@@ -69,7 +69,7 @@ tests/bin/bw-lab reset
 | `bw-lab down [--keep-data]` | stop the environment; volumes are removed unless `--keep-data` |
 | `bw-lab reset` | `down -v` + wipe Wazuh certificates + `up` |
 | `bw-lab status` | containers, published ports, health of Prometheus/Grafana/dashboard |
-| `bw-lab provision <target>` | ansible only: `eye`, `nftables`, `metrics`, `voice`, `cf-wall`, `brain`, `fixtures`, `all` |
+| `bw-lab provision <target> [ansible args]` | ansible only: `eye`, `nftables`, `metrics`, `voice`, `cf-wall`, `brain`, `fixtures`, `all`; `brain` passes extra args through, e.g. `-e brain_enabled=false` |
 | `bw-lab ssh <host> [cmd...]` | shell into a container (root password `blackwall`) |
 | `bw-lab logs <service> [-f]` | compose logs for one service |
 | `bw-lab open <target>` | open `dashboard`, `grafana` or `prometheus` in a browser |

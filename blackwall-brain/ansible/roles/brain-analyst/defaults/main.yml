@@ -1,4 +1,9 @@
 ---
+# Turn the AI analysis on/off without uninstalling: false stops and disables
+# the service (script, config and state stay in place). Voice is unaffected.
+#   ansible-playbook ansible/playbooks/brain.yml -e brain_enabled=false
+brain_enabled: true
+
 # Analysis threshold: only analyze alerts with rule.level >= this value
 analysis_threshold: 7
 

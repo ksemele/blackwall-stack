@@ -88,6 +88,7 @@ blackwall-brain/
 
 | Variable | Default | Description |
 |---|---|---|
+| `brain_enabled` | `true` | `false` stops and disables the service (files stay) — AI analysis off |
 | `analysis_threshold` | `7` | Minimum `rule.level` to trigger AI analysis |
 | `poll_interval` | `5` | Seconds between log tail reads |
 | `claude_api_key` | `""` | Anthropic API key — must be set |
