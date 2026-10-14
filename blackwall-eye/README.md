@@ -95,8 +95,10 @@ ansible-playbook ansible/playbooks/verify-auditd.yml
 
 ## Firewall (nftables)
 
-The `nftables` role renders `/etc/nftables.d/blackwall-base.nft` and owns
-`/etc/nftables.conf`.
+The `nftables` role renders `/etc/nftables.d/blackwall-base.nft`, owns the main
+config (`nft_conf_path`, which includes `/etc/nftables.d/*.nft`) and installs a
+`nftables.service` drop-in. Debian and RedHat families are supported (the lab
+has `black-host-01` on Ubuntu and `black-rocky-02` on Rocky Linux 9).
 
 ```bash
 ansible-playbook ansible/playbooks/nftables.yml
@@ -108,9 +110,11 @@ ansible-playbook ansible/playbooks/verify-nftables.yml
 | `nft_enabled` | `true` | set to `false` to skip the host entirely |
 | `nft_wan_if` | `eth0` | external interface |
 | `nft_public_tcp` | `[22]` | TCP ports open to everyone |
-| `nft_restricted` | `[]` | list of `{port, sources[]}` — port reachable only from those sources |
-| `nft_forward_policy` | `accept` | policy of the `forward` chain |
+| `nft_restricted` | `[]` | list of `{port, sources[], name?}` — port reachable only from those sources; the set is named `name` (default `src_<port>`) |
+| `nft_forward_policy` | `accept` | policy of the `forward` chain; `drop` adds a rate-limited log line and a counter |
 | `nft_log_drops` | `true` | rate-limited log line on drops |
+| `nft_podman` | `{}` | `{net, if}` of a podman host: anti-spoofing on the WAN, container DNS to the host, `ct status dnat accept` and container egress in `forward` |
+| `nft_conf_path` | per OS family | `/etc/nftables.conf` (Debian) or `/etc/sysconfig/nftables.conf` (RedHat) |
 
 The `input` chain is always `policy drop` with a fixed scaffolding of
 `iif lo accept`, `ct state established,related accept`, `ct state invalid drop`
@@ -123,11 +127,42 @@ Two things to know before changing the port lists:
   the role does not own — inside Docker it wipes the NAT rules of the embedded
   resolver `127.0.0.11`, killing DNS in the container while the ruleset itself
   still looks correct.
+- **`systemctl reload/stop nftables` never flush either.** The stock unit runs
+  `flush ruleset` on both; the role's drop-in
+  (`/etc/systemd/system/nftables.service.d/blackwall.conf`) re-reads the config
+  on reload and deletes only `blackwall_base` / `blackwall_wall` on stop.
 - **On a Wazuh manager, 9200 and 9300 must stay open.** filebeat and the
   dashboard reach the indexer over the interface address, not over loopback, so
   closing those ports stops alert delivery while every service stays `active`.
 
 Ports for the test environment live in `tests/inventory/group_vars/`.
+
+### Cloudflare origin filter (`cf-wall`)
+
+For a site behind Cloudflare, the `cf-wall` role lets only Cloudflare prefixes
+(and `cfwall_admin_allow`) reach `cfwall_ports` on the WAN interface. It installs
+`blackwall-cf-refresh` and a weekly timer; the script generates
+`/etc/nftables.d/blackwall-wall.nft`. Details, variables and rollback:
+[ansible/roles/cf-wall/README.md](ansible/roles/cf-wall/README.md).
+
+```bash
+ansible-playbook ansible/playbooks/cf-wall.yml        # group cf_wall
+ansible-playbook ansible/playbooks/verify-cf-wall.yml
+```
+
+### Real hosts: values stay local
+
+Host-specific values (ports, allowed sources, podman subnet, admin IPs) go into
+a git-ignored inventory, e.g. `hosts/prod.yml` — the repository keeps only the
+roles. Before applying to a host whose ruleset was hand-made, prove the role
+renders the same table:
+
+```bash
+tools/nft-equiv hosts/prod.yml <host> hosts/<host>/nftables/blackwall-base.nft
+```
+
+It renders the role template for that host, loads both files into a throwaway
+container and diffs nft's own listing (exit 0 = equal). Needs Docker.
 
 ## Verification playbooks
 

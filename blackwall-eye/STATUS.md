@@ -2,14 +2,25 @@
 module: blackwall-eye
 status: in_progress
 stage: 1
-last_updated: 2026-10-14
-last_task: "manager host (agent 000) gets syscollector + SCA; rootcheck reads etc/rootcheck/ rootkit lists"
-next_task: "Port hosts/example.com/nftables/*.nft into the nftables role (the prod config is still outside config-as-code)"
+last_updated: 2026-10-15
+last_task: "prod firewall as code: nftables role on RHEL + podman + drop-in, new cf-wall role, nft-equiv tool, Rocky 9 lab node"
+next_task: "Owner applies nftables + cf-wall to the prod host from the local inventory (check --diff first)"
 blockers: []
 ---
 
 ## Done
 
+- 2026-10-15: prod firewall as code (spec `docs/superpowers/specs/2026-10-14-nftables-prod-port-design.md`).
+  - `nftables` role: Debian + RedHat (`nft_conf_path`), `nftables.service`
+    drop-in without `flush ruleset`, optional `nft_podman` (anti-spoof,
+    container DNS, DNAT forward, egress), named restricted sets,
+    forward-drop logging when `nft_forward_policy: drop`.
+  - New `cf-wall` role: `blackwall-cf-refresh` + weekly timer; loads the new
+    table before persisting it, aborts on a junk fetch or a missing WAN
+    interface, never leaves a rejected file on disk.
+  - `tools/nft-equiv`: proves a host's rendered table equals a reference file.
+  - Lab: `black-rocky-02` (Rocky Linux 9); `bw-lab provision cf-wall`,
+    `bw-check cf-wall`.
 - 2026-10-14: manager host inventory. `wazuh-manager` `ossec.conf` gains
   `<wodle name="syscollector">` and `<sca>` (agent 000 was empty in the TUI
   Hardware/Top/Packages/Network/Security tabs); rootcheck now points at the

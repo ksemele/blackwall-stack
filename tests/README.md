@@ -291,9 +291,11 @@ ansible-playbook ansible/playbooks/verify-nftables.yml
 | `nft_enabled` | `true` | set to `false` to skip the host entirely |
 | `nft_wan_if` | `eth0` | external interface |
 | `nft_public_tcp` | `[22]` | TCP ports open to everyone |
-| `nft_restricted` | `[]` | list of `{port, sources[]}` — port reachable only from those sources |
-| `nft_forward_policy` | `accept` | policy of the `forward` chain |
+| `nft_restricted` | `[]` | list of `{port, sources[], name?}` — port reachable only from those sources; the set is named `name` (default `src_<port>`) |
+| `nft_forward_policy` | `accept` | policy of the `forward` chain; `drop` adds a rate-limited log line and a counter |
 | `nft_log_drops` | `true` | rate-limited log line on drops |
+| `nft_podman` | `{}` | `{net, if}` of a podman host: anti-spoofing on the WAN, container DNS to the host, `ct status dnat accept` and container egress in `forward` |
+| `nft_conf_path` | per OS family | `/etc/nftables.conf` (Debian) or `/etc/sysconfig/nftables.conf` (RedHat) |
 
 Ports per group live in `tests/inventory/group_vars/`:
 
