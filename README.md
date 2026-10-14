@@ -58,7 +58,21 @@ deployed but never fire in the lab (see [container limitations](./tests/README.m
 Certificates are self-signed; accept the browser warning. Tear down with
 `tests/bin/bw-lab down`, or start from scratch with `tests/bin/bw-lab reset`.
 
-### 2. Point agents at a real Wazuh master
+### 2. Watch it in the TUI
+
+[`tools/blackwall`](./tools/blackwall/) is a k9s-style terminal UI: agents,
+the `:alerts` feed and per-agent Sessions.
+
+```bash
+cd tools/blackwall && go install ./cmd/blackwall   # binary lands in ~/go/bin
+blackwall                          # first run writes ~/.config/blackwall/config.yaml (with a lab context) and exits
+blackwall --context lab --once     # agents table, then exit
+blackwall --context lab            # interactive TUI
+```
+
+See [tools/blackwall/README.md](./tools/blackwall/README.md) for config and keys.
+
+### 3. Point agents at a real Wazuh master
 
 Write your own inventory (`inventory/prod.yml`) with the target hosts and run:
 
