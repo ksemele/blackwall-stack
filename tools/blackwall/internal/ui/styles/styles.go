@@ -40,6 +40,9 @@ var (
 	// RowDown renders a full table row in red to signal an offline/broken resource (disconnected).
 	RowDown = lipgloss.NewStyle().Foreground(lipgloss.Color("9"))
 
+	// LevelCritical marks alerts of level 12 and above.
+	LevelCritical = lipgloss.NewStyle().Foreground(lipgloss.Color("9")).Bold(true)
+
 	// RowPending renders a full table row in yellow for transient/recoverable states.
 	RowPending = lipgloss.NewStyle().Foreground(lipgloss.Color("11"))
 
