@@ -162,7 +162,7 @@ check_ports() {
   # host and the container, and a break in it is invisible from the inside.
   local entry port label
   for entry in "2200:ssh black-master-00" "2201:ssh black-host-01" \
-               "5601:wazuh-dashboard" "55000:wazuh-api" "9090:prometheus" "3000:grafana"; do
+               "5601:wazuh-dashboard" "55000:wazuh-api" "9200:wazuh-indexer" "9090:prometheus" "3000:grafana"; do
     port="${entry%%:*}"
     label="${entry#*:}"
     if bw_tcp_probe localhost "$port"; then
@@ -181,6 +181,14 @@ check_wazuh() {
     bw_ansible blackwall-eye ansible/playbooks/verify-agents.yml
   bw_run "manager REST API answers" \
     bw_ansible blackwall-eye ansible/playbooks/verify-api.yml
+
+  local icode
+  icode="$(curl -sk -m 5 -o /dev/null -w '%{http_code}' -u "$BW_INDEXER_AUTH" "$BW_INDEXER_URL/" 2>/dev/null)"
+  if [[ "$icode" == "200" ]]; then
+    bw_pass "indexer answers at $BW_INDEXER_URL"
+  else
+    bw_fail "indexer does not answer at $BW_INDEXER_URL (code '$icode')"
+  fi
 
   check_fixtures
 
