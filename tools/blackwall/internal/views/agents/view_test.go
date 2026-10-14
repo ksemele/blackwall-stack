@@ -27,3 +27,19 @@ func TestView_DetailInheritsWindowSize(t *testing.T) {
 		t.Errorf("packages list height = %d, want > 0 (inherited from the window)", pk.sl.height)
 	}
 }
+
+// While a detail tab's filter prompt is open, the app must not treat typed
+// letters as global shortcuts.
+func TestView_CapturesKeysWhileDetailFilterIsOpen(t *testing.T) {
+	v := NewView(&fakeClient{}, 0)
+	if v.CapturesKeys() {
+		t.Fatal("list view must not capture keys")
+	}
+	_, _ = v.Update(app.SwitchToDetailMsg{AgentID: "002"})
+	v.detail.activeTab = 3
+	pk := v.detail.subs[3].(*PackagesModel)
+	pk.filtering = true
+	if !v.CapturesKeys() {
+		t.Error("view must capture keys while the packages filter is open")
+	}
+}

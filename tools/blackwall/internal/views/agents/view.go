@@ -93,3 +93,17 @@ func (v *View) View() string {
 
 // SetAgents is a convenience pass-through used in tests.
 func (v *View) SetAgents(a []wazuh.Agent) { v.list.SetAgents(a) }
+
+// CapturesKeys implements views.KeyCapturer: true while the active detail tab
+// is in a modal state (e.g. typing into its filter prompt).
+func (v *View) CapturesKeys() bool {
+	if v.detail == nil {
+		return false
+	}
+	sub, ok := v.detail.subs[v.detail.activeTab]
+	if !ok {
+		return false
+	}
+	kc, ok := sub.(keyCapturer)
+	return ok && kc.CapturesKeys()
+}

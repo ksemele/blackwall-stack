@@ -26,3 +26,14 @@ func TestRender_Paused(t *testing.T) {
 		t.Errorf("expected paused indicator: %q", got)
 	}
 }
+
+func TestRender_IndexerShownOnlyWhenSet(t *testing.T) {
+	with := Render(State{Context: "lab", Wazuh: "127.0.0.1:55000", Indexer: "127.0.0.1:9200", Refresh: time.Second})
+	if !strings.Contains(with, "indexer: 127.0.0.1:9200") {
+		t.Errorf("missing indexer in %q", with)
+	}
+	without := Render(State{Context: "lab", Wazuh: "127.0.0.1:55000", Refresh: time.Second})
+	if strings.Contains(without, "indexer") {
+		t.Errorf("unexpected indexer in %q", without)
+	}
+}

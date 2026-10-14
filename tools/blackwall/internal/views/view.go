@@ -13,3 +13,11 @@ type View interface {
 	Name() string
 	Hints() []footer.Hint
 }
+
+// KeyCapturer is implemented by views that sometimes need every key — for
+// example while the user types into a filter prompt. While CapturesKeys()
+// returns true the app hands keys straight to the view and skips its global
+// shortcuts (q, Tab, digits, :, ?, p). ctrl+c always quits.
+type KeyCapturer interface {
+	CapturesKeys() bool
+}
