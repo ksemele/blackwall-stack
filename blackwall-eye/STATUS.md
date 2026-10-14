@@ -4,7 +4,7 @@ status: in_progress
 stage: 1
 last_updated: 2026-10-15
 last_task: "prod firewall as code: nftables role on RHEL + podman + drop-in, new cf-wall role, nft-equiv tool, Rocky 9 lab node"
-next_task: "Owner applies nftables + cf-wall to the prod host from the local inventory (check --diff first)"
+next_task: "Choose the next Eye item: Suricata/Zeek network layer (stage 3) or Wazuh version pin"
 blockers: []
 ---
 
@@ -21,6 +21,9 @@ blockers: []
   - `tools/nft-equiv`: proves a host's rendered table equals a reference file.
   - Lab: `black-rocky-02` (Rocky Linux 9); `bw-lab provision cf-wall`,
     `bw-check cf-wall`.
+  - Applied to the prod host by the owner (dry run first): both tables and
+    podman's `ip nat` / `ip filter` intact, timer active, SELinux contexts
+    clean. The hand-made setup is retired; the roles are the source of truth.
 - 2026-10-14: manager host inventory. `wazuh-manager` `ossec.conf` gains
   `<wodle name="syscollector">` and `<sca>` (agent 000 was empty in the TUI
   Hardware/Top/Packages/Network/Security tabs); rootcheck now points at the

@@ -2,8 +2,9 @@
 #
 # Managed by the Ansible role blackwall-eye/nftables. Do not edit by hand.
 #
-# The role owns this file because Ubuntu's stock nftables.conf runs
-# `flush ruleset` on every service start.
+# The role owns this file because the stock configs flush the whole ruleset
+# (Debian's /etc/nftables.conf starts with `flush ruleset`); see also the
+# nftables.service drop-in, which removes the flush from reload and stop.
 #
 # NO GLOBAL FLUSH HERE — deliberately. A global flush wipes tables this role
 # does not own, and that breaks the host in ways that look like a network
