@@ -20,9 +20,12 @@ ALERT_LOG          = "{{ brain_alert_log }}"
 STATE_FILE         = "{{ brain_state_file }}"
 ANALYSIS_THRESHOLD = {{ analysis_threshold }}
 POLL_INTERVAL      = {{ poll_interval }}
+SEND_ATTEMPTS      = 3
 CLAUDE_API_KEY     = "{{ claude_api_key }}"
 CLAUDE_MODEL       = "{{ claude_model }}"
 MAX_TOKENS         = {{ max_tokens }}
+CLAUDE_EFFORT      = "{{ claude_effort }}"
+CLAUDE_WORKSPACE_ID = "{{ claude_workspace_id }}"
 BOT_TOKEN          = "{{ telegram_bot_token }}"
 CHAT_ID            = "{{ telegram_chat_id }}"
 TELEGRAM_URL       = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
@@ -88,26 +91,33 @@ def call_claude(alert: dict) -> str | None:
     payload = json.dumps({
         "model": CLAUDE_MODEL,
         "max_tokens": MAX_TOKENS,
+        # One-line classification: low effort keeps thinking short and cheap.
+        "output_config": {"effort": CLAUDE_EFFORT},
         "messages": [
             {"role": "user", "content": prompt}
         ],
     }).encode()
 
-    req = urllib.request.Request(
-        CLAUDE_URL,
-        data=payload,
-        headers={
-            "x-api-key": CLAUDE_API_KEY,
-            "anthropic-version": "2023-06-01",
-            "content-type": "application/json",
-        },
-    )
+    headers = {
+        "x-api-key": CLAUDE_API_KEY,
+        "anthropic-version": "2023-06-01",
+        "content-type": "application/json",
+    }
+    # Keys not scoped to a workspace must name one per request.
+    if CLAUDE_WORKSPACE_ID:
+        headers["anthropic-workspace-id"] = CLAUDE_WORKSPACE_ID
+    req = urllib.request.Request(CLAUDE_URL, data=payload, headers=headers)
     try:
         with urllib.request.urlopen(req, timeout=30) as resp:
             body = json.loads(resp.read())
-            return body["content"][0]["text"].strip()
+        # Thinking blocks come first on current models; take the text block.
+        text = next((b["text"] for b in body.get("content", []) if b.get("type") == "text"), "")
+        if not text.strip():
+            log.error("Claude API returned no text (stop_reason=%s)", body.get("stop_reason"))
+            return None
+        return text.strip()
     except urllib.error.HTTPError as exc:
-        log.error("Claude API HTTP error %d: %s", exc.code, exc.read()[:200])
+        log.error("Claude API HTTP error %d: %s", exc.code, exc.read()[:400])
         return None
     except urllib.error.URLError as exc:
         log.error("Claude API request failed: %s", exc)
@@ -138,7 +148,7 @@ def format_brain_message(alert: dict, claude_response: str) -> str:
         f"Time: {ts}\n"
         f"---\n"
         f"AI Analysis:\n"
-        f"{claude_response}"
+        f"{_md_escape(claude_response)}"
     )
 
 
@@ -219,21 +229,24 @@ def tail_alerts(sent_ids: set) -> None:
             if alert_id in sent_ids:
                 continue
 
-            log.info("Analyzing alert %s (level %d) with Claude", alert_id, level)
-            claude_response = call_claude(alert)
-            if claude_response is None:
-                log.warning("Claude analysis failed for alert %s — skipping this cycle (will retry)", alert_id)
-                # Do NOT write ID to state file — allow retry on next run
-                continue
-
-            msg = format_brain_message(alert, claude_response)
-            ok  = send_telegram(msg)
-            if ok:
-                sent_ids.add(alert_id)
-                save_sent_id(alert_id)
-                log.info("Sent brain analysis for alert %s (level %d)", alert_id, level)
+            # The tail has already moved past this line, so retry here or never.
+            # The ID is saved only after both Claude and Telegram succeeded.
+            claude_response = None
+            for attempt in range(1, SEND_ATTEMPTS + 1):
+                if claude_response is None:
+                    log.info("Analyzing alert %s (level %d) with Claude", alert_id, level)
+                    claude_response = call_claude(alert)
+                if claude_response is not None and send_telegram(format_brain_message(alert, claude_response)):
+                    sent_ids.add(alert_id)
+                    save_sent_id(alert_id)
+                    log.info("Sent brain analysis for alert %s (level %d)", alert_id, level)
+                    break
+                if attempt < SEND_ATTEMPTS:
+                    log.warning("Alert %s failed (attempt %d/%d) — retrying in %ds",
+                                alert_id, attempt, SEND_ATTEMPTS, POLL_INTERVAL)
+                    time.sleep(POLL_INTERVAL)
             else:
-                log.warning("Telegram send failed for alert %s — will retry next cycle", alert_id)
+                log.error("Dropped alert %s after %d failed attempts", alert_id, SEND_ATTEMPTS)
     finally:
         fh.close()
 

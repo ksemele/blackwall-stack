@@ -1,0 +1,77 @@
+---
+- name: Real-IP output path is required with an nginx container
+  ansible.builtin.assert:
+    that: cfwall_nginx_container == '' or cfwall_realip_out != ''
+    fail_msg: cfwall_nginx_container is set but cfwall_realip_out is empty
+
+# Rocky ships curl-minimal, which conflicts with the curl package: install
+# curl only when no curl binary is present.
+- name: Look for curl
+  ansible.builtin.shell: command -v curl
+  register: curl_probe
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Install curl
+  ansible.builtin.package:
+    name: curl
+    state: present
+  when: curl_probe.rc != 0
+
+- name: Require the nftables role first
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  register: nft_req
+  failed_when: not nft_req.stat.exists
+  loop:
+    - /etc/nftables.d
+    - /etc/systemd/system/nftables.service.d/blackwall.conf
+  loop_control:
+    label: "{{ item }}"
+
+- name: Install blackwall-cf-refresh
+  ansible.builtin.copy:
+    src: blackwall-cf-refresh
+    dest: /usr/local/sbin/blackwall-cf-refresh
+    owner: root
+    group: root
+    mode: "0755"
+  notify: Refresh Cloudflare filter
+
+- name: Install refresh config
+  ansible.builtin.template:
+    src: blackwall-cf-refresh.default.j2
+    dest: /etc/default/blackwall-cf-refresh
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Refresh Cloudflare filter
+
+- name: Install refresh service and timer
+  ansible.builtin.copy:
+    src: "{{ item }}"
+    dest: "/etc/systemd/system/{{ item }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop:
+    - blackwall-cf-refresh.service
+    - blackwall-cf-refresh.timer
+  notify: Reload systemd
+
+- name: Run pending refresh and systemd reload now
+  ansible.builtin.meta: flush_handlers
+
+# Covers a host where the files were already in place but the rules were
+# removed; on a fresh install the handler above has already created them.
+- name: Generate the filter if it is missing
+  ansible.builtin.command: /usr/local/sbin/blackwall-cf-refresh
+  args:
+    creates: /etc/nftables.d/blackwall-wall.nft
+
+- name: Enable the weekly refresh timer
+  ansible.builtin.systemd:
+    name: blackwall-cf-refresh.timer
+    enabled: true
+    state: started

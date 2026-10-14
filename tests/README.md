@@ -7,11 +7,12 @@ Docker environment shared by all Blackwall modules.
 | `black-master-00` | Wazuh manager + indexer + dashboard (all-in-one) |
 | `black-host-01` | Wazuh agent + auditd target |
 | `black-dead-98` | agent fixture, stopped on purpose (`disconnected` status) |
+| `black-rocky-02` | Rocky Linux 9, firewall roles on the RHEL family |
 | `black-metrics-00` | Prometheus |
 | `black-grafana-00` | Grafana |
 | `black-aptcache-00` | apt-cacher-ng — apt cache for the nodes, lab only |
 
-The three `black-*-NN` nodes are privileged with systemd as PID 1, so service
+The `black-*-NN` nodes are privileged with systemd as PID 1, so service
 management works identically to production hosts. Prometheus and Grafana are
 plain containers configured entirely from files in this repository.
 
@@ -68,7 +69,7 @@ tests/bin/bw-lab reset
 | `bw-lab down [--keep-data]` | stop the environment; volumes are removed unless `--keep-data` |
 | `bw-lab reset` | `down -v` + wipe Wazuh certificates + `up` |
 | `bw-lab status` | containers, published ports, health of Prometheus/Grafana/dashboard |
-| `bw-lab provision <target>` | ansible only: `eye`, `nftables`, `metrics`, `voice`, `fixtures`, `all` |
+| `bw-lab provision <target>` | ansible only: `eye`, `nftables`, `metrics`, `voice`, `cf-wall`, `brain`, `fixtures`, `all` |
 | `bw-lab ssh <host> [cmd...]` | shell into a container (root password `blackwall`) |
 | `bw-lab logs <service> [-f]` | compose logs for one service |
 | `bw-lab open <target>` | open `dashboard`, `grafana` or `prometheus` in a browser |
@@ -114,10 +115,12 @@ tests/bin/bw-check metrics    # just one group
 | `hosts` | the five running containers exist (incl. the apt cache); ansible reaches every systemd node |
 | `versions` | `wazuh-*`, `filebeat`, `auditd`, `nftables` are installed (prints versions); `wazuh-agent` version equals `wazuh-manager` |
 | `nft` | `chain input` is `policy drop` and every expected port is in `set public_tcp` |
+| `cf-wall` | table `inet blackwall_wall` loaded with Cloudflare prefixes, timer enabled, a refresh that fetches junk leaves the live rules untouched (opt-in: SKIP until `bw-lab provision cf-wall`) |
 | `ports` | expected listeners inside the containers, plus published ports probed from the Mac |
 | `wazuh` | agents registered on the manager, REST API answers, indexer answers, `black-ghost-99` is `never_connected` and `black-dead-98` is `disconnected`, dashboard responds |
 | `metrics` | node_exporter serves metrics, Prometheus targets are `up`, `node_load1` returns data, Grafana is healthy with its datasource and dashboard |
-| `voice` | `telegram-alerter` is running |
+| `voice` | `telegram-alerter` is running and Telegram accepted a synthetic alert |
+| `brain` | `brain-analyst` is running; a synthetic level-10 alert was analysed by Claude and delivered to Telegram |
 
 Every line is `PASS`, `FAIL` or `SKIP`; the exit code is 0 only when there is no
 `FAIL`, so this is usable straight from CI. Output of a failing step is printed
@@ -166,6 +169,7 @@ direnv allow
 | `BW_TELEGRAM_BOT_TOKEN` | `telegram_bot_token` | voice, brain |
 | `BW_TELEGRAM_CHAT_ID` | `telegram_chat_id` | voice, brain |
 | `BW_CLAUDE_API_KEY` | `claude_api_key` | brain |
+| `BW_CLAUDE_WORKSPACE_ID` | `claude_workspace_id` | brain (only for keys not scoped to a workspace) |
 
 Unset variables render as empty strings — playbooks still run, delivery just fails.
 
@@ -178,6 +182,7 @@ Unset variables render as empty strings — playbooks still run, delivery just f
 | `black-master-00` | manager + indexer + dashboard | `2200→22` | `5601→443`, `127.0.0.1:55000→55000`, `127.0.0.1:9200→9200` | `172.28.0.10` |
 | `black-host-01` | agent + auditd target | `2201→22` | — | `172.28.0.11` |
 | `black-dead-98` | agent fixture — disconnected | `2202→22` | — | `172.28.0.98` |
+| `black-rocky-02` | Rocky Linux 9 — firewall roles | `2203→22` | — | `172.28.0.15` |
 | `black-metrics-00` | Prometheus | — | `9090→9090` | `172.28.0.12` |
 | `black-grafana-00` | Grafana | — | `3000→3000` | `172.28.0.13` |
 | `black-aptcache-00` | apt-cacher-ng | — | — | `172.28.0.14` |
@@ -286,9 +291,11 @@ ansible-playbook ansible/playbooks/verify-nftables.yml
 | `nft_enabled` | `true` | set to `false` to skip the host entirely |
 | `nft_wan_if` | `eth0` | external interface |
 | `nft_public_tcp` | `[22]` | TCP ports open to everyone |
-| `nft_restricted` | `[]` | list of `{port, sources[]}` — port reachable only from those sources |
-| `nft_forward_policy` | `accept` | policy of the `forward` chain |
+| `nft_restricted` | `[]` | list of `{port, sources[], name?}` — port reachable only from those sources; the set is named `name` (default `src_<port>`) |
+| `nft_forward_policy` | `accept` | policy of the `forward` chain; `drop` adds a rate-limited log line and a counter |
 | `nft_log_drops` | `true` | rate-limited log line on drops |
+| `nft_podman` | `{}` | `{net, if}` of a podman host: anti-spoofing on the WAN, container DNS to the host, `ct status dnat accept` and container egress in `forward` |
+| `nft_conf_path` | per OS family | `/etc/nftables.conf` (Debian) or `/etc/sysconfig/nftables.conf` (RedHat) |
 
 Ports per group live in `tests/inventory/group_vars/`:
 

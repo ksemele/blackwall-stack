@@ -20,6 +20,7 @@ STATE_FILE     = "{{ alerter_state_file }}"
 LOG_FILE       = "{{ alerter_log_file }}"
 SEVERITY_THRESHOLD = {{ severity_threshold }}
 POLL_INTERVAL  = {{ poll_interval }}
+SEND_ATTEMPTS  = 3
 BOT_TOKEN      = "{{ telegram_bot_token }}"
 CHAT_ID        = "{{ telegram_chat_id }}"
 TELEGRAM_URL   = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
@@ -77,6 +78,11 @@ def send_telegram(text: str) -> bool:
     try:
         with urllib.request.urlopen(req, timeout=10) as resp:
             return resp.status == 200
+    except urllib.error.HTTPError as exc:
+        # Telegram explains the refusal in the body (blocked bot, bad markup, ...).
+        body = exc.read().decode(errors="replace")[:300]
+        log.error("Telegram send failed: %s — %s", exc, body)
+        return False
     except urllib.error.URLError as exc:
         log.error("Telegram send failed: %s", exc)
         return False
@@ -140,13 +146,19 @@ def tail_alerts(sent_ids: set) -> None:
             continue
 
         msg = format_message(alert)
-        ok  = send_telegram(msg)
-        if ok:
-            sent_ids.add(alert_id)
-            save_sent_id(alert_id)
-            log.info("Sent alert %s (level %d)", alert_id, level)
+        # The tail has already moved past this line, so retry here or never.
+        for attempt in range(1, SEND_ATTEMPTS + 1):
+            if send_telegram(msg):
+                sent_ids.add(alert_id)
+                save_sent_id(alert_id)
+                log.info("Sent alert %s (level %d)", alert_id, level)
+                break
+            if attempt < SEND_ATTEMPTS:
+                log.warning("Failed to send alert %s (attempt %d/%d) — retrying in %ds",
+                            alert_id, attempt, SEND_ATTEMPTS, POLL_INTERVAL)
+                time.sleep(POLL_INTERVAL)
         else:
-            log.warning("Failed to send alert %s — will retry next cycle", alert_id)
+            log.error("Dropped alert %s after %d failed attempts", alert_id, SEND_ATTEMPTS)
 
 
 def main() -> None:

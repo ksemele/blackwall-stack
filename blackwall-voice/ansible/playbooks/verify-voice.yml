@@ -65,9 +65,11 @@
         fail_msg: >-
           Synthetic alert ID '{{ synthetic_alert_id }}' not found in state file.
           State file content: {{ state_file_content.content | default('') | b64decode }}
-          Note: if bot token is invalid, send fails and ID won't be written — this is expected with dummy tokens.
+          The ID is written only after Telegram accepted the message: check the
+          bot token / chat id and the alerter log.
         success_msg: "Dedup state file contains synthetic alert ID — alerter processed and sent successfully"
-      ignore_errors: true
+      # Without a token there is nothing to deliver; only the pickup is checked below.
+      ignore_errors: "{{ (telegram_bot_token | default('')) | length == 0 }}"
 
     - name: Show state file contents
       ansible.builtin.debug:

@@ -1,0 +1,136 @@
+---
+- name: Verify the Cloudflare origin filter
+  hosts: cf_wall
+  become: true
+  gather_facts: false
+
+  vars:
+    wall_file: /etc/nftables.d/blackwall-wall.nft
+
+  tasks:
+    - name: Dump table as JSON
+      ansible.builtin.command: nft -j list table inet blackwall_wall
+      register: wall_json
+      changed_when: false
+
+    - name: Collect sets and the prerouting chain
+      ansible.builtin.set_fact:
+        wall_sets: >-
+          {{ (wall_json.stdout | from_json).nftables | selectattr('set', 'defined')
+             | map(attribute='set') | list }}
+        wall_chain: >-
+          {{ (wall_json.stdout | from_json).nftables | selectattr('chain', 'defined')
+             | map(attribute='chain') | selectattr('name', 'eq', 'prerouting') | first | default({}) }}
+
+    - name: Assert Cloudflare prefix sets are filled and the hook is prerouting -150
+      ansible.builtin.assert:
+        that:
+          - (wall_sets | selectattr('name', 'eq', 'cf_v4') | map(attribute='elem') | first | default([]) | length) >= 10
+          - (wall_sets | selectattr('name', 'eq', 'cf_v6') | map(attribute='elem') | first | default([]) | length) >= 5
+          - wall_chain.hook | default('') == 'prerouting'
+          - wall_chain.prio | default(0) | int == -150
+        fail_msg: "blackwall_wall on {{ inventory_hostname }} is incomplete: {{ wall_chain }}"
+
+    - name: Generated file passes nft -c
+      ansible.builtin.command: nft -c -f {{ wall_file }}
+      changed_when: false
+
+    - name: Timer is enabled and active
+      ansible.builtin.command: "systemctl {{ item }} blackwall-cf-refresh.timer"
+      changed_when: false
+      loop:
+        - is-enabled
+        - is-active
+
+    # A refresh that fetches junk must abort and leave the live rules alone.
+    - name: Checksum before a bad refresh
+      ansible.builtin.stat:
+        path: "{{ wall_file }}"
+        checksum_algorithm: sha256
+      register: before
+
+    - name: Refresh against a page that is not a prefix list
+      ansible.builtin.command: /usr/local/sbin/blackwall-cf-refresh
+      environment:
+        V4_URL: https://example.com/
+      register: bad_refresh
+      changed_when: false
+      failed_when: bad_refresh.rc == 0
+
+    - name: Checksum after the bad refresh
+      ansible.builtin.stat:
+        path: "{{ wall_file }}"
+        checksum_algorithm: sha256
+      register: after
+
+    - name: Assert the live file is untouched
+      ansible.builtin.assert:
+        that: before.stat.checksum == after.stat.checksum
+        fail_msg: "a failed refresh changed {{ wall_file }}"
+
+    # A WAN interface that does not exist would open the origin: must abort.
+    - name: Refresh with a nonexistent WAN interface
+      ansible.builtin.command: /usr/local/sbin/blackwall-cf-refresh
+      environment:
+        WAN_IF: bw-nonexistent0
+      register: bad_wan
+      changed_when: false
+      failed_when: bad_wan.rc == 0
+
+    # nft -c passes but the live load fails: the file must not be persisted.
+    - name: Create the shim directory
+      ansible.builtin.file:
+        path: /root/.bw-nft-shim
+        state: directory
+        mode: "0700"
+      changed_when: false
+
+    - name: Create an nft shim that rejects live loads
+      ansible.builtin.copy:
+        dest: /root/.bw-nft-shim/nft
+        mode: "0755"
+        content: |
+          #!/bin/sh
+          for a in "$@"; do [ "$a" = "-c" ] && exec /usr/sbin/nft "$@"; done
+          exit 1
+      changed_when: false
+
+    - name: Refresh while the live load fails
+      ansible.builtin.command: /usr/local/sbin/blackwall-cf-refresh
+      environment:
+        PATH: "/root/.bw-nft-shim:/usr/local/sbin:/usr/sbin:/usr/bin:/sbin:/bin"
+      register: bad_load
+      changed_when: false
+      failed_when: bad_load.rc == 0
+
+    - name: Remove the nft shim
+      ansible.builtin.file:
+        path: /root/.bw-nft-shim
+        state: absent
+      changed_when: false
+
+    - name: Checksum after the failed runs
+      ansible.builtin.stat:
+        path: "{{ wall_file }}"
+        checksum_algorithm: sha256
+      register: after_fail
+
+    - name: Assert the wall file is still untouched
+      ansible.builtin.assert:
+        that: before.stat.checksum == after_fail.stat.checksum
+        fail_msg: "a failed run changed {{ wall_file }}"
+
+    # The timer's own path: the unit must run the script successfully.
+    - name: Run the refresh through systemd
+      ansible.builtin.command: systemctl start blackwall-cf-refresh.service
+      changed_when: false
+
+    - name: Unit is not failed
+      ansible.builtin.command: systemctl is-failed blackwall-cf-refresh.service
+      register: unit_failed
+      changed_when: false
+      failed_when: unit_failed.stdout | trim == 'failed'
+
+    - name: Wall file is still valid after the systemd run
+      ansible.builtin.command: nft -c -f {{ wall_file }}
+      changed_when: false

@@ -4,3 +4,4 @@
 export BW_TELEGRAM_BOT_TOKEN=''   # blackwall-voice / blackwall-brain
 export BW_TELEGRAM_CHAT_ID=''
 export BW_CLAUDE_API_KEY=''       # blackwall-brain
+export BW_CLAUDE_WORKSPACE_ID=''  # only for keys not scoped to a workspace (wrkspc_...)

@@ -39,6 +39,15 @@ telegram_chat_id:   "your-chat-id"
 severity_threshold: 5   # forward alerts with rule.level >= this value
 ```
 
+`telegram_chat_id` is the chat the bot writes to — your own user id, not the
+bot's (the number before `:` in the token is the bot itself; Telegram answers
+403 "the bot can't send messages to the bot"). Send `/start` to the bot, then
+read the id from `https://api.telegram.org/bot<token>/getUpdates`
+(`result[].message.chat.id`).
+
+The lab inventory sets `severity_threshold: 10`: provisioning alone produces
+hundreds of level-7 alerts a day.
+
 ## Deploy
 
 ```bash
@@ -54,7 +63,11 @@ ansible-playbook ansible/playbooks/voice.yml \
 ansible-playbook ansible/playbooks/verify-voice.yml
 ```
 
-Sends a test alert through the pipeline and confirms the Telegram message is received.
+Injects a synthetic level-10 alert and checks that Telegram accepted the
+message (its id lands in the dedup state file). With a token set, a refused
+send fails the playbook; the Telegram error body is in
+`/var/log/voice-alerter/alerter.log`. A failed send is retried 3 times, then
+logged as dropped.
 
 ## Metrics (node_exporter + Prometheus + Grafana)
 

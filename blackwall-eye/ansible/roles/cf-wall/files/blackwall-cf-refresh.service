@@ -1,0 +1,12 @@
+[Unit]
+Description=Blackwall: refresh Cloudflare prefixes in nftables + nginx real_ip
+Documentation=https://www.cloudflare.com/ips/
+After=network-online.target nftables.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/blackwall-cf-refresh
+# The script sources /etc/default/blackwall-cf-refresh itself.
+# A failed refresh (network glitch, bad data, rejected ruleset) changes nothing
+# and leaves this unit failed: that is the visible signal. The next timer run retries.

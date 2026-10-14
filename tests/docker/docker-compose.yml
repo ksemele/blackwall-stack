@@ -114,6 +114,20 @@ services:
       blackwall-test:
         ipv4_address: 172.28.0.98
 
+  # RHEL-family node: exercises the RedHat paths of the firewall roles.
+  black-rocky-02:
+    <<: *black-node
+    profiles: [ubuntu2204]
+    build:
+      context: ./images/rockylinux9
+    container_name: black-rocky-02
+    hostname: black-rocky-02
+    ports:
+      - "2203:22"
+    networks:
+      blackwall-test:
+        ipv4_address: 172.28.0.15
+
   # ── Monitoring stack: Prometheus + Grafana ────────────────────────────────
   # Profile: ubuntu2204
   # Plain containers, not systemd nodes: they need no privileged mode, host

@@ -2,8 +2,38 @@
 module: blackwall-brain
 status: in_progress
 stage: 3
-last_updated: 2026-05-10
-last_task: "Bootstrap blackwall-brain module — brain-analyst role, brain.yml, verify-brain.yml"
-next_task: "Deploy with real Claude API key and verify end-to-end AI analysis in Telegram"
+last_updated: 2026-10-14
+last_task: "Lab deploy with a real key: text-block parsing for thinking models, low effort, real retries, optional workspace id header, strict verify-brain, bw-lab/bw-check brain targets"
+next_task: "ansible-vault for prod secrets; decide whether voice should skip brain verify alerts"
 blockers: []
 ---
+
+## Done
+
+- 2026-10-14: end-to-end verified in the lab — `bw-check brain` PASS, Claude
+  (`claude-haiku-5-5`) classified the synthetic alert and the analysis arrived
+  in Telegram. Claude's answer is now Markdown-escaped (categories like
+  `privilege_escalation` broke Telegram's parser).
+- 2026-10-14: ready for end-to-end in the lab.
+  - `brain.py`: reads the `text` block (thinking blocks come first on
+    `claude-haiku-5-5`), `output_config.effort: low`, `max_tokens: 2048`
+    (thinking counts against it), logs `stop_reason` when no text came back.
+  - Claude/Telegram failures are retried 3 times; the ID is saved only after
+    both succeed, otherwise the drop is logged at ERROR.
+  - Optional `claude_workspace_id` (`BW_CLAUDE_WORKSPACE_ID`) sends
+    `anthropic-workspace-id` for keys not scoped to a workspace.
+  - `verify-brain.yml` waits up to 90 s for the ID in the state file and fails
+    when credentials are set but nothing was delivered.
+  - `bw-lab provision brain`, `bw-check brain`; lab `analysis_threshold: 10`.
+- 2026-05-10: bootstrap — `brain-analyst` role, `brain.yml`, `verify-brain.yml`.
+
+## Plans
+
+- **Workload identity federation instead of a static API key.** Short-lived
+  tokens exchanged from an OIDC JWT, no long-lived secret on the host. Worth it
+  once Brain runs where an OIDC issuer comes for free (Kubernetes, AWS, GCP);
+  on a single VPS we would have to run our own issuer. The switch likely means
+  moving `brain.py` to the Anthropic Python SDK, which does the token exchange
+  and refresh itself (today the module is stdlib-only by design).
+- Prod secrets via ansible-vault (`claude_api_key`, Telegram).
+- The lab API key expires 30 days after 2026-10-14.

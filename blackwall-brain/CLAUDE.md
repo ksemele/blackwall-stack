@@ -27,7 +27,7 @@ A Python script deployed as a systemd service on the manager host that:
 - Receives structured AI classification: threat category, confidence, recommended action
 - Formats a "Brain analysis" Telegram message and sends via same bot as Voice
 - Deduplicates: tracks processed `id` values to avoid re-analyzing on restart (state file)
-- On Claude API failure: logs error and skips the alert (does NOT write ID to state — allows retry)
+- On Claude or Telegram failure: retries up to 3 times (the ID is written to state only after both succeed), then logs the alert as dropped
 - Restarts automatically on failure (systemd `Restart=on-failure`)
 
 ---
@@ -36,7 +36,7 @@ A Python script deployed as a systemd service on the manager host that:
 
 - **Zero pip dependencies:** uses only Python 3 stdlib (`urllib.request`, `json`, `logging`, `os`, `time`)
 - **Config as code:** all settings live in Ansible vars and templates; no manual edits on hosts
-- **Fail open on Claude errors:** if Claude API fails, alert is not suppressed — it remains eligible for retry
+- **Fail loud on errors:** a failed alert is retried, and a drop is logged at ERROR — never silent
 - **Signal over noise:** `analysis_threshold` default 7 (higher than Voice's 5) — only high-confidence events get AI analysis
 - **Resilient:** systemd `Restart=on-failure`; script catches all errors and sleeps, never crashes
 
@@ -92,7 +92,8 @@ blackwall-brain/
 | `poll_interval` | `5` | Seconds between log tail reads |
 | `claude_api_key` | `""` | Anthropic API key — must be set |
 | `claude_model` | `claude-haiku-5-5` | Claude model for analysis |
-| `max_tokens` | `300` | Max tokens in Claude response |
+| `claude_effort` | `low` | Effort (thinking depth) for the one-line classification |
+| `max_tokens` | `2048` | Max tokens in Claude response, thinking included |
 | `brain_state_file` | `/var/lib/brain-analyst/sent_ids.txt` | Dedup state |
 | `brain_log_file` | `/var/log/brain-analyst/analyst.log` | Service log |
 | `brain_alert_log` | `/var/ossec/logs/alerts/alerts.json` | Alert source |

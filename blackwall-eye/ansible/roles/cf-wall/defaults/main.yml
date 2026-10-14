@@ -1,0 +1,17 @@
+---
+# TCP ports reachable only from Cloudflare (and cfwall_admin_allow)
+cfwall_ports: [80, 443]
+
+# Sources allowed straight to the origin (deploys, health checks)
+cfwall_admin_allow: []
+
+# External interface; empty = detect from the default route
+cfwall_wan_if: ""
+
+# nginx real_ip (container runtime: podman). Empty container = skip
+cfwall_nginx_container: ""
+cfwall_realip_out: ""
+
+# Abort the refresh when Cloudflare returns fewer prefixes than this
+cfwall_min_v4: 10
+cfwall_min_v6: 5

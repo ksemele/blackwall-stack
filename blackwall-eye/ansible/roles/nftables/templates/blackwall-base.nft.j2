@@ -17,7 +17,7 @@ table inet blackwall_base {
     }
 {% for r in nft_restricted %}
 
-    set src_{{ r.port }} {
+    set {{ r.name | default('src_' ~ r.port) }} {
         type ipv4_addr
         flags interval
         auto-merge
@@ -32,6 +32,18 @@ table inet blackwall_base {
         iif lo accept
         ct state established,related accept
         ct state invalid drop
+{% if nft_podman %}
+
+        # Anti-spoofing: container subnet addresses cannot arrive from outside.
+        # Must come before the rules below that trust the subnet.
+        iifname "{{ nft_wan_if }}" ip saddr {{ nft_podman.net }} counter drop
+
+        # DNS from containers to aardvark-dns on the host. netavark accepts it in
+        # its own table, but our policy drop here kills it regardless - without
+        # these lines containers silently cannot resolve names.
+        iifname "{{ nft_podman.if }}" ip saddr {{ nft_podman.net }} udp dport 53 counter accept
+        iifname "{{ nft_podman.if }}" ip saddr {{ nft_podman.net }} tcp dport 53 counter accept
+{% endif %}
 
         # All of ICMP: dropping icmpv6 breaks IPv6 (neighbor discovery, PMTU),
         # dropping icmp breaks path MTU discovery on IPv4.
@@ -40,7 +52,7 @@ table inet blackwall_base {
 
         tcp dport @public_tcp ct state new counter accept
 {% for r in nft_restricted %}
-        tcp dport {{ r.port }} ip saddr @src_{{ r.port }} ct state new counter accept
+        tcp dport {{ r.port }} ip saddr @{{ r.name | default('src_' ~ r.port) }} ct state new counter accept
 {% endfor %}
 {% if nft_log_drops %}
 
@@ -54,6 +66,22 @@ table inet blackwall_base {
 
         ct state established,related accept
         ct state invalid drop
+{% if nft_podman %}
+
+        # Published container ports arrive here after netavark's DNAT. Who may
+        # reach them is decided earlier (e.g. blackwall_wall in prerouting).
+        ct status dnat counter accept
+
+        # Containers going out.
+        oifname "{{ nft_wan_if }}" ip saddr {{ nft_podman.net }} counter accept
+{% endif %}
+{% if nft_forward_policy == 'drop' %}
+{% if nft_log_drops %}
+
+        limit rate 5/minute log prefix "[blackwall-base] fwd-drop " level info
+{% endif %}
+        counter
+{% endif %}
     }
 
     chain output {

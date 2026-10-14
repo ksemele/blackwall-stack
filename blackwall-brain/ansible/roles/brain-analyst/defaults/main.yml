@@ -21,8 +21,13 @@ brain_install_dir: /opt/brain-analyst
 
 # Claude API settings
 claude_api_key: ""
+# Required only when the API key is not scoped to a workspace (wrkspc_...)
+claude_workspace_id: ""
 claude_model: "claude-haiku-5-5"
-max_tokens: 300
+# Thinking is on by default for this model and counts against max_tokens:
+# keep room for it, and keep it short with low effort.
+claude_effort: "low"
+max_tokens: 2048
 
 # Telegram credentials — MUST be overridden (use ansible-vault in production)
 telegram_bot_token: ""

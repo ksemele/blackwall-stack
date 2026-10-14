@@ -25,7 +25,7 @@ Commands:
   down [--keep-data]                  stop the environment (volumes removed by default)
   reset                               down -v + wipe Wazuh certs + up
   status                              containers, ports, monitoring health
-  provision <target>                  ansible only: eye|nftables|metrics|voice|fixtures|all
+  provision <target>                  ansible only: eye|nftables|metrics|voice|cf-wall|brain|fixtures|all
   ssh <host> [command...]             shell into a test container
   logs <service> [-f]                 compose logs for one service
   open <target>                       open in a browser: dashboard|grafana|prometheus
@@ -76,6 +76,14 @@ cmd_provision() {
       bw_info "provision: telegram-alerter"
       bw_ansible blackwall-voice ansible/playbooks/voice.yml
       ;;
+    cf-wall)
+      bw_info "provision: cf-wall (Cloudflare origin filter)"
+      bw_ansible blackwall-eye ansible/playbooks/cf-wall.yml --limit "$(bw_live_limit)"
+      ;;
+    brain)
+      bw_info "provision: brain-analyst"
+      bw_ansible blackwall-brain ansible/playbooks/brain.yml
+      ;;
     all)
       # Order matters: nftables runs after the services so the firewall covers
       # what is already up instead of blocking its install (apt, agent
@@ -86,7 +94,7 @@ cmd_provision() {
       cmd_provision fixtures
       ;;
     *)
-      bw_die "unknown target: $target (eye|nftables|metrics|voice|fixtures|all)"
+      bw_die "unknown target: $target (eye|nftables|metrics|voice|cf-wall|brain|fixtures|all)"
       ;;
   esac
 }

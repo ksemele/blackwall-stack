@@ -29,6 +29,7 @@ Each module is independently deployable. A shared Docker test environment lives 
 | `black-master-00` | Wazuh manager + indexer + dashboard |
 | `black-host-01` | Wazuh agent (target for other module roles) |
 | `black-dead-98` | agent fixture, stopped on purpose |
+| `black-rocky-02` | Rocky Linux 9, firewall roles on the RHEL family |
 | `black-metrics-00` | Prometheus |
 | `black-grafana-00` | Grafana |
 | `black-aptcache-00` | apt cache (lab only): Wazuh packages are downloaded once |

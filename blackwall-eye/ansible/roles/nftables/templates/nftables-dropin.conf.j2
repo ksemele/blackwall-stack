@@ -1,0 +1,16 @@
+# Managed by the Ansible role blackwall-eye/nftables. Do not edit by hand.
+#
+# The stock nftables.service runs `flush ruleset` on reload and stop (Debian
+# and RHEL alike). That wipes tables this role does not own: Docker's NAT
+# (embedded DNS 127.0.0.11) in containers, netavark's `ip nat` / `ip filter`
+# on podman hosts. Reload re-reads our config instead; stop removes only our
+# tables. Our .nft files use the create / delete / define idiom, so a reload
+# is atomic per table.
+
+[Service]
+ExecReload=
+ExecReload=/usr/sbin/nft -f {{ nft_conf_path }}
+
+ExecStop=
+ExecStop=-/usr/sbin/nft delete table inet blackwall_wall
+ExecStop=-/usr/sbin/nft delete table inet blackwall_base
