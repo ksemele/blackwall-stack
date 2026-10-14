@@ -37,7 +37,6 @@ PORTS="${PORTS:-80 443}"
 # script silently (no ip/iproute2, no default route) — not how we want to find out.
 detect_wan() { ip -o -4 route show to default 2>/dev/null | awk '{print $5; exit}' || true; }
 WAN_IF="${WAN_IF:-$(detect_wan)}"
-WAN_IF="${WAN_IF:-eth0}"
 
 # Extra IPs/subnets with direct origin access (space-separated).
 # Example: ADMIN_ALLOW="203.0.113.7 198.51.100.0/24"
@@ -58,6 +57,10 @@ die() { log "ERROR: $*"; exit 1; }
 [ "$(id -u)" -eq 0 ] || die "must run as root"
 command -v nft   >/dev/null || die "nft not found"
 command -v curl  >/dev/null || die "curl not found"
+
+# A wrong interface name would make "iifname != WAN accept" accept everything.
+[ -n "$WAN_IF" ] || die "cannot detect WAN interface; set WAN_IF"
+ip link show dev "$WAN_IF" >/dev/null 2>&1 || die "WAN_IF=$WAN_IF does not exist"
 
 tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' EXIT
 
@@ -181,8 +184,9 @@ if [ "$DRY_RUN" -eq 1 ]; then
 fi
 
 install -d -m 0755 "$(dirname "$RULES_OUT")"
+# Load first, persist after: a rejected file must never reach the boot config.
+nft -f "$tmp/blackwall-wall.nft" || die "ruleset failed to apply; $RULES_OUT left unchanged"
 install -m 0644 "$tmp/blackwall-wall.nft" "$RULES_OUT"
-nft -f "$RULES_OUT" || die "ruleset failed to apply (file written to $RULES_OUT)"
 log "nftables: table inet $TABLE updated and saved to $RULES_OUT"
 
 # nginx on this host lives in a podman container, so the config check and

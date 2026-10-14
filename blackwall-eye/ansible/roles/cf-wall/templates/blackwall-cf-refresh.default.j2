@@ -5,7 +5,7 @@
 ADMIN_ALLOW="{{ cfwall_admin_allow | join(' ') }}"
 
 # External interface; empty = from the default route.
-WAN_IF="{{ cfwall_wan_if }}"
+WAN_IF="${WAN_IF:-{{ cfwall_wan_if }}}"
 
 # Filtered TCP ports.
 PORTS="{{ cfwall_ports | join(' ') }}"
