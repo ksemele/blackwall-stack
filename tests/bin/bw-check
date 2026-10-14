@@ -87,6 +87,7 @@ Checks:
   wazuh      agent registration, REST API, broken-agent fixtures, dashboard
   metrics    node_exporter, Prometheus targets, Grafana health and datasource
   voice      telegram-alerter
+  brain      brain-analyst (Claude analysis delivered to Telegram)
 
 Exit code: 0 when nothing failed, 1 otherwise.
 USAGE
@@ -312,6 +313,23 @@ check_voice() {
     bw_ansible blackwall-voice ansible/playbooks/verify-voice.yml
 }
 
+check_brain() {
+  bw_info "brain"
+  bw_require_ansible
+
+  # Opt-in like voice: needs a Claude API key and a Telegram token.
+  local installed
+  installed="$(bw_ansible_adhoc blackwall-brain wazuh_managers -b \
+                 -m stat -a 'path=/etc/systemd/system/brain-analyst.service' 2>&1)"
+  if ! grep -q '"exists": true' <<<"$installed"; then
+    bw_skip "brain-analyst is not deployed (run: bw-lab provision brain)"
+    return
+  fi
+
+  bw_run "brain-analyst analysed and delivered a test alert" \
+    bw_ansible blackwall-brain ansible/playbooks/verify-brain.yml
+}
+
 bw_summary() {
   printf '\n%s%s passed%s, %s%s failed%s, %s%s skipped%s\n' \
     "$BW_GREEN" "$BW_PASS" "$BW_RESET" \
@@ -324,7 +342,7 @@ main() {
   case "${1:-all}" in
     all)
       check_hosts; check_versions; check_nft; check_ports
-      check_wazuh; check_metrics; check_voice
+      check_wazuh; check_metrics; check_voice; check_brain
       ;;
     hosts)    check_hosts ;;
     versions) check_versions ;;
@@ -333,6 +351,7 @@ main() {
     wazuh)    check_wazuh ;;
     metrics)  check_metrics ;;
     voice)    check_voice ;;
+    brain)    check_brain ;;
     -h|--help|help) usage; exit 0 ;;
     *) printf 'unknown check: %s\n\n' "$1" >&2; usage >&2; exit 2 ;;
   esac

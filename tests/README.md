@@ -68,7 +68,7 @@ tests/bin/bw-lab reset
 | `bw-lab down [--keep-data]` | stop the environment; volumes are removed unless `--keep-data` |
 | `bw-lab reset` | `down -v` + wipe Wazuh certificates + `up` |
 | `bw-lab status` | containers, published ports, health of Prometheus/Grafana/dashboard |
-| `bw-lab provision <target>` | ansible only: `eye`, `nftables`, `metrics`, `voice`, `fixtures`, `all` |
+| `bw-lab provision <target>` | ansible only: `eye`, `nftables`, `metrics`, `voice`, `brain`, `fixtures`, `all` |
 | `bw-lab ssh <host> [cmd...]` | shell into a container (root password `blackwall`) |
 | `bw-lab logs <service> [-f]` | compose logs for one service |
 | `bw-lab open <target>` | open `dashboard`, `grafana` or `prometheus` in a browser |
@@ -117,7 +117,8 @@ tests/bin/bw-check metrics    # just one group
 | `ports` | expected listeners inside the containers, plus published ports probed from the Mac |
 | `wazuh` | agents registered on the manager, REST API answers, indexer answers, `black-ghost-99` is `never_connected` and `black-dead-98` is `disconnected`, dashboard responds |
 | `metrics` | node_exporter serves metrics, Prometheus targets are `up`, `node_load1` returns data, Grafana is healthy with its datasource and dashboard |
-| `voice` | `telegram-alerter` is running |
+| `voice` | `telegram-alerter` is running and Telegram accepted a synthetic alert |
+| `brain` | `brain-analyst` is running; a synthetic level-10 alert was analysed by Claude and delivered to Telegram |
 
 Every line is `PASS`, `FAIL` or `SKIP`; the exit code is 0 only when there is no
 `FAIL`, so this is usable straight from CI. Output of a failing step is printed
@@ -166,6 +167,7 @@ direnv allow
 | `BW_TELEGRAM_BOT_TOKEN` | `telegram_bot_token` | voice, brain |
 | `BW_TELEGRAM_CHAT_ID` | `telegram_chat_id` | voice, brain |
 | `BW_CLAUDE_API_KEY` | `claude_api_key` | brain |
+| `BW_CLAUDE_WORKSPACE_ID` | `claude_workspace_id` | brain (only for keys not scoped to a workspace) |
 
 Unset variables render as empty strings — playbooks still run, delivery just fails.
 

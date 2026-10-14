@@ -25,6 +25,7 @@ CLAUDE_API_KEY     = "{{ claude_api_key }}"
 CLAUDE_MODEL       = "{{ claude_model }}"
 MAX_TOKENS         = {{ max_tokens }}
 CLAUDE_EFFORT      = "{{ claude_effort }}"
+CLAUDE_WORKSPACE_ID = "{{ claude_workspace_id }}"
 BOT_TOKEN          = "{{ telegram_bot_token }}"
 CHAT_ID            = "{{ telegram_chat_id }}"
 TELEGRAM_URL       = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
@@ -97,15 +98,15 @@ def call_claude(alert: dict) -> str | None:
         ],
     }).encode()
 
-    req = urllib.request.Request(
-        CLAUDE_URL,
-        data=payload,
-        headers={
-            "x-api-key": CLAUDE_API_KEY,
-            "anthropic-version": "2023-06-01",
-            "content-type": "application/json",
-        },
-    )
+    headers = {
+        "x-api-key": CLAUDE_API_KEY,
+        "anthropic-version": "2023-06-01",
+        "content-type": "application/json",
+    }
+    # Keys not scoped to a workspace must name one per request.
+    if CLAUDE_WORKSPACE_ID:
+        headers["anthropic-workspace-id"] = CLAUDE_WORKSPACE_ID
+    req = urllib.request.Request(CLAUDE_URL, data=payload, headers=headers)
     try:
         with urllib.request.urlopen(req, timeout=30) as resp:
             body = json.loads(resp.read())
@@ -116,7 +117,7 @@ def call_claude(alert: dict) -> str | None:
             return None
         return text.strip()
     except urllib.error.HTTPError as exc:
-        log.error("Claude API HTTP error %d: %s", exc.code, exc.read()[:200])
+        log.error("Claude API HTTP error %d: %s", exc.code, exc.read()[:400])
         return None
     except urllib.error.URLError as exc:
         log.error("Claude API request failed: %s", exc)

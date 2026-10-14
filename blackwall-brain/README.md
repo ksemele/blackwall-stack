@@ -36,6 +36,7 @@ For other targets, set these vars before deploying (use Ansible vault for secret
 
 ```yaml
 claude_api_key:     "your-anthropic-api-key"
+claude_workspace_id: ""  # only if the key is not scoped to a workspace (wrkspc_...)
 telegram_bot_token: "your-bot-token"
 telegram_chat_id:   "your-chat-id"
 analysis_threshold: 7   # analyze alerts with rule.level >= this value

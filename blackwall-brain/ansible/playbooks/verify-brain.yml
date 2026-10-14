@@ -7,7 +7,7 @@
     synthetic_alert_id: "verify-brain-{{ ansible_date_time.epoch }}"
     synthetic_alert_json: >-
       {"id":"{{ synthetic_alert_id }}","timestamp":"{{ ansible_date_time.iso8601 }}",
-      "rule":{"level":9,"description":"Synthetic verify-brain test alert","id":"99998"},
+      "rule":{"level":10,"description":"Synthetic verify-brain test alert","id":"99998"},
       "agent":{"name":"verify-bot"},"manager":{"name":"black-master-00"},
       "full_log":"synthetic alert injected by verify-brain.yml"}
 
@@ -47,26 +47,21 @@
       ansible.builtin.shell:
         cmd: "printf '%s\\n' '{{ synthetic_alert_json }}' >> /var/ossec/logs/alerts/alerts.json"
 
-    - name: Wait for brain-analyst to process the synthetic alert
-      ansible.builtin.pause:
-        seconds: "{{ poll_interval | default(5) | int + 3 }}"
+    # The ID lands in the state file only after Claude answered and Telegram
+    # accepted the message; the Claude call takes a few seconds.
+    - name: Wait for the synthetic alert ID in the state file (Claude + Telegram done)
+      ansible.builtin.wait_for:
+        path: "{{ brain_state_file | default('/var/lib/brain-analyst/sent_ids.txt') }}"
+        search_regex: "{{ synthetic_alert_id }}"
+        timeout: 90
+      register: state_wait
+      # Without credentials nothing can be delivered; only the pickup is checked below.
+      ignore_errors: "{{ (claude_api_key | default('')) | length == 0 or (telegram_bot_token | default('')) | length == 0 }}"
 
     - name: Read brain state file
       ansible.builtin.slurp:
         src: "{{ brain_state_file | default('/var/lib/brain-analyst/sent_ids.txt') }}"
       register: state_file_content
-      ignore_errors: true
-
-    - name: Check synthetic alert ID is in state file (dedup confirmation)
-      ansible.builtin.assert:
-        that:
-          - state_file_content.content is defined
-          - synthetic_alert_id in (state_file_content.content | b64decode)
-        fail_msg: >-
-          Synthetic alert ID '{{ synthetic_alert_id }}' not found in state file.
-          State file content: {{ state_file_content.content | default('') | b64decode }}
-          Note: if Claude API key or bot token is invalid, send fails and ID won't be written — this is expected with placeholder credentials.
-        success_msg: "Dedup state file contains synthetic alert ID — brain-analyst processed and sent successfully"
       ignore_errors: true
 
     - name: Show state file contents
