@@ -65,6 +65,31 @@ for the lab is just:
 
 The generated template already contains it; `blackwall --context lab --once`.
 
+### Wazuh indexer (alerts feed)
+
+An optional `indexer:` section per context points the alerts feed at the
+Wazuh indexer (OpenSearch). Contexts without it simply have no alerts feed.
+
+```yaml
+  lab:
+    wazuh:
+      # ...
+    indexer:
+      server:   127.0.0.1
+      port:     9200
+      user:     admin
+      password: ${BW_LAB_INDEXER_PASSWORD}
+      tls:
+        insecure_skip_verify: true
+      alerts:
+        min_level: 5                               # default; 0-15
+        exclude_groups: [sca, blackwall_sessions]  # default
+```
+
+`server`, `port`, `user` and `password` are required when the section is present.
+`alerts` is optional: an omitted `min_level` means 5, and an omitted
+`exclude_groups` means `[sca, blackwall_sessions]`. An explicit `0` or `[]` is kept.
+
 ## Run
 
 ```bash

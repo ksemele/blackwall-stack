@@ -30,6 +30,16 @@ contexts:
       password: wazuh               # lab-only credentials, see tests/README.md
       tls:
         insecure_skip_verify: true  # self-signed lab certificate
+    indexer:
+      server:   127.0.0.1
+      port:     9200
+      user:     admin
+      password: Blackwall1!         # lab-only, public (tests/README.md)
+      tls:
+        insecure_skip_verify: true  # self-signed lab certificate
+      # alerts:
+      #   min_level: 5                            # default
+      #   exclude_groups: [sca, blackwall_sessions]  # default
 
 ui:
   refresh_interval: 3s

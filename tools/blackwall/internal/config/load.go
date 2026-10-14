@@ -57,45 +57,65 @@ func ApplyDefaults(cfg Config) Config {
 	if !cfg.SelectContextOnStart {
 		cfg.SelectContextOnStart = true
 	}
+	for name, ctx := range cfg.Contexts {
+		if ctx.Indexer == nil {
+			continue
+		}
+		idx := *ctx.Indexer
+		if idx.Alerts.MinLevel == nil {
+			lvl := DefaultMinLevel
+			idx.Alerts.MinLevel = &lvl
+		}
+		if idx.Alerts.ExcludeGroups == nil {
+			idx.Alerts.ExcludeGroups = DefaultExcludeGroups()
+		}
+		ctx.Indexer = &idx
+		cfg.Contexts[name] = ctx
+	}
 	return cfg
 }
 
 var envVarRE = regexp.MustCompile(`\$\{([A-Za-z_][A-Za-z0-9_]*)\}`)
 
-// ExpandEnv walks every string inside Contexts.*.Wazuh and substitutes
-// ${VAR} from the process environment. An empty post-expansion value
-// is an error (typically a missing env var).
+// ExpandEnv walks every string inside Contexts.*.Wazuh and
+// Contexts.*.Indexer and substitutes ${VAR} from the process environment.
+// An empty post-expansion value is an error (typically a missing env var).
 func ExpandEnv(cfg Config) (Config, error) {
 	for name, ctx := range cfg.Contexts {
-		if ctx.Wazuh == nil {
-			continue
-		}
-		w := *ctx.Wazuh
-
 		var expandErr error
 		expand := func(in, field string) string {
 			out := envVarRE.ReplaceAllStringFunc(in, func(m string) string {
 				sub := envVarRE.FindStringSubmatch(m)
 				return os.Getenv(sub[1])
 			})
-			if strings.Contains(in, "${") && strings.TrimSpace(out) == "" {
+			if strings.Contains(in, "${") && strings.TrimSpace(out) == "" && expandErr == nil {
 				expandErr = fmt.Errorf(
-					"contexts.%s.wazuh.%s resolves to empty (env var not set?)",
+					"contexts.%s.%s resolves to empty (env var not set?)",
 					name, field,
 				)
 			}
 			return out
 		}
 
-		w.Server = expand(w.Server, "server")
-		w.User = expand(w.User, "user")
-		w.Password = expand(w.Password, "password")
-		w.TLS.CAFile = expand(w.TLS.CAFile, "tls.ca_file")
+		if ctx.Wazuh != nil {
+			w := *ctx.Wazuh
+			w.Server = expand(w.Server, "wazuh.server")
+			w.User = expand(w.User, "wazuh.user")
+			w.Password = expand(w.Password, "wazuh.password")
+			w.TLS.CAFile = expand(w.TLS.CAFile, "wazuh.tls.ca_file")
+			ctx.Wazuh = &w
+		}
+		if ctx.Indexer != nil {
+			x := *ctx.Indexer
+			x.Server = expand(x.Server, "indexer.server")
+			x.User = expand(x.User, "indexer.user")
+			x.Password = expand(x.Password, "indexer.password")
+			x.TLS.CAFile = expand(x.TLS.CAFile, "indexer.tls.ca_file")
+			ctx.Indexer = &x
+		}
 		if expandErr != nil {
 			return cfg, expandErr
 		}
-
-		ctx.Wazuh = &w
 		cfg.Contexts[name] = ctx
 	}
 	return cfg, nil
@@ -110,21 +130,32 @@ func Validate(cfg Config) error {
 		return fmt.Errorf("config: current context %q not defined in contexts", cfg.Current)
 	}
 	for name, ctx := range cfg.Contexts {
-		if ctx.Wazuh == nil {
-			continue
-		}
-		w := ctx.Wazuh
-		if w.Server == "" || w.Port == 0 || w.User == "" || w.Password == "" {
-			return fmt.Errorf(
-				"contexts.%s.wazuh: server/port/user/password are all required",
-				name,
-			)
-		}
-		if w.TLS.CAFile != "" {
-			if _, err := os.Stat(w.TLS.CAFile); err != nil {
+		if w := ctx.Wazuh; w != nil {
+			if w.Server == "" || w.Port == 0 || w.User == "" || w.Password == "" {
 				return fmt.Errorf(
-					"contexts.%s.wazuh.tls.ca_file: %v", name, err,
+					"contexts.%s.wazuh: server/port/user/password are all required",
+					name,
 				)
+			}
+			if w.TLS.CAFile != "" {
+				if _, err := os.Stat(w.TLS.CAFile); err != nil {
+					return fmt.Errorf(
+						"contexts.%s.wazuh.tls.ca_file: %v", name, err,
+					)
+				}
+			}
+		}
+		if x := ctx.Indexer; x != nil {
+			if x.Server == "" || x.Port == 0 || x.User == "" || x.Password == "" {
+				return fmt.Errorf("contexts.%s.indexer: server/port/user/password are all required", name)
+			}
+			if x.TLS.CAFile != "" {
+				if _, err := os.Stat(x.TLS.CAFile); err != nil {
+					return fmt.Errorf("contexts.%s.indexer.tls.ca_file: %v", name, err)
+				}
+			}
+			if l := x.Alerts.MinLevel; l != nil && (*l < 0 || *l > 15) {
+				return fmt.Errorf("contexts.%s.indexer.alerts.min_level: %d is outside 0–15", name, *l)
 			}
 		}
 	}

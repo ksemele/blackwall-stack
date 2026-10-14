@@ -2,6 +2,7 @@ package config
 
 import (
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -178,5 +179,86 @@ contexts:
 	}
 	if cfg.Current != "new-ctx" {
 		t.Errorf("Current = %q, want new-ctx", cfg.Current)
+	}
+}
+
+const indexerYAML = `
+current: lab
+contexts:
+  lab:
+    wazuh:
+      server: 127.0.0.1
+      port: 55000
+      user: wazuh
+      password: wazuh
+    indexer:
+      server: 127.0.0.1
+      port: 9200
+      user: admin
+      password: ${BW_TEST_IDX_PW}
+      tls:
+        insecure_skip_verify: true
+`
+
+func TestIndexer_ParsedDefaultedExpanded(t *testing.T) {
+	t.Setenv("BW_TEST_IDX_PW", "s3cret")
+	raw, err := Load(writeTempFile(t, "config.yaml", indexerYAML))
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := ExpandEnv(ApplyDefaults(raw))
+	if err != nil {
+		t.Fatal(err)
+	}
+	idx := cfg.Contexts["lab"].Indexer
+	if idx == nil || idx.Port != 9200 || idx.User != "admin" || !idx.TLS.InsecureSkipVerify {
+		t.Fatalf("indexer = %+v", idx)
+	}
+	if idx.Password != "s3cret" {
+		t.Errorf("password = %q, want expanded value", idx.Password)
+	}
+	if idx.Alerts.MinLevel == nil || *idx.Alerts.MinLevel != DefaultMinLevel {
+		t.Errorf("min_level = %v, want %d", idx.Alerts.MinLevel, DefaultMinLevel)
+	}
+	if got := idx.Alerts.ExcludeGroups; len(got) != 2 || got[0] != "sca" || got[1] != "blackwall_sessions" {
+		t.Errorf("exclude_groups = %v", got)
+	}
+	if err := Validate(cfg); err != nil {
+		t.Errorf("Validate: %v", err)
+	}
+}
+
+// An explicit 0 and an explicit empty list are real choices, not "absent".
+func TestIndexer_ExplicitZeroAndEmptyKept(t *testing.T) {
+	body := indexerYAML + "      alerts:\n        min_level: 0\n        exclude_groups: []\n"
+	t.Setenv("BW_TEST_IDX_PW", "x")
+	raw, err := Load(writeTempFile(t, "config.yaml", body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	a := ApplyDefaults(raw).Contexts["lab"].Indexer.Alerts
+	if a.MinLevel == nil || *a.MinLevel != 0 {
+		t.Errorf("min_level = %v, want explicit 0", a.MinLevel)
+	}
+	if a.ExcludeGroups == nil || len(a.ExcludeGroups) != 0 {
+		t.Errorf("exclude_groups = %#v, want explicit empty", a.ExcludeGroups)
+	}
+}
+
+func TestIndexer_ValidateRequiresFields(t *testing.T) {
+	t.Setenv("BW_TEST_IDX_PW", "x")
+	raw, _ := Load(writeTempFile(t, "config.yaml", strings.Replace(indexerYAML, "      user: admin\n", "", 1)))
+	cfg, _ := ExpandEnv(ApplyDefaults(raw))
+	if err := Validate(cfg); err == nil || !strings.Contains(err.Error(), "contexts.lab.indexer") {
+		t.Errorf("Validate err = %v, want contexts.lab.indexer error", err)
+	}
+}
+
+func TestIndexer_ValidateLevelRange(t *testing.T) {
+	t.Setenv("BW_TEST_IDX_PW", "x")
+	raw, _ := Load(writeTempFile(t, "config.yaml", indexerYAML+"      alerts:\n        min_level: 16\n"))
+	cfg, _ := ExpandEnv(ApplyDefaults(raw))
+	if err := Validate(cfg); err == nil {
+		t.Error("min_level 16 must be rejected (Wazuh levels are 0–15)")
 	}
 }
