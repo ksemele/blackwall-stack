@@ -101,16 +101,35 @@ func TestCard_StripsTerminalControls(t *testing.T) {
 	}
 }
 
-func TestSanitize(t *testing.T) {
-	cases := map[string]string{
-		"a\tb":              "a b",
-		"x\x00y\x7fz":       "xyz",
-		"c1\u0085\u009fend": "c1end",
-		"héllo ✓":           "héllo ✓",
+func TestCard_StripsControlsFromDescriptionAndAgent(t *testing.T) {
+	a := richAlert()
+	a.Rule.Description = "login\x1b[2Jwiped\x1b]0;pwned\x07"
+	a.Agent.Name = "host\x1b[31m"
+	a.Rule.Groups = []string{"g\x1bx"}
+	a.Rule.PCIDSS = []string{"1\x1b0"}
+	out := newCard(a, 100, 0).view()
+	if strings.Contains(out, "\x1b") || strings.Contains(out, "\x07") {
+		t.Errorf("output contains control chars: %q", out)
 	}
-	for in, want := range cases {
-		if got := sanitize(in); got != want {
-			t.Errorf("sanitize(%q) = %q, want %q", in, got, want)
+	if !strings.Contains(out, "login[2Jwiped") {
+		t.Errorf("description text lost:\n%s", out)
+	}
+}
+
+func TestCard_MultiLineFullLogKeepsLines(t *testing.T) {
+	a := richAlert()
+	a.FullLog = "first line\nsecond line\r\nthird"
+	out := newCard(a, 100, 0).view()
+	for _, want := range []string{"\nfirst line\n", "\nsecond line\n", "\nthird"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("want separate line %q in:\n%s", want, out)
 		}
 	}
+}
+
+func TestCard_ShrinkingContentAfterScrollDoesNotPanic(t *testing.T) {
+	c := newCard(richAlert(), 30, 12)
+	c.handleKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'G'}})
+	c.setSize(300, 12)
+	_ = c.view()
 }

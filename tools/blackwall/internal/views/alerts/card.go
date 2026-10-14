@@ -9,6 +9,7 @@ import (
 
 	"github.com/greengrunt/blackwall/tools/blackwall/internal/indexer"
 	"github.com/greengrunt/blackwall/tools/blackwall/internal/ui/footer"
+	"github.com/greengrunt/blackwall/tools/blackwall/internal/ui/safe"
 	"github.com/greengrunt/blackwall/tools/blackwall/internal/ui/scroll"
 	"github.com/greengrunt/blackwall/tools/blackwall/internal/ui/styles"
 	"github.com/greengrunt/blackwall/tools/blackwall/internal/wazuh"
@@ -60,24 +61,6 @@ func wrap(s string, w int) []string {
 	return out
 }
 
-// sanitize makes attacker-controlled log text safe to print: tabs become a
-// space, other C0 controls, DEL and C1 controls are dropped, everything else
-// is kept. Without it an alert's full_log could carry ANSI escapes that
-// rewrite the terminal.
-func sanitize(s string) string {
-	var b strings.Builder
-	for _, r := range s {
-		switch {
-		case r == '\t':
-			b.WriteByte(' ')
-		case r < 0x20, r == 0x7f, r >= 0x80 && r <= 0x9f:
-		default:
-			b.WriteRune(r)
-		}
-	}
-	return b.String()
-}
-
 // flatten turns nested data into "a.b.c" -> value pairs.
 func flatten(prefix string, v any, out map[string]string) {
 	if m, ok := v.(map[string]any); ok {
@@ -96,6 +79,15 @@ func flatten(prefix string, v any, out map[string]string) {
 func (c *card) lines() []string {
 	a := c.alert
 	w := c.width
+	// Everything below comes from the indexer or from agents: clean it once.
+	ln := safe.Line
+	lns := func(in []string) string {
+		out := make([]string, len(in))
+		for i, x := range in {
+			out[i] = ln(x)
+		}
+		return strings.Join(out, ", ")
+	}
 	var l []string
 	add := func(s string) { l = append(l, wrap(s, w)...) }
 	section := func(title string) {
@@ -104,25 +96,25 @@ func (c *card) lines() []string {
 
 	// Wrap the plain title first, then style each line: wrapping a styled
 	// string would cut ANSI escape sequences in half.
-	for _, s := range wrap(fmt.Sprintf("[%d] %s", a.Rule.Level, a.Rule.Description), w) {
+	for _, s := range wrap(fmt.Sprintf("[%d] %s", a.Rule.Level, ln(a.Rule.Description)), w) {
 		l = append(l, levelStyle(a.Rule.Level).Render(s))
 	}
 	add(wazuh.FormatLocalUTC(a.Time, "2006-01-02 15:04:05 MST", "2006-01-02 15:04:05 UTC"))
 
 	section("Rule")
-	add(fmt.Sprintf("id %s · level %d · fired %d×", a.Rule.ID, a.Rule.Level, a.Rule.FiredTimes))
-	add("groups: " + strings.Join(a.Rule.Groups, ", "))
+	add(fmt.Sprintf("id %s · level %d · fired %d×", ln(a.Rule.ID), a.Rule.Level, a.Rule.FiredTimes))
+	add("groups: " + lns(a.Rule.Groups))
 
 	if m := a.Rule.MITRE; len(m.ID)+len(m.Tactic)+len(m.Technique) > 0 {
 		section("MITRE ATT&CK")
-		add("tactic:    " + strings.Join(m.Tactic, ", "))
-		add("technique: " + strings.Join(m.Technique, ", "))
-		add("id:        " + strings.Join(m.ID, ", "))
+		add("tactic:    " + lns(m.Tactic))
+		add("technique: " + lns(m.Technique))
+		add("id:        " + lns(m.ID))
 	}
 
 	section("Source")
-	add(fmt.Sprintf("agent:    %s (%s)", a.Agent.Name, a.Agent.ID))
-	add("location: " + a.Location)
+	add(fmt.Sprintf("agent:    %s (%s)", ln(a.Agent.Name), ln(a.Agent.ID)))
+	add("location: " + ln(a.Location))
 
 	if len(a.Data) > 0 {
 		section("Data")
@@ -134,13 +126,13 @@ func (c *card) lines() []string {
 		}
 		sort.Strings(keys)
 		for _, k := range keys {
-			add(sanitize(k) + ": " + sanitize(flat[k]))
+			add(ln(k) + ": " + ln(flat[k]))
 		}
 	}
 
 	if a.FullLog != "" {
 		section("Full log")
-		add(sanitize(a.FullLog))
+		add(safe.Block(a.FullLog))
 	}
 
 	comp := []struct {
@@ -156,7 +148,7 @@ func (c *card) lines() []string {
 			section("Compliance")
 			first = false
 		}
-		add(cv.name + ": " + strings.Join(cv.vals, ", "))
+		add(cv.name + ": " + lns(cv.vals))
 	}
 	return l
 }
