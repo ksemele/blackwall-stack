@@ -9,6 +9,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/greengrunt/blackwall/tools/blackwall/internal/ui/footer"
+	"github.com/greengrunt/blackwall/tools/blackwall/internal/ui/scroll"
 	"github.com/greengrunt/blackwall/tools/blackwall/internal/ui/styles"
 	"github.com/greengrunt/blackwall/tools/blackwall/internal/wazuh"
 )
@@ -30,14 +31,14 @@ type ProcessesModel struct {
 	err       string
 	filter    string
 	filtering bool
-	sl        scrollist
+	sl        scroll.List
 }
 
 func NewProcesses(c ProcessesClient, agentID string) *ProcessesModel {
 	return &ProcessesModel{
 		client:  c,
 		agentID: agentID,
-		sl:      scrollist{headerRows: 2, footerRows: 2},
+		sl:      scroll.List{HeaderRows: 2, FooterRows: 2},
 	}
 }
 
@@ -73,17 +74,17 @@ func (m *ProcessesModel) Update(msg tea.Msg) (subView, tea.Cmd) {
 		m.items = msg.Items
 		m.loaded = true
 		m.err = ""
-		m.sl.scroll = 0
+		m.sl.Reset()
 
 	case tea.KeyMsg:
 		if !m.filtering {
 			if msg.String() == "/" {
 				m.filtering = true
 				m.filter = ""
-				m.sl.scroll = 0
+				m.sl.Reset()
 				return m, nil
 			}
-			// Delegate scroll keys to scrollist.
+			// Delegate scroll keys to scroll.List.
 			if m.sl.HandleKey(msg, len(m.filtered())) {
 				return m, nil
 			}
@@ -92,10 +93,10 @@ func (m *ProcessesModel) Update(msg tea.Msg) (subView, tea.Cmd) {
 			case "esc":
 				m.filtering = false
 				m.filter = ""
-				m.sl.scroll = 0
+				m.sl.Reset()
 			case "enter":
 				m.filtering = false
-				m.sl.scroll = 0
+				m.sl.Reset()
 			case "backspace":
 				if len(m.filter) > 0 {
 					_, size := utf8.DecodeLastRuneInString(m.filter)
@@ -104,7 +105,7 @@ func (m *ProcessesModel) Update(msg tea.Msg) (subView, tea.Cmd) {
 			default:
 				if msg.Type == tea.KeyRunes {
 					m.filter += string(msg.Runes)
-					m.sl.scroll = 0
+					m.sl.Reset()
 				}
 			}
 		}

@@ -23,8 +23,8 @@ func TestView_DetailInheritsWindowSize(t *testing.T) {
 	if !ok {
 		t.Fatalf("subs[3] is %T, want *PackagesModel", v.detail.subs[3])
 	}
-	if pk.sl.height <= 0 {
-		t.Errorf("packages list height = %d, want > 0 (inherited from the window)", pk.sl.height)
+	if pk.sl.Height() <= 0 {
+		t.Errorf("packages list height = %d, want > 0 (inherited from the window)", pk.sl.Height())
 	}
 }
 
