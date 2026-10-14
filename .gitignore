@@ -9,3 +9,6 @@ tests/.wazuh-certs/*
 
 # Local secrets for direnv (template: .envrc.example)
 .envrc
+
+# Per-host prod configs (kept local, never committed)
+hosts/
