@@ -11,8 +11,16 @@ nft_public_tcp: [22]
 # Ports reachable only from the listed sources:
 #   nft_restricted:
 #     - port: 9100
+#       name: monitor_v4   # optional, default src_<port>
 #       sources: [172.28.0.12]
 nft_restricted: []
+
+# podman host: container subnet and bridge. When set, the base table adds
+# anti-spoofing, container DNS to the host and forwarding for published ports.
+#   nft_podman:
+#     net: 10.88.0.0/16
+#     if: podman0
+nft_podman: {}
 
 nft_forward_policy: accept
 nft_log_drops: true

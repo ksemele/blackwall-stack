@@ -6,3 +6,14 @@ all:
       nft_restricted:
         - port: 9999
           sources: [192.0.2.10]
+    podman:
+      nft_wan_if: eth0
+      nft_public_tcp: [22]
+      nft_restricted:
+        - port: 9999
+          name: monitor_v4
+          sources: [192.0.2.10, 198.51.100.0/24]
+      nft_podman:
+        net: 10.88.0.0/16
+        if: podman0
+      nft_forward_policy: drop
