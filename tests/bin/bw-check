@@ -83,6 +83,7 @@ Checks:
   hosts      containers are running, ansible can reach them
   versions   expected packages are installed, with versions
   nft        applied nftables ruleset and open ports
+  cf-wall    Cloudflare origin filter (cf-wall role)
   ports      listeners inside containers + published ports from the host
   wazuh      agent registration, REST API, broken-agent fixtures, dashboard
   metrics    node_exporter, Prometheus targets, Grafana health and datasource
@@ -150,6 +151,23 @@ check_nft() {
     bw_fail "ruleset does not match expectations"
     printf '%s\n' "$out" | tail -25 | sed 's/^/      /'
   fi
+}
+
+check_cf_wall() {
+  bw_info "cf-wall"
+  bw_require_ansible
+
+  # Opt-in: `bw-lab provision all` leaves it out (it fetches from cloudflare.com).
+  local installed
+  installed="$(bw_ansible_adhoc blackwall-eye cf_wall -b \
+                 -m stat -a 'path=/usr/local/sbin/blackwall-cf-refresh' 2>&1)"
+  if ! grep -q '"exists": true' <<<"$installed"; then
+    bw_skip "cf-wall is not deployed (run: bw-lab provision cf-wall)"
+    return
+  fi
+
+  bw_run "Cloudflare filter loaded, refresh is safe" \
+    bw_ansible blackwall-eye ansible/playbooks/verify-cf-wall.yml --limit "$BW_LIVE_HOSTS"
 }
 
 check_ports() {
@@ -341,12 +359,13 @@ bw_summary() {
 main() {
   case "${1:-all}" in
     all)
-      check_hosts; check_versions; check_nft; check_ports
+      check_hosts; check_versions; check_nft; check_cf_wall; check_ports
       check_wazuh; check_metrics; check_voice; check_brain
       ;;
     hosts)    check_hosts ;;
     versions) check_versions ;;
     nft)      check_nft ;;
+    cf-wall)  check_cf_wall ;;
     ports)    check_ports ;;
     wazuh)    check_wazuh ;;
     metrics)  check_metrics ;;

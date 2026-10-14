@@ -1,0 +1,14 @@
+[Unit]
+Description=Blackwall: refresh Cloudflare prefixes in nftables + nginx real_ip
+Documentation=https://www.cloudflare.com/ips/
+After=network-online.target nftables.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/blackwall-cf-refresh
+EnvironmentFile=-/etc/default/blackwall-cf-refresh
+
+# The script rolls back its own changes on error; there is no point failing
+# the systemd unit on a network glitch — the next timer run will catch up.
+SuccessExitStatus=0

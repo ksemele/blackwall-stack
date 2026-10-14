@@ -1,0 +1,9 @@
+---
+- name: Cloudflare origin filter
+  hosts: cf_wall
+  become: true
+  gather_facts: true
+
+  roles:
+    - role: cf-wall
+      tags: [cf-wall, firewall]

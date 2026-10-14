@@ -1,0 +1,66 @@
+---
+- name: Verify the Cloudflare origin filter
+  hosts: cf_wall
+  become: true
+  gather_facts: false
+
+  vars:
+    wall_file: /etc/nftables.d/blackwall-wall.nft
+
+  tasks:
+    - name: Dump table as JSON
+      ansible.builtin.command: nft -j list table inet blackwall_wall
+      register: wall_json
+      changed_when: false
+
+    - name: Collect sets and the prerouting chain
+      ansible.builtin.set_fact:
+        wall_sets: >-
+          {{ (wall_json.stdout | from_json).nftables | selectattr('set', 'defined')
+             | map(attribute='set') | list }}
+        wall_chain: >-
+          {{ (wall_json.stdout | from_json).nftables | selectattr('chain', 'defined')
+             | map(attribute='chain') | selectattr('name', 'eq', 'prerouting') | first | default({}) }}
+
+    - name: Assert Cloudflare prefix sets are filled and the hook is prerouting -150
+      ansible.builtin.assert:
+        that:
+          - (wall_sets | selectattr('name', 'eq', 'cf_v4') | map(attribute='elem') | first | default([]) | length) >= 10
+          - (wall_sets | selectattr('name', 'eq', 'cf_v6') | map(attribute='elem') | first | default([]) | length) >= 5
+          - wall_chain.hook | default('') == 'prerouting'
+          - wall_chain.prio | default(0) | int == -150
+        fail_msg: "blackwall_wall on {{ inventory_hostname }} is incomplete: {{ wall_chain }}"
+
+    - name: Generated file passes nft -c
+      ansible.builtin.command: nft -c -f {{ wall_file }}
+      changed_when: false
+
+    - name: Timer is enabled and active
+      ansible.builtin.command: systemctl is-enabled blackwall-cf-refresh.timer
+      changed_when: false
+
+    # A refresh that fetches junk must abort and leave the live rules alone.
+    - name: Checksum before a bad refresh
+      ansible.builtin.stat:
+        path: "{{ wall_file }}"
+        checksum_algorithm: sha256
+      register: before
+
+    - name: Refresh against a page that is not a prefix list
+      ansible.builtin.command: /usr/local/sbin/blackwall-cf-refresh
+      environment:
+        V4_URL: https://example.com/
+      register: bad_refresh
+      changed_when: false
+      failed_when: bad_refresh.rc == 0
+
+    - name: Checksum after the bad refresh
+      ansible.builtin.stat:
+        path: "{{ wall_file }}"
+        checksum_algorithm: sha256
+      register: after
+
+    - name: Assert the live file is untouched
+      ansible.builtin.assert:
+        that: before.stat.checksum == after.stat.checksum
+        fail_msg: "a failed refresh changed {{ wall_file }}"

@@ -69,7 +69,7 @@ tests/bin/bw-lab reset
 | `bw-lab down [--keep-data]` | stop the environment; volumes are removed unless `--keep-data` |
 | `bw-lab reset` | `down -v` + wipe Wazuh certificates + `up` |
 | `bw-lab status` | containers, published ports, health of Prometheus/Grafana/dashboard |
-| `bw-lab provision <target>` | ansible only: `eye`, `nftables`, `metrics`, `voice`, `brain`, `fixtures`, `all` |
+| `bw-lab provision <target>` | ansible only: `eye`, `nftables`, `metrics`, `voice`, `cf-wall`, `brain`, `fixtures`, `all` |
 | `bw-lab ssh <host> [cmd...]` | shell into a container (root password `blackwall`) |
 | `bw-lab logs <service> [-f]` | compose logs for one service |
 | `bw-lab open <target>` | open `dashboard`, `grafana` or `prometheus` in a browser |
@@ -115,6 +115,7 @@ tests/bin/bw-check metrics    # just one group
 | `hosts` | the five running containers exist (incl. the apt cache); ansible reaches every systemd node |
 | `versions` | `wazuh-*`, `filebeat`, `auditd`, `nftables` are installed (prints versions); `wazuh-agent` version equals `wazuh-manager` |
 | `nft` | `chain input` is `policy drop` and every expected port is in `set public_tcp` |
+| `cf-wall` | table `inet blackwall_wall` loaded with Cloudflare prefixes, timer enabled, a refresh that fetches junk leaves the live rules untouched (opt-in: SKIP until `bw-lab provision cf-wall`) |
 | `ports` | expected listeners inside the containers, plus published ports probed from the Mac |
 | `wazuh` | agents registered on the manager, REST API answers, indexer answers, `black-ghost-99` is `never_connected` and `black-dead-98` is `disconnected`, dashboard responds |
 | `metrics` | node_exporter serves metrics, Prometheus targets are `up`, `node_load1` returns data, Grafana is healthy with its datasource and dashboard |

@@ -1,0 +1,22 @@
+# Managed by the Ansible role blackwall-eye/cf-wall. Do not edit by hand.
+# Read by /usr/local/sbin/blackwall-cf-refresh.
+
+# Sources allowed straight to the origin on the filtered ports (space-separated).
+ADMIN_ALLOW="{{ cfwall_admin_allow | join(' ') }}"
+
+# External interface; empty = from the default route.
+WAN_IF="{{ cfwall_wan_if }}"
+
+# Filtered TCP ports.
+PORTS="{{ cfwall_ports | join(' ') }}"
+
+# nginx real_ip: container name and host path of cf-realip.conf inside the
+# directory mounted as /etc/nginx/conf.d. Empty container = skip real_ip.
+NGINX_CONTAINER="{{ cfwall_nginx_container }}"
+{% if cfwall_realip_out %}
+REALIP_OUT="{{ cfwall_realip_out }}"
+{% endif %}
+
+# Sanity floor: fewer fetched prefixes than this aborts the refresh.
+MIN_V4={{ cfwall_min_v4 }}
+MIN_V6={{ cfwall_min_v6 }}
