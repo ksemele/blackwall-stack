@@ -4,12 +4,16 @@ status: in_progress
 stage: 3
 last_updated: 2026-10-14
 last_task: "Lab deploy with a real key: text-block parsing for thinking models, low effort, real retries, optional workspace id header, strict verify-brain, bw-lab/bw-check brain targets"
-next_task: "Deploy with real Claude API key and verify end-to-end AI analysis in Telegram"
+next_task: "ansible-vault for prod secrets; decide whether voice should skip brain verify alerts"
 blockers: []
 ---
 
 ## Done
 
+- 2026-10-14: end-to-end verified in the lab — `bw-check brain` PASS, Claude
+  (`claude-haiku-5-5`) classified the synthetic alert and the analysis arrived
+  in Telegram. Claude's answer is now Markdown-escaped (categories like
+  `privilege_escalation` broke Telegram's parser).
 - 2026-10-14: ready for end-to-end in the lab.
   - `brain.py`: reads the `text` block (thinking blocks come first on
     `claude-haiku-5-5`), `output_config.effort: low`, `max_tokens: 2048`

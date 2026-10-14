@@ -148,7 +148,7 @@ def format_brain_message(alert: dict, claude_response: str) -> str:
         f"Time: {ts}\n"
         f"---\n"
         f"AI Analysis:\n"
-        f"{claude_response}"
+        f"{_md_escape(claude_response)}"
     )
 
 
