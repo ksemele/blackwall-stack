@@ -29,6 +29,116 @@
 
 ---
 
+### Task 0: RHEL-family host in the lab
+
+The prod host is RHEL family; the lab is Ubuntu only. Add one Rocky Linux 9
+node so the RedHat paths of both roles (`/etc/sysconfig/nftables.conf`, `dnf`)
+run for real.
+
+**Files:**
+- Create: `tests/docker/images/rockylinux9/Dockerfile`
+- Create: `tests/docker/images/rockylinux9/entrypoint.sh` (same as the ubuntu one, systemd path `/usr/lib/systemd/systemd`)
+- Modify: `tests/docker/docker-compose.yml` (service `black-rocky-02`)
+- Modify: `tests/inventory/hosts.yml` (group `rhel9`)
+- Create: `tests/inventory/group_vars/rhel9.yml`
+- Modify: any playbook with `hosts: all` that fails on the new node for apt-only reasons (see Step 4)
+- Modify: `tests/README.md`, root `README.md` host table
+
+**Interfaces:**
+- Produces: host `black-rocky-02` (172.28.0.15, SSH on host port 2203), group `rhel9`. Not a Wazuh agent.
+
+- [ ] **Step 1: Image** — `tests/docker/images/rockylinux9/Dockerfile`:
+
+```dockerfile
+FROM geerlingguy/docker-rockylinux9-ansible:latest
+
+# Rocky Linux 9 with systemd as PID 1 + sshd, mirroring images/ubuntu2204.
+# Root password 'blackwall' and PermitRootLogin yes: LOCAL TEST ENVIRONMENT ONLY.
+RUN dnf -y install openssh-server iproute \
+  && dnf clean all \
+  && ssh-keygen -A \
+  && echo 'PermitRootLogin yes' >> /etc/ssh/sshd_config \
+  && echo 'PasswordAuthentication yes' >> /etc/ssh/sshd_config \
+  && echo 'root:blackwall' | chpasswd \
+  && systemctl enable sshd
+
+EXPOSE 22
+
+COPY entrypoint.sh /entrypoint.sh
+STOPSIGNAL SIGRTMIN+3
+ENTRYPOINT ["/entrypoint.sh"]
+```
+
+`entrypoint.sh` (chmod +x):
+
+```bash
+#!/bin/bash
+# See images/ubuntu2204/entrypoint.sh: shadow a non-cgroup2 /sys/fs/cgroup.
+mount -t cgroup2 none /sys/fs/cgroup 2>/dev/null || true
+exec /usr/lib/systemd/systemd "$@"
+```
+
+- [ ] **Step 2: Compose + inventory**
+
+`docker-compose.yml`, after `black-dead-98`:
+
+```yaml
+  # RHEL-family node: exercises the RedHat paths of the firewall roles.
+  black-rocky-02:
+    <<: *black-node
+    profiles: [ubuntu2204]
+    build:
+      context: ./images/rockylinux9
+    container_name: black-rocky-02
+    hostname: black-rocky-02
+    ports:
+      - "2203:22"
+    networks:
+      blackwall-test:
+        ipv4_address: 172.28.0.15
+```
+
+`tests/inventory/hosts.yml`, under `all.children` next to `ubuntu2204`:
+
+```yaml
+    rhel9:
+      hosts:
+        black-rocky-02:
+          ansible_host: localhost
+          ansible_port: 2203
+```
+
+`tests/inventory/group_vars/rhel9.yml`:
+
+```yaml
+---
+# RHEL-family lab node (Rocky Linux 9). Firewall only — not a Wazuh agent.
+nft_public_tcp: [22, 9100]
+```
+
+(Add `node_exporter_install_method: tarball` here only if `metrics.yml` fails on this host with the apt method.)
+
+- [ ] **Step 3: Bring it up**
+
+Run: `tests/bin/bw-lab up --no-provision && ssh -F tests/docker/ssh_config black-rocky-02 true` (or `tests/bin/bw-lab ssh black-rocky-02 'cat /etc/redhat-release'`).
+Expected: `Rocky Linux release 9.x`.
+
+- [ ] **Step 4: Full provision + checks**
+
+Run: `tests/bin/bw-lab provision all && tests/bin/bw-check all`
+Expected: the new node gets `nftables` and `node_exporter`; no FAIL. If a `hosts: all` playbook (`verify-versions.yml`, `verify-ports.yml`, `metrics.yml`, `verify-metrics.yml`) fails on `black-rocky-02` for an apt/Ubuntu-only reason, make it OS-aware the smallest way (skip the apt-only assertion when `ansible_os_family != 'Debian'`, or scope the play to `ubuntu2204` when it is Wazuh-specific). Do not touch the `nftables` role in this task: if it fails on Rocky (`apt` task), that is the red test for Task 1 — record it and limit `provision all`/`bw-check` to work around nothing.
+
+- [ ] **Step 5: Docs** — `tests/README.md` host table and root `README.md` host table gain `black-rocky-02 | Rocky Linux 9, firewall roles on the RHEL family`.
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add tests README.md blackwall-*/ansible/playbooks
+git commit -m "feat(tests): rocky linux 9 node in the lab"
+```
+
+---
+
 ### Task 1: nftables role — OS family config path + service drop-in
 
 **Files:**
@@ -164,7 +274,7 @@ ExecStop=-/usr/sbin/nft delete table inet blackwall_base
 - [ ] **Step 4: Apply and verify**
 
 Run: `tests/bin/bw-lab provision nftables && tests/bin/bw-check nft`
-Expected: `PASS ruleset applied, expected ports are open`.
+Expected: `PASS ruleset applied, expected ports are open` — including `black-rocky-02` (RedHat path `/etc/sysconfig/nftables.conf`; check it with `tests/bin/bw-lab ssh black-rocky-02 'cat /etc/sysconfig/nftables.conf'`).
 Then: `tests/bin/bw-check all` — no new FAIL (voice/brain may SKIP).
 
 - [ ] **Step 5: Commit**
@@ -654,14 +764,15 @@ git commit -m "feat(eye): nftables podman rules, named restricted sets"
 ```
 
 Lab wiring now (so the check can run):
-- `tests/inventory/hosts.yml`, under `ubuntu2204.children` next to `wazuh_agents`:
+- `tests/inventory/hosts.yml`, under `all.children` (one Ubuntu and one RHEL-family node):
 
 ```yaml
-        # Cloudflare origin filter (cf-wall role). The lab serves nothing on
-        # 80/443, so the filter is inert here; it proves deploy and refresh.
-        cf_wall:
-          hosts:
-            black-host-01:
+    # Cloudflare origin filter (cf-wall role). The lab serves nothing on
+    # 80/443, so the filter is inert here; it proves deploy and refresh.
+    cf_wall:
+      hosts:
+        black-host-01:
+        black-rocky-02:
 ```
 
 - `tests/bin/bw-lab`: usage/die lists gain `cf-wall`; new case after `voice)`:
@@ -868,7 +979,7 @@ tests/bin/bw-lab provision cf-wall
 tests/bin/bw-check cf-wall
 tests/bin/bw-lab provision cf-wall 2>&1 | grep -E 'black-host-01 +:'
 ```
-Expected: `PASS Cloudflare filter loaded, refresh is safe`; the second provision recap shows `changed=0`.
+Expected: `PASS Cloudflare filter loaded, refresh is safe` (both hosts); the second provision recap shows `changed=0` for `black-host-01` and `black-rocky-02`.
 Then `tests/bin/bw-check nft` still PASS (reload of the base config includes the wall file).
 
 - [ ] **Step 5: tests/README.md** — provision target list gains `cf-wall`; checks table gains `| \`cf-wall\` | table \`inet blackwall_wall\` loaded with Cloudflare prefixes, timer enabled, a refresh that fetches junk leaves the live rules untouched |`.
