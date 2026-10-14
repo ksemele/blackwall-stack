@@ -42,4 +42,6 @@ var (
 	_ hintProvider = (*PackagesModel)(nil)
 	_ sizedView    = (*ProcessesModel)(nil)
 	_ hintProvider = (*ProcessesModel)(nil)
+	_ sizedView    = (*SessionsModel)(nil)
+	_ hintProvider = (*SessionsModel)(nil)
 )

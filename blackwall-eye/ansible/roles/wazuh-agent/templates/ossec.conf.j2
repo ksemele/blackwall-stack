@@ -38,6 +38,15 @@
     <log_format>syslog</log_format>
     <location>/var/log/syslog</location>
   </localfile>
+{% if wazuh_sessions_enabled %}
+  <!-- Login sessions for the blackwall Sessions tab (manager rule 100100) -->
+  <localfile>
+    <log_format>full_command</log_format>
+    <command>last --time-format iso -w -n 50</command>
+    <alias>blackwall-sessions</alias>
+    <frequency>{{ wazuh_sessions_frequency }}</frequency>
+  </localfile>
+{% endif %}
 
   <!-- File Integrity Monitoring -->
   <syscheck>

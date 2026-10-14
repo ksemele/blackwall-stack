@@ -1,0 +1,16 @@
+<!-- Managed by blackwall-eye (ansible role wazuh-manager). Do not edit on the host. -->
+<group name="blackwall,">
+
+  <!-- Login sessions snapshot: the agent runs `last` (alias blackwall-sessions,
+       see the wazuh-agent role). check_diff stores an alert only when the
+       output changes — one snapshot per login/logout, read by the blackwall
+       TUI Sessions tab. -->
+  <rule id="100100" level="3">
+    <if_sid>530</if_sid>
+    <match>ossec: output: 'blackwall-sessions'</match>
+    <check_diff />
+    <description>Blackwall: login sessions changed (last).</description>
+    <group>blackwall_sessions,</group>
+  </rule>
+
+</group>

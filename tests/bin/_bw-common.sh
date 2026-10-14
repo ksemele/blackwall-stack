@@ -17,6 +17,8 @@ BW_GRAFANA_URL="http://localhost:3000"
 BW_GRAFANA_AUTH="admin:blackwall"
 BW_PROM_URL="http://localhost:9090"
 BW_DASHBOARD_URL="https://localhost:5601"
+BW_INDEXER_URL="https://127.0.0.1:9200"
+BW_INDEXER_AUTH="admin:Blackwall1!"
 
 if [[ -t 1 ]]; then
   BW_RED=$'\033[31m'; BW_GREEN=$'\033[32m'; BW_YELLOW=$'\033[33m'

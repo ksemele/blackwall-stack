@@ -9,8 +9,8 @@ import (
 
 	"github.com/greengrunt/blackwall/tools/blackwall/internal/app"
 	"github.com/greengrunt/blackwall/tools/blackwall/internal/ui/footer"
-	"github.com/greengrunt/blackwall/tools/blackwall/internal/ui/tabbar"
 	"github.com/greengrunt/blackwall/tools/blackwall/internal/ui/styles"
+	"github.com/greengrunt/blackwall/tools/blackwall/internal/ui/tabbar"
 	"github.com/greengrunt/blackwall/tools/blackwall/internal/wazuh"
 )
 
@@ -35,11 +35,11 @@ func statusStyled(status string) string {
 const containerWarning = "⚠ Container host: no kernel audit — auditd rules do not fire. " +
 	"FIM, rootcheck, SCA and inventory work."
 
-var detailTabs = []string{"Overview", "Hardware", "Top", "Packages", "Network", "Security"}
+var detailTabs = []string{"Overview", "Hardware", "Top", "Packages", "Network", "Security", "Sessions"}
 
 // detailTabKeys are the upper-case hotkey labels shown in the tabbar prefix.
 // IMPORTANT: keep in sync with tabIndex below — same order, same length.
-var detailTabKeys = []string{"O", "H", "T", "K", "N", "S"}
+var detailTabKeys = []string{"O", "H", "T", "K", "N", "S", "E"}
 
 // tabIndex maps single-letter hotkeys to tab indices.
 var tabIndex = map[string]int{
@@ -49,6 +49,7 @@ var tabIndex = map[string]int{
 	"k": 3,
 	"n": 4,
 	"s": 5,
+	"e": 6,
 }
 
 type DetailModel struct {
@@ -62,7 +63,7 @@ type DetailModel struct {
 	subs      map[int]subView
 }
 
-func NewDetail(c Client, id string) *DetailModel {
+func NewDetail(c Client, idx AlertSearcher, id string) *DetailModel {
 	return &DetailModel{
 		client:  c,
 		agentID: id,
@@ -72,6 +73,7 @@ func NewDetail(c Client, id string) *DetailModel {
 			3: NewPackages(c, id),
 			4: NewNetwork(c, id),
 			5: NewSecurity(c, id),
+			6: NewSessions(idx, id),
 		},
 	}
 }
@@ -80,7 +82,8 @@ func (m *DetailModel) Name() string { return ":agent-detail" }
 
 func (m *DetailModel) Hints() []footer.Hint {
 	base := []footer.Hint{
-		{Key: "o/h/t/k/n/s", Desc: "tabs"},
+		{Key: "o/h/t/k/n/s/e", Desc: "tabs"},
+		{Key: "l", Desc: "alerts"},
 		{Key: "esc", Desc: "back"},
 		{Key: "r", Desc: "refresh"},
 		{Key: "?", Desc: "help"},
@@ -116,9 +119,9 @@ func (m *DetailModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if ws, ok := msg.(tea.WindowSizeMsg); ok {
 		m.width = ws.Width
 		m.height = ws.Height
-		// headerRow (agent name) + tabbar row + newline = 3 fixed rows.
-		// footer rendered by app layer = 1 row.
-		subHeight := max(ws.Height-4, 1)
+		// ws is the body area (the app already took its chrome); the detail
+		// header takes two more rows: agent name and the tab bar.
+		subHeight := max(ws.Height-2, 1)
 		for i, sub := range m.subs {
 			if sv, ok := sub.(sizedView); ok {
 				sv.SetSize(ws.Width, subHeight)
@@ -157,6 +160,12 @@ func (m *DetailModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, func() tea.Msg { return app.BackMsg{} }
 		case "r":
 			return m, m.Init()
+		case "l":
+			id, name := m.agentID, m.detail.Name
+			if name == "" {
+				name = id // detail not loaded yet
+			}
+			return m, func() tea.Msg { return app.ShowAgentAlertsMsg{AgentID: id, AgentName: name} }
 		}
 	}
 

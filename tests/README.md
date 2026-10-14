@@ -115,7 +115,7 @@ tests/bin/bw-check metrics    # just one group
 | `versions` | `wazuh-*`, `filebeat`, `auditd`, `nftables` are installed (prints versions); `wazuh-agent` version equals `wazuh-manager` |
 | `nft` | `chain input` is `policy drop` and every expected port is in `set public_tcp` |
 | `ports` | expected listeners inside the containers, plus published ports probed from the Mac |
-| `wazuh` | agents registered on the manager, REST API answers, `black-ghost-99` is `never_connected` and `black-dead-98` is `disconnected`, dashboard responds |
+| `wazuh` | agents registered on the manager, REST API answers, indexer answers, `black-ghost-99` is `never_connected` and `black-dead-98` is `disconnected`, dashboard responds |
 | `metrics` | node_exporter serves metrics, Prometheus targets are `up`, `node_load1` returns data, Grafana is healthy with its datasource and dashboard |
 | `voice` | `telegram-alerter` is running |
 
@@ -136,6 +136,7 @@ fixture stops it deliberately.
 | Grafana | `http://localhost:3000` | `admin` / `blackwall` |
 | Prometheus | `http://localhost:9090` | none |
 | Wazuh API (for `blackwall` TUI) | `https://127.0.0.1:55000` | `wazuh` / `wazuh` |
+| Wazuh indexer (for blackwall :alerts) | `https://127.0.0.1:9200` | `admin` / `Blackwall1!` |
 | SSH to any node | `tests/bin/bw-lab ssh <host>` | `root` / `blackwall` |
 
 Wazuh dashboard and indexer use a self-signed certificate; browsers show
@@ -174,7 +175,7 @@ Unset variables render as empty strings — playbooks still run, delivery just f
 
 | Container | Role | SSH port | Published | Static IP |
 |---|---|---|---|---|
-| `black-master-00` | manager + indexer + dashboard | `2200→22` | `5601→443`, `127.0.0.1:55000→55000` | `172.28.0.10` |
+| `black-master-00` | manager + indexer + dashboard | `2200→22` | `5601→443`, `127.0.0.1:55000→55000`, `127.0.0.1:9200→9200` | `172.28.0.10` |
 | `black-host-01` | agent + auditd target | `2201→22` | — | `172.28.0.11` |
 | `black-dead-98` | agent fixture — disconnected | `2202→22` | — | `172.28.0.98` |
 | `black-metrics-00` | Prometheus | — | `9090→9090` | `172.28.0.12` |

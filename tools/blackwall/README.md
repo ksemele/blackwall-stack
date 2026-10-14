@@ -40,11 +40,21 @@ contexts:
       password: ${BW_MASTER_00_WAZUH_PASSWORD}
       tls:
         insecure_skip_verify: true
+    indexer:                      # optional
+      server:   172.28.0.10
+      port:     9200
+      user:     admin
+      password: ${BW_MASTER_00_INDEXER_PASSWORD}
+      tls:
+        insecure_skip_verify: true
 
 ui:
   refresh_interval: 3s
   vim_keys:         true
 ```
+
+The `indexer:` section is optional (see below): without it `:alerts` and the
+agent Sessions tab show a hint instead of data.
 
 ### Test environment
 
@@ -61,9 +71,42 @@ for the lab is just:
       password: wazuh
       tls:
         insecure_skip_verify: true
+    indexer:
+      server:   127.0.0.1
+      port:     9200
+      user:     admin
+      password: Blackwall1!       # lab-only, public
+      tls:
+        insecure_skip_verify: true
 ```
 
-The generated template already contains it; `blackwall --context lab --once`.
+The lab also publishes the Wazuh indexer on `127.0.0.1:9200`, used by `:alerts`
+and Sessions. The generated template already contains the context; `blackwall --context lab --once`.
+
+### Wazuh indexer (alerts feed)
+
+An optional `indexer:` section per context points the alerts feed at the
+Wazuh indexer (OpenSearch). Contexts without it simply have no alerts feed.
+
+```yaml
+  lab:
+    wazuh:
+      # ...
+    indexer:
+      server:   127.0.0.1
+      port:     9200
+      user:     admin
+      password: ${BW_LAB_INDEXER_PASSWORD}
+      tls:
+        insecure_skip_verify: true
+      alerts:
+        min_level: 5                               # default; 0-15
+        exclude_groups: [sca, blackwall_sessions]  # default
+```
+
+`server`, `port`, `user` and `password` are required when the section is present.
+`alerts` is optional: an omitted `min_level` means 5, and an omitted
+`exclude_groups` means `[sca, blackwall_sessions]`. An explicit `0` or `[]` is kept.
 
 ## Run
 
@@ -80,17 +123,37 @@ blackwall --once                       # print agents and exit (script-friendly)
 | `q`, `Ctrl+C` | quit |
 | `Tab` / `Shift+Tab` | next / previous view |
 | `1`-`9` | jump to view by tab number |
-| `:` | open command palette (`:agents`, `:contexts`, `:ctx <name>`, `:q`) |
+| `:` | open command palette (`:agents`, `:contexts`, `:ctx <name>`, `:alerts`, `:q`) |
 | `↑↓` / `j k` | move cursor |
 | `↵` | open (context picker → open context; agents list → details) |
+| `l` | agent card: jump to `:alerts` filtered to this agent |
+| `e` | agent card: open the Sessions tab |
 | `p` | pause / resume auto-refresh |
 | `Ctrl+R` | force refresh now |
 | `?` | toggle help (planned) |
 
+## Alerts
+
+`:alerts` (tab `[3]`) is a live feed of Wazuh alerts read from the indexer. The first
+load is the last 24 hours (newest 200 rows); every `ui.refresh_interval` only newer
+alerts are fetched and prepended, with at most 500 rows kept in memory.
+Defaults: `min_level: 5`, `exclude_groups: [sca, blackwall_sessions]`.
+
+| Key | Action |
+|---|---|
+| `↑↓` / `j k` | move |
+| `↵` | open the alert card (rule, MITRE, agent, data, full log, compliance); `esc` back |
+| `+` / `-` | minimum level up / down (0-15), re-queries |
+| `s` | toggle the `exclude_groups` filter, re-queries |
+| `a` | cycle the agent filter over agents present in the feed, then all |
+| `/` | substring filter over loaded rows (description, agent, rule id, full log); `Enter` applies, `Esc` clears; while typing, `q`, digits and `p` go into the prompt |
+| `p` | pause / resume auto-refresh |
+| `Ctrl+R` | refresh now |
+
 ## Agent detail
 
 Open an agent from the agents list with `↵` to enter detail. The detail screen
-has six tabs, switchable by hotkey:
+has seven tabs, switchable by hotkey:
 
 | Tab | Key | Content |
 |---|---|---|
@@ -100,6 +163,7 @@ has six tabs, switchable by hotkey:
 | Packages | `k` | Installed packages (filterable with `/`) |
 | Network | `n` | Interfaces, addresses, open ports |
 | Security | `s` | FIM scan, rootcheck findings, SCA compliance |
+| Sessions | `e` | Who is logged in now and recent logins (from the agent's `last`, rule 100100); `⚠` marks logins that coincided with a level ≥ 7 alert. Needs the indexer |
 
 Agents enrolled into the Wazuh group `docker` (the `wazuh-agent` role does this
 for hosts with `/.dockerenv`) get a red `[docker]` tag in the list and a `DOCKER`
@@ -107,7 +171,12 @@ badge plus warning in detail: container kernels may lack audit support, so
 auditd detections do not fire there. See
 [tests/README.md](../../tests/README.md#container-limitations).
 
-Press `esc` to return to the agents list, `r` to force a refresh.
+Sessions come from `last` (wtmp), which only records sessions with a PTY:
+non-interactive `ssh host cmd`, scp and Ansible runs do not appear in the
+Sessions tab.
+
+Press `esc` to return to the agents list, `r` to force a refresh, `l` to jump
+to `:alerts` filtered to this agent.
 
 While in Top or Packages, press `/` to start typing a substring filter.
 `Enter` applies it, `Esc` clears.

@@ -22,11 +22,9 @@ func TestGetHardware_OK(t *testing.T) {
 			if r.Header.Get("Authorization") != "Bearer tok" {
 				t.Errorf("Authorization = %q, want Bearer tok", r.Header.Get("Authorization"))
 			}
-			_ = json.NewEncoder(w).Encode(hardwareResponse{Data: struct {
-				AffectedItems []Hardware `json:"affected_items"`
-			}{AffectedItems: []Hardware{
-				{BoardSerial: "DMQ3", CPUName: "Intel Core i7", CPUCores: 8},
-			}}})
+			// Real API shape: cpu/ram are nested objects.
+			_, _ = w.Write([]byte(`{"data":{"affected_items":[
+				{"board_serial":"DMQ3","cpu":{"name":"Intel Core i7","cores":8,"mhz":2400}}]}}`))
 		default:
 			t.Errorf("unexpected path %q", r.URL.Path)
 		}
@@ -69,11 +67,9 @@ func TestGetOSInfo_OK(t *testing.T) {
 			if r.Header.Get("Authorization") != "Bearer tok" {
 				t.Errorf("Authorization = %q, want Bearer tok", r.Header.Get("Authorization"))
 			}
-			_ = json.NewEncoder(w).Encode(osInfoResponse{Data: struct {
-				AffectedItems []OSInfo `json:"affected_items"`
-			}{AffectedItems: []OSInfo{
-				{OSName: "Ubuntu", OSVersion: "22.04", Architecture: "x86_64"},
-			}}})
+			// Real API shape: os.* is a nested object.
+			_, _ = w.Write([]byte(`{"data":{"affected_items":[
+				{"architecture":"x86_64","os":{"name":"Ubuntu","version":"22.04"}}]}}`))
 		default:
 			t.Errorf("unexpected path %q", r.URL.Path)
 		}
@@ -160,11 +156,9 @@ func TestListPorts_OK(t *testing.T) {
 		case "/security/user/authenticate":
 			authOK(w)
 		case "/syscollector/001/ports":
-			_ = json.NewEncoder(w).Encode(portsResponse{Data: struct {
-				AffectedItems []Port `json:"affected_items"`
-			}{AffectedItems: []Port{
-				{Protocol: "tcp", LocalIP: "0.0.0.0", LocalPort: 22, State: "listening"},
-			}}})
+			// Real API shape: local/remote are nested objects.
+			_, _ = w.Write([]byte(`{"data":{"affected_items":[
+				{"protocol":"tcp","local":{"ip":"0.0.0.0","port":22},"state":"listening"}]}}`))
 		default:
 			t.Errorf("unexpected path %q", r.URL.Path)
 		}

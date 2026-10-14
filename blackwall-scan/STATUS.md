@@ -28,7 +28,7 @@ called **blackwall-scan**.
     tlsx (SAN/expiry/ciphers) → nuclei (optional: exposures/misconfig/takeover).
     Output: JSONL + summary in `output/<timestamp>/`.
   - `run.sh` — host helper: build + run with targets/ and output/ mounted.
-  - `targets.txt` — example.com, 203.0.113.10, 198.51.100.20.
+  - `targets/targets.txt` — local only (git-ignored); template in `targets.txt.example`.
 
 ## Known facts about the targets (initial recon)
 

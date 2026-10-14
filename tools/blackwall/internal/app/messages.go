@@ -20,3 +20,11 @@ type ContextSwitchedMsg struct {
 	Name string
 	Err  error
 }
+
+// ShowAgentAlertsMsg asks the app to open `:alerts` filtered to one agent
+// (sent by the agent card's `l` key). The app activates the view named
+// ":alerts" and passes it this message; the view applies the filter.
+type ShowAgentAlertsMsg struct {
+	AgentID   string
+	AgentName string
+}

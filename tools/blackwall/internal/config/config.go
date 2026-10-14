@@ -12,8 +12,9 @@ type Config struct {
 }
 
 type Context struct {
-	Description string          `yaml:"description"`
-	Wazuh       *WazuhSubsystem `yaml:"wazuh,omitempty"`
+	Description string            `yaml:"description"`
+	Wazuh       *WazuhSubsystem   `yaml:"wazuh,omitempty"`
+	Indexer     *IndexerSubsystem `yaml:"indexer,omitempty"`
 }
 
 type WazuhSubsystem struct {
@@ -23,6 +24,27 @@ type WazuhSubsystem struct {
 	Password string `yaml:"password"`
 	TLS      TLS    `yaml:"tls"`
 }
+
+type IndexerSubsystem struct {
+	Server   string        `yaml:"server"`
+	Port     int           `yaml:"port"`
+	User     string        `yaml:"user"`
+	Password string        `yaml:"password"`
+	TLS      TLS           `yaml:"tls"`
+	Alerts   AlertDefaults `yaml:"alerts"`
+}
+
+type AlertDefaults struct {
+	MinLevel      *int     `yaml:"min_level"`      // nil → DefaultMinLevel
+	ExcludeGroups []string `yaml:"exclude_groups"` // nil → DefaultExcludeGroups()
+}
+
+// DefaultMinLevel hides routine events (level < 5) from the alerts feed.
+const DefaultMinLevel = 5
+
+// DefaultExcludeGroups hides CIS audit results (shown in the agent card
+// already) and session snapshots (shown in the Sessions tab) from the feed.
+func DefaultExcludeGroups() []string { return []string{"sca", "blackwall_sessions"} }
 
 type TLS struct {
 	InsecureSkipVerify bool   `yaml:"insecure_skip_verify"`

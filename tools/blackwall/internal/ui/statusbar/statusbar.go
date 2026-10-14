@@ -11,6 +11,7 @@ import (
 type State struct {
 	Context string
 	Wazuh   string
+	Indexer string
 	Refresh time.Duration
 	Paused  bool
 }
@@ -21,6 +22,10 @@ func Render(s State) string {
 		mode = "⏸ paused"
 	}
 	ctxBadge := styles.ContextBadge.Render(s.Context)
-	body := fmt.Sprintf("context: %s · wazuh: %s · %s", ctxBadge, s.Wazuh, mode)
+	body := fmt.Sprintf("context: %s · wazuh: %s", ctxBadge, s.Wazuh)
+	if s.Indexer != "" {
+		body += " · indexer: " + s.Indexer
+	}
+	body += " · " + mode
 	return styles.StatusBar.Render(body)
 }

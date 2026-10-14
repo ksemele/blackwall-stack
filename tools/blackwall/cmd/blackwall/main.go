@@ -21,6 +21,7 @@ import (
 	"github.com/greengrunt/blackwall/tools/blackwall/internal/ui/statusbar"
 	"github.com/greengrunt/blackwall/tools/blackwall/internal/views"
 	agentsview "github.com/greengrunt/blackwall/tools/blackwall/internal/views/agents"
+	alertsview "github.com/greengrunt/blackwall/tools/blackwall/internal/views/alerts"
 	ctxview "github.com/greengrunt/blackwall/tools/blackwall/internal/views/contexts"
 	helpview "github.com/greengrunt/blackwall/tools/blackwall/internal/views/help"
 	"github.com/greengrunt/blackwall/tools/blackwall/internal/wazuh"
@@ -140,7 +141,25 @@ func run() error {
 
 	ctxView := ctxview.New(cfg)
 	agentsList := agentsview.NewView(client, cfg.UI.RefreshInterval)
-	registered := []views.View{ctxView, agentsList}
+	idx, idxAddr, err := alertsview.SearcherFor(currentCtx.Indexer)
+	if err != nil {
+		return err
+	}
+	alertsSettings := func(name string, sub *config.IndexerSubsystem) alertsview.Settings {
+		st := alertsview.Settings{Context: name, MinLevel: config.DefaultMinLevel,
+			ExcludeGroups: config.DefaultExcludeGroups(), Refresh: cfg.UI.RefreshInterval}
+		if sub != nil {
+			st.MinLevel = *sub.Alerts.MinLevel
+			st.ExcludeGroups = sub.Alerts.ExcludeGroups
+		}
+		return st
+	}
+	alertsView := alertsview.New(idx, alertsSettings(cfg.Current, currentCtx.Indexer))
+	if idx != nil {
+		agentsList.SetIndexer(idx)
+	}
+	registered := []views.View{ctxView, agentsList, alertsView}
+	liveIndexer := idxAddr
 
 	initial := ":agents"
 	if cfg.SelectContextOnStart {
@@ -163,9 +182,20 @@ func run() error {
 			if err != nil {
 				return app.ContextSwitchedMsg{Name: name, Err: err}
 			}
+			newIdx, newIdxAddr, err := alertsview.SearcherFor(ctx.Indexer)
+			if err != nil {
+				return app.ContextSwitchedMsg{Name: name, Err: err}
+			}
 			if err := config.SetCurrent(cfgPath, name); err != nil {
 				return app.ContextSwitchedMsg{Name: name, Err: err}
 			}
+			alertsView.Replace(newIdx, alertsSettings(name, ctx.Indexer))
+			if newIdx != nil {
+				agentsList.SetIndexer(newIdx)
+			} else {
+				agentsList.SetIndexer(nil)
+			}
+			liveIndexer = newIdxAddr
 			cfg.Current = name
 			liveCtx = name
 			liveWazuh = fmt.Sprintf("%s:%d", ctx.Wazuh.Server, ctx.Wazuh.Port)
@@ -185,6 +215,7 @@ func run() error {
 			return statusbar.State{
 				Context: liveCtx,
 				Wazuh:   liveWazuh,
+				Indexer: liveIndexer,
 				Refresh: cfg.UI.RefreshInterval,
 			}
 		},

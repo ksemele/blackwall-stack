@@ -38,7 +38,12 @@ PORTS="-p -" ./run.sh     # full scan of all 65535 TCP ports (slow)
 ./run.sh --build          # rebuild the image
 ```
 
-Targets go in `targets.txt` (one per line, a domain or an IPv4 address).
+Targets go in `targets/targets.txt` (one per line, a domain or an IPv4 address).
+The file is git-ignored — create it from the template:
+
+```bash
+cp targets/targets.txt.example targets/targets.txt
+```
 
 Results land in `output/<timestamp>/`:
 - `SUMMARY.txt` — human-readable summary

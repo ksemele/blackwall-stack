@@ -35,3 +35,10 @@ func TestEnsureExists_CreatesFileWhenAbsent(t *testing.T) {
 		t.Error("created = true on second run, want false")
 	}
 }
+
+func TestTemplate_HasLabIndexer(t *testing.T) {
+	tpl := string(defaultTemplate)
+	if !strings.Contains(tpl, "indexer:") || !strings.Contains(tpl, "port:     9200") {
+		t.Error("template lab context must carry an indexer section on port 9200")
+	}
+}

@@ -20,6 +20,11 @@ if [[ "${1:-}" == "--build" ]] || ! docker image inspect "$IMAGE" >/dev/null 2>&
   docker build -t "$IMAGE" .
 fi
 
+if [[ ! -f targets/targets.txt ]]; then
+  echo "[run] no targets/targets.txt — copy targets/targets.txt.example and fill it in" >&2
+  exit 1
+fi
+
 echo "[run] scanning targets from ./targets/targets.txt ..."
 docker run --rm \
   -v "$(pwd)/targets:/targets:ro" \

@@ -69,6 +69,7 @@ services:
   # Ports:
   #   black-master-00:  2200 (SSH), 5601 (Wazuh dashboard, container :443),
   #                     55000 (Wazuh API, loopback only — for the blackwall TUI)
+  #                     9200 (Wazuh indexer, loopback only — for blackwall :alerts)
   #   black-host-01:    2201 (SSH)
 
   black-master-00:
@@ -82,6 +83,7 @@ services:
       - "2200:22"
       - "5601:443"
       - "127.0.0.1:55000:55000"
+      - "127.0.0.1:9200:9200"
     networks:
       blackwall-test:
         ipv4_address: 172.28.0.10

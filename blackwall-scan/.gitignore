@@ -1,2 +1,5 @@
 # Scan results — never commit (may contain infra details)
 output/
+
+# Real targets — local only (template: targets/targets.txt.example)
+targets/targets.txt

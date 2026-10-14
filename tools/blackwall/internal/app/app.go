@@ -87,6 +87,10 @@ func (m *Model) Init() tea.Cmd {
 	return m.Active().Init()
 }
 
+// chromeRows is what View() draws around the active view: tab bar, status
+// line and rule on top, rule and key hints at the bottom.
+const chromeRows = 5
+
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// Track terminal size for right-aligned layout and footer pinning.
 	// Broadcast the size to every view (including the help overlay) so an
@@ -95,14 +99,17 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if ws, ok := msg.(tea.WindowSizeMsg); ok {
 		m.width = ws.Width
 		m.height = ws.Height
+		// Views get the body area, not the whole terminal: the chrome rows
+		// rendered in View() are not theirs to fill.
+		body := tea.WindowSizeMsg{Width: ws.Width, Height: max(ws.Height-chromeRows, 1)}
 		for i, v := range m.views {
-			next, _ := v.Update(ws)
+			next, _ := v.Update(body)
 			if vv, ok := next.(views.View); ok {
 				m.views[i] = vv
 			}
 		}
 		if m.helpView != nil {
-			next, _ := m.helpView.Update(ws)
+			next, _ := m.helpView.Update(body)
 			if vv, ok := next.(views.View); ok {
 				m.helpView = vv
 			}
@@ -156,6 +163,17 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, cmd
 		}
 
+		if msg.String() == "ctrl+c" {
+			return m, tea.Quit
+		}
+		if kc, ok := m.Active().(views.KeyCapturer); ok && kc.CapturesKeys() {
+			next, cmd := m.Active().Update(msg)
+			if v, ok := next.(views.View); ok {
+				m.views[m.active] = v
+			}
+			return m, cmd
+		}
+
 		if msg.String() == ":" {
 			m.paletteOpen = true
 			m.paletteInput = ":"
@@ -178,10 +196,12 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.active = (m.active - 1 + len(m.views)) % len(m.views)
 			return m, m.Active().Init()
 		case "p":
+			// Only consume `p` when a pause hook is wired; otherwise the
+			// active view owns pause (the agents list and :alerts do).
 			if m.pauseToggle != nil {
 				m.pauseToggle()
+				return m, nil
 			}
-			return m, nil
 		}
 		if r := singleDigit(msg.String()); r > 0 && r <= len(m.views) {
 			m.active = r - 1
@@ -199,6 +219,19 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if v.Name() == msg.Name {
 				m.active = i
 				return m, v.Init()
+			}
+		}
+		return m, nil
+
+	case ShowAgentAlertsMsg:
+		for i, v := range m.views {
+			if v.Name() == ":alerts" {
+				m.active = i
+				next, cmd := v.Update(msg)
+				if vv, ok := next.(views.View); ok {
+					m.views[i] = vv
+				}
+				return m, cmd
 			}
 		}
 		return m, nil
