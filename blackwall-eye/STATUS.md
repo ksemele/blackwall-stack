@@ -3,13 +3,19 @@ module: blackwall-eye
 status: in_progress
 stage: 1
 last_updated: 2026-10-14
-last_task: "session snapshots: agent runs last, manager rule 100100 (check_diff), explicit <ruleset> in manager ossec.conf, bw-check asserts the rule"
+last_task: "manager host (agent 000) gets syscollector + SCA; rootcheck reads etc/rootcheck/ rootkit lists"
 next_task: "Port hosts/example.com/nftables/*.nft into the nftables role (the prod config is still outside config-as-code)"
 blockers: []
 ---
 
 ## Done
 
+- 2026-10-14: manager host inventory. `wazuh-manager` `ossec.conf` gains
+  `<wodle name="syscollector">` and `<sca>` (agent 000 was empty in the TUI
+  Hardware/Top/Packages/Network/Security tabs); rootcheck now points at the
+  shipped `etc/rootcheck/rootkit_*.txt` instead of missing `etc/shared/` files.
+  Intervals reuse the agent role knobs (`wazuh_syscollector_interval`,
+  `wazuh_sca_interval`, `wazuh_rootcheck_frequency`).
 - 2026-10-14: login sessions snapshot for the blackwall TUI Sessions tab.
   - Manager `ossec.conf` now declares `<ruleset>` explicitly (fixes
     `GET /rules` error 1106); `blackwall_rules.xml` deployed to `etc/rules/`.

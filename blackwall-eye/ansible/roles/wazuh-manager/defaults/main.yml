@@ -25,3 +25,9 @@ wazuh_agents_disconnection_time: 10m
 
 # Syscheck settings
 wazuh_syscheck_frequency: 43200
+
+# Inventory and posture of the manager host itself (agent 000), same knobs as
+# the wazuh-agent role
+wazuh_syscollector_interval: "5m"
+wazuh_rootcheck_frequency: 43200
+wazuh_sca_interval: "12h"
