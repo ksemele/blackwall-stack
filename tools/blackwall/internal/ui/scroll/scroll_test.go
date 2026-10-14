@@ -47,3 +47,13 @@ func TestList_KeysAndIndicator(t *testing.T) {
 		t.Errorf("Height() = %d", l.Height())
 	}
 }
+
+func TestList_RenderClampsWhenRowsShrink(t *testing.T) {
+	l := List{HeaderRows: 2, FooterRows: 1}
+	l.SetSize(10)
+	l.HandleKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'G'}}, 115)
+	out := l.Render("h1\nh2\n", rows(25), "f\n") // must not panic
+	if got := strings.Count(out, "\n"); got != 10 {
+		t.Errorf("rendered %d lines, want 10 (last page)", got)
+	}
+}

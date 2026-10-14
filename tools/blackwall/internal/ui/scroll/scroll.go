@@ -86,6 +86,7 @@ func (s *List) HandleKey(msg tea.KeyMsg, total int) bool {
 // Callers embed this into their footer block so the total line count stays
 // within the FooterRows budget.
 func (s *List) Indicator(total int) string {
+	s.clamp(total)
 	vis := s.visibleCount(total)
 	end := min(s.scroll+vis, total)
 	first := s.scroll + 1
@@ -116,6 +117,7 @@ func (s *List) Render(headerBlock string, rows []string, footerBlock string) str
 		return b.String()
 	}
 
+	s.clamp(len(rows)) // the row count may have shrunk since the last key
 	vis := s.visibleCount(len(rows))
 	end := min(s.scroll+vis, len(rows))
 	slice := rows[s.scroll:end]
