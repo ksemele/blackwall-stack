@@ -51,3 +51,17 @@ func TestBuildSearch_AllFilters(t *testing.T) {
 		t.Errorf("no excluded groups → no must_not, got %s", got)
 	}
 }
+
+func TestBuildSearch_NoTimeLimit(t *testing.T) {
+	got := asJSON(t, BuildSearch(AlertQuery{RuleID: "100100", NoTimeLimit: true}))
+	if strings.Contains(got, `"timestamp":{"gte"`) || strings.Contains(got, "now-24h") {
+		t.Errorf("NoTimeLimit must not emit a timestamp range: %s", got)
+	}
+	if !strings.Contains(got, `{"timestamp":{"order":"desc"}}`) {
+		t.Errorf("sort must stay: %s", got)
+	}
+	got = asJSON(t, BuildSearch(AlertQuery{}))
+	if !strings.Contains(got, `"now-24h"`) {
+		t.Errorf("zero Since without NoTimeLimit must stay now-24h: %s", got)
+	}
+}

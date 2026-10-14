@@ -18,7 +18,9 @@ func BuildSearch(q AlertQuery) map[string]any {
 	}
 	filter := []any{
 		map[string]any{"range": map[string]any{"rule.level": map[string]any{"gte": q.MinLevel}}},
-		map[string]any{"range": map[string]any{"timestamp": map[string]any{"gte": since}}},
+	}
+	if !q.NoTimeLimit {
+		filter = append(filter, map[string]any{"range": map[string]any{"timestamp": map[string]any{"gte": since}}})
 	}
 	if q.AgentID != "" {
 		filter = append(filter, map[string]any{"term": map[string]any{"agent.id": q.AgentID}})

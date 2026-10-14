@@ -1,6 +1,7 @@
 package indexer
 
 import (
+	"encoding/json"
 	"testing"
 	"time"
 )
@@ -23,5 +24,16 @@ func TestParseTime_RFC3339AndGarbage(t *testing.T) {
 	}
 	if _, err := ParseTime("yesterday"); err == nil {
 		t.Error("garbage must be an error")
+	}
+}
+
+func TestAlertUnmarshal_BadTimestampKeepsAlert(t *testing.T) {
+	var as []Alert
+	in := `[{"id":"a","timestamp":"2026-10-13T23:58:03.908+0000"},{"id":"b","timestamp":"garbage"}]`
+	if err := json.Unmarshal([]byte(in), &as); err != nil {
+		t.Fatal(err)
+	}
+	if len(as) != 2 || as[0].Time.IsZero() || !as[1].Time.IsZero() || as[1].RawTime != "garbage" {
+		t.Errorf("got %+v", as)
 	}
 }

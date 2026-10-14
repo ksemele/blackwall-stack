@@ -15,6 +15,7 @@ type AlertQuery struct {
 	RuleID        string    // "" = any
 	Since         time.Time // zero = now-24h; otherwise timestamp >= Since
 	Size          int       // 0 = 200
+	NoTimeLimit   bool      // true = no timestamp range at all (Since is ignored)
 }
 
 type Alert struct {
@@ -75,11 +76,11 @@ func (a *Alert) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	if a.RawTime != "" {
-		t, err := ParseTime(a.RawTime)
-		if err != nil {
-			return err
+		// One unparseable timestamp must not fail the whole search: keep
+		// RawTime and leave Time zero.
+		if t, err := ParseTime(a.RawTime); err == nil {
+			a.Time = t
 		}
-		a.Time = t
 	}
 	return nil
 }
