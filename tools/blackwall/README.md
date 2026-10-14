@@ -126,7 +126,7 @@ blackwall --once                       # print agents and exit (script-friendly)
 | `:` | open command palette (`:agents`, `:contexts`, `:ctx <name>`, `:alerts`, `:q`) |
 | `↑↓` / `j k` | move cursor |
 | `↵` | open (context picker → open context; agents list → details) |
-| `←` / `→` | agent card: previous / next tab; `←` on Overview goes back |
+| `←` / `→` | agent card: previous / next tab (wraps around); `esc` goes back |
 | `l` | agent card: jump to `:alerts` filtered to this agent |
 | `e` | agent card: open the Sessions tab |
 | `p` | pause / resume auto-refresh |

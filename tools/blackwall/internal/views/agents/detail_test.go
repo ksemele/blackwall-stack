@@ -50,22 +50,24 @@ func TestDetail_ArrowsCycleTabs(t *testing.T) {
 	if got := m.(*DetailModel).activeTab; got != 1 {
 		t.Fatalf("activeTab = %d after ←, want 1", got)
 	}
-	for range detailTabs {
-		m, _ = m.Update(right)
-	}
-	if got := m.(*DetailModel).activeTab; got != len(detailTabs)-1 {
-		t.Errorf("activeTab = %d, want last tab %d (→ stops at the end)", got, len(detailTabs)-1)
-	}
 }
 
-func TestDetail_LeftOnOverviewEmitsBack(t *testing.T) {
-	d := NewDetail(&fakeClient{}, nil, "001")
-	_, cmd := d.Update(tea.KeyMsg{Type: tea.KeyLeft})
-	if cmd == nil {
-		t.Fatal("expected cmd on ← from Overview")
+func TestDetail_ArrowsWrapAround(t *testing.T) {
+	var m tea.Model = NewDetail(&fakeClient{}, nil, "001")
+	last := len(detailTabs) - 1
+
+	m, cmd := m.Update(tea.KeyMsg{Type: tea.KeyLeft})
+	if got := m.(*DetailModel).activeTab; got != last {
+		t.Fatalf("activeTab = %d after ← on Overview, want last tab %d", got, last)
 	}
-	if _, ok := cmd().(app.BackMsg); !ok {
-		t.Errorf("msg type = %T, want BackMsg", cmd())
+	if cmd != nil {
+		if _, back := cmd().(app.BackMsg); back {
+			t.Fatal("← must not leave the card; esc does")
+		}
+	}
+	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyRight})
+	if got := m.(*DetailModel).activeTab; got != 0 {
+		t.Errorf("activeTab = %d after → on last tab, want 0", got)
 	}
 }
 

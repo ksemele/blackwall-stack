@@ -153,16 +153,9 @@ func (m *DetailModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		switch msg.String() {
 		case "right":
-			if m.activeTab < len(detailTabs)-1 {
-				return m, m.switchTab(m.activeTab + 1)
-			}
-			return m, nil
+			return m, m.switchTab((m.activeTab + 1) % len(detailTabs))
 		case "left":
-			// ← from the first tab leaves the card, like esc.
-			if m.activeTab > 0 {
-				return m, m.switchTab(m.activeTab - 1)
-			}
-			return m, func() tea.Msg { return app.BackMsg{} }
+			return m, m.switchTab((m.activeTab + len(detailTabs) - 1) % len(detailTabs))
 		case "esc":
 			return m, func() tea.Msg { return app.BackMsg{} }
 		case "r":
