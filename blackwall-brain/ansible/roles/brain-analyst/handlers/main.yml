@@ -7,3 +7,5 @@
   ansible.builtin.systemd:
     name: brain-analyst
     state: restarted
+  # A disabled analyst must stay stopped even when its files change.
+  when: brain_enabled | bool

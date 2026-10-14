@@ -55,6 +55,20 @@ ansible-playbook ansible/playbooks/brain.yml \
   -e telegram_chat_id=<chat_id>
 ```
 
+## Turn AI analysis on/off
+
+`brain_enabled` (default `true`) switches the analyst without uninstalling it:
+`false` stops and disables the service, the script, config and state stay in
+place. Voice keeps forwarding raw alerts either way.
+
+```bash
+ansible-playbook ansible/playbooks/brain.yml -e brain_enabled=false   # off
+ansible-playbook ansible/playbooks/brain.yml                          # on again
+```
+
+In the lab: `tests/bin/bw-lab provision brain -e brain_enabled=false`; while it
+is off, `bw-check brain` reports SKIP. Set it in the inventory to make it stick.
+
 ## Verify
 
 ```bash

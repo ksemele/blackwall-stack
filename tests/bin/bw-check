@@ -344,6 +344,16 @@ check_brain() {
     return
   fi
 
+  # brain_enabled=false keeps the files but stops and disables the service.
+  # `|| true` keeps rc 0, so ansible prints the bare state on its own line.
+  local enabled
+  enabled="$(bw_ansible_adhoc blackwall-brain wazuh_managers -b \
+               -m shell -a 'systemctl is-enabled brain-analyst || true' 2>&1)"
+  if ! grep -qx 'enabled' <<<"$enabled"; then
+    bw_skip "brain-analyst is disabled (brain_enabled=false; enable: bw-lab provision brain)"
+    return
+  fi
+
   bw_run "brain-analyst analysed and delivered a test alert" \
     bw_ansible blackwall-brain ansible/playbooks/verify-brain.yml
 }
