@@ -65,15 +65,18 @@ type View struct {
 	excludeOn bool
 	agentID   string
 	agentName string
-	filter    string
-	filtering bool
-	paused    bool
-	newCount  int
-	err       string
-	gen       int
-	width     int
-	height    int
-	card      *card // non-nil while the alert card is open (Task 9)
+	// knownAgents (id → name) is refreshed from every load and never shrunk by
+	// agent-filtered loads, so `a` can cycle over all agents seen.
+	knownAgents map[string]string
+	filter      string
+	filtering   bool
+	paused      bool
+	newCount    int
+	err         string
+	gen         int
+	width       int
+	height      int
+	card        *card // non-nil while the alert card is open (Task 9)
 
 	tick func(gen int) tea.Cmd // replaced in tests
 
@@ -162,17 +165,35 @@ func (v *View) query(incremental bool) indexer.AlertQuery {
 	if v.excludeOn {
 		q.ExcludeGroups = v.st.ExcludeGroups
 	}
-	if incremental && len(v.rows) > 0 {
-		q.Since = v.rows[0].Time
+	if since := v.newestTime(); incremental && !since.IsZero() {
+		// Overlap by 30 s: late-indexed alerts may carry slightly older
+		// timestamps; merge de-duplicates by ID.
+		q.Since = since.Add(-sinceOverlap)
 	} else {
 		q.Size = initialSize
 	}
 	return q
 }
 
+// sinceOverlap is how far an incremental query reaches back before the
+// newest shown alert.
+const sinceOverlap = 30 * time.Second
+
+// newestTime returns the newest non-zero alert time among the rows (alerts
+// with an unparseable timestamp have a zero Time).
+func (v *View) newestTime() time.Time {
+	var t time.Time
+	for _, r := range v.rows {
+		if r.Time.After(t) {
+			t = r.Time
+		}
+	}
+	return t
+}
+
 func (v *View) load(incremental bool) tea.Cmd {
 	s, q, gen := v.searcher, v.query(incremental), v.gen
-	inc := incremental && len(v.rows) > 0
+	inc := !q.Since.IsZero()
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
@@ -193,6 +214,7 @@ func (v *View) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case app.ShowAgentAlertsMsg:
 		v.agentID, v.agentName = msg.AgentID, msg.AgentName
+		v.filter, v.filtering = "", false
 		v.card = nil
 		return v, v.reload()
 
@@ -214,6 +236,14 @@ func (v *View) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return v, nil
 		}
 		v.err = ""
+		if v.knownAgents == nil {
+			v.knownAgents = map[string]string{}
+		}
+		for _, a := range msg.alerts {
+			if a.Agent.ID != "" {
+				v.knownAgents[a.Agent.ID] = a.Agent.Name
+			}
+		}
 		if !msg.incremental {
 			v.rows, _ = merge(nil, msg.alerts, maxRows)
 			v.cursor, v.offset, v.newCount = 0, 0, 0
@@ -330,10 +360,7 @@ func (v *View) key(msg tea.KeyMsg) tea.Cmd {
 
 // nextAgent cycles over the agents present in the feed, by name, then "all".
 func (v *View) nextAgent() {
-	names := map[string]string{}
-	for _, r := range v.rows {
-		names[r.Agent.ID] = r.Agent.Name
-	}
+	names := v.knownAgents
 	ids := make([]string, 0, len(names))
 	for id := range names {
 		ids = append(ids, id)

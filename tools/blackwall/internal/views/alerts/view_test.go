@@ -34,7 +34,16 @@ func (f *fakeSearcher) SearchAlerts(_ context.Context, q indexer.AlertQuery) ([]
 	if len(f.results) > 1 {
 		f.results = f.results[1:]
 	}
-	return r, nil
+	if q.AgentID == "" {
+		return r, nil
+	}
+	var out []indexer.Alert
+	for _, a := range r {
+		if a.Agent.ID == q.AgentID {
+			out = append(out, a)
+		}
+	}
+	return out, nil
 }
 
 func alert(id string, sec, level int, agentID, agentName, desc string) indexer.Alert {
@@ -115,8 +124,8 @@ func TestTick_PrependsKeepsCursorCountsNew(t *testing.T) {
 
 	drain(t, v, func() tea.Msg { return tickMsg{gen: v.gen} })
 
-	if q := f.queries[1]; !q.Since.Equal(alert("B", 2, 0, "", "", "").Time) || q.Size != 0 {
-		t.Errorf("incremental query = %+v, want Since=B.Time and default size", q)
+	if q := f.queries[1]; !q.Since.Equal(alert("B", 2, 0, "", "", "").Time.Add(-30*time.Second)) || q.Size != 0 {
+		t.Errorf("incremental query = %+v, want Since=B.Time-30s and default size", q)
 	}
 	if got := ids(v.rows); got != "CBA" {
 		t.Fatalf("rows = %s, want CBA", got)
@@ -306,5 +315,77 @@ func TestReplace_AppliedOnNextInit(t *testing.T) {
 	}
 	if len(v.rows) != 0 {
 		t.Errorf("old rows survived: %s", ids(v.rows))
+	}
+}
+
+func TestTick_SinceFromNewestNonZeroTime(t *testing.T) {
+	bad := alert("X", 0, 7, "002", "h1", "bad")
+	bad.Time = time.Time{}
+	f := &fakeSearcher{results: [][]indexer.Alert{
+		{bad, alert("B", 20, 7, "002", "h1", "b"), alert("A", 10, 7, "002", "h1", "a")},
+	}}
+	v := newTestView(f)
+	drain(t, v, v.Init())
+	drain(t, v, func() tea.Msg { return tickMsg{gen: v.gen} })
+	want := alert("B", 20, 0, "", "", "").Time.Add(-30 * time.Second)
+	if q := f.queries[1]; !q.Since.Equal(want) {
+		t.Errorf("Since = %v, want %v", q.Since, want)
+	}
+}
+
+func TestTick_AllTimesZeroDoesFullLoad(t *testing.T) {
+	bad := alert("X", 0, 7, "002", "h1", "bad")
+	bad.Time = time.Time{}
+	f := &fakeSearcher{results: [][]indexer.Alert{{bad}}}
+	v := newTestView(f)
+	drain(t, v, v.Init())
+	drain(t, v, func() tea.Msg { return tickMsg{gen: v.gen} })
+	if q := f.queries[1]; !q.Since.IsZero() || q.Size != initialSize {
+		t.Errorf("want a full load, got %+v", q)
+	}
+}
+
+func TestAgentCycle_SurvivesFilteredLoads(t *testing.T) {
+	f := &fakeSearcher{results: [][]indexer.Alert{{
+		alert("B", 2, 7, "002", "black-host-01", "b"),
+		alert("A", 1, 7, "000", "black-master-00", "a"),
+	}}}
+	v := newTestView(f)
+	drain(t, v, v.Init())
+	for _, want := range []string{"002", "000", ""} {
+		_, cmd := v.Update(key("a"))
+		drain(t, v, cmd)
+		if q := f.queries[len(f.queries)-1]; q.AgentID != want {
+			t.Fatalf("agent filter = %q, want %q", q.AgentID, want)
+		}
+	}
+}
+
+func TestShowAgentAlertsMsg_ClearsTextFilter(t *testing.T) {
+	f := &fakeSearcher{}
+	v := newTestView(f)
+	v.filter, v.filtering = "stale", true
+	_, cmd := v.Update(app.ShowAgentAlertsMsg{AgentID: "002", AgentName: "h"})
+	drain(t, v, cmd)
+	if v.filter != "" || v.filtering {
+		t.Errorf("filter = %q filtering = %v, want cleared", v.filter, v.filtering)
+	}
+}
+
+func TestRender_StripsControlsFromIndexerText(t *testing.T) {
+	a := alert("A", 1, 7, "002", "host\x1b[31m", "desc\x1b]0;x\x07end")
+	f := &fakeSearcher{results: [][]indexer.Alert{{a}}, err: nil}
+	v := newTestView(f)
+	drain(t, v, v.Init())
+	v.err = "bad\x1b[2Jbody"
+	v.agentID, v.agentName = "002", "n\x1bm"
+	out := v.View()
+	if strings.ContainsAny(out, "\x1b\x07") {
+		t.Errorf("control chars from indexer text in view: %q", out)
+	}
+	for _, bad := range []string{"host\x1b", "desc\x1b", "bad\x1b", "n\x1b"} {
+		if strings.Contains(out, bad) {
+			t.Errorf("view contains %q: %q", bad, out)
+		}
 	}
 }

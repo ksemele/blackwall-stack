@@ -7,6 +7,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/greengrunt/blackwall/tools/blackwall/internal/indexer"
+	"github.com/greengrunt/blackwall/tools/blackwall/internal/ui/safe"
 	"github.com/greengrunt/blackwall/tools/blackwall/internal/ui/styles"
 	"github.com/greengrunt/blackwall/tools/blackwall/internal/ui/table"
 	"github.com/greengrunt/blackwall/tools/blackwall/internal/wazuh"
@@ -31,7 +32,7 @@ func (v *View) filtered(rows []indexer.Alert) []indexer.Alert {
 	f := strings.ToLower(v.filter)
 	var out []indexer.Alert
 	for _, a := range rows {
-		hay := strings.ToLower(a.Rule.Description + " " + a.Agent.Name + " " + a.Rule.ID + " " + a.FullLog)
+		hay := strings.ToLower(safe.Line(a.Rule.Description + " " + a.Agent.Name + " " + a.Rule.ID + " " + a.FullLog))
 		if strings.Contains(hay, f) {
 			out = append(out, a)
 		}
@@ -78,7 +79,7 @@ func (v *View) View() string {
 	}
 	agent := "all"
 	if v.agentID != "" {
-		agent = v.agentName
+		agent = safe.Line(v.agentName)
 	}
 	rows := v.visible()
 	left := fmt.Sprintf("level ≥ %d · %s · agent: %s · last 24h", v.minLevel, groups, agent)
@@ -98,7 +99,7 @@ func (v *View) View() string {
 		fixed++
 	}
 	if v.err != "" {
-		b.WriteString(styles.Error.Render(fit("⚠ indexer: "+v.err, v.width)) + "\n")
+		b.WriteString(styles.Error.Render(fit("⚠ indexer: "+safe.Line(v.err), v.width)) + "\n")
 		fixed++
 	}
 
@@ -127,7 +128,7 @@ func (v *View) View() string {
 		row := fit(table.Row(widths, []string{
 			wazuh.FormatLocalUTC(a.Time, "2006-01-02 15:04", "15:04Z"),
 			fmt.Sprintf("%3d", a.Rule.Level),
-			a.Agent.Name, a.Rule.ID, a.Rule.Description,
+			safe.Line(a.Agent.Name), safe.Line(a.Rule.ID), safe.Line(a.Rule.Description),
 		}), v.width)
 		if i == v.cursor {
 			row = styles.SelectedRow.Render(row)
