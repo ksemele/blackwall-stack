@@ -4,11 +4,9 @@
   when: not nft_enabled
 
 - name: Install nftables
-  ansible.builtin.apt:
+  ansible.builtin.package:
     name: nftables
     state: present
-    update_cache: true
-    cache_valid_time: 3600
 
 - name: Create rules directory
   ansible.builtin.file:
@@ -50,11 +48,33 @@
 - name: Install nftables.conf
   ansible.builtin.template:
     src: nftables.conf.j2
-    dest: /etc/nftables.conf
+    dest: "{{ nft_conf_path }}"
     owner: root
     group: root
     mode: "0644"
   notify: Reload nftables
+
+- name: Create nftables.service drop-in directory
+  ansible.builtin.file:
+    path: /etc/systemd/system/nftables.service.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Install nftables.service drop-in (no global flush)
+  ansible.builtin.template:
+    src: nftables-dropin.conf.j2
+    dest: /etc/systemd/system/nftables.service.d/blackwall.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify:
+    - Reload systemd
+    - Reload nftables
+
+- name: Apply the drop-in before the service is touched
+  ansible.builtin.meta: flush_handlers
 
 - name: Enable and start nftables
   ansible.builtin.systemd:

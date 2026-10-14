@@ -53,3 +53,32 @@
     - name: Report open ports
       ansible.builtin.debug:
         msg: "{{ inventory_hostname }}: policy={{ nft_input_policy }} open={{ nft_open_ports }}"
+
+    - name: Read nftables.service ExecStop / ExecReload
+      ansible.builtin.command: systemctl show nftables -p ExecStop -p ExecReload
+      register: nft_unit
+      changed_when: false
+
+    - name: Assert the unit never flushes the whole ruleset
+      ansible.builtin.assert:
+        that: "'flush' not in nft_unit.stdout"
+        fail_msg: >-
+          nftables.service still runs `flush ruleset` on reload/stop on
+          {{ inventory_hostname }} — it would wipe tables the role does not own
+          (Docker NAT in the lab, netavark on podman hosts)
+
+    # Docker's embedded DNS lives in the container's `ip nat` table. A global
+    # flush kills it; resolving another container's name proves it survived.
+    - name: Reload nftables
+      ansible.builtin.systemd:
+        name: nftables
+        state: reloaded
+
+    - name: Stop and start nftables
+      ansible.builtin.shell: systemctl stop nftables && systemctl start nftables
+      changed_when: false
+
+    - name: Container DNS still resolves after reload/stop
+      ansible.builtin.command: >-
+        getent hosts {{ 'black-host-01' if inventory_hostname == 'black-master-00' else 'black-master-00' }}
+      changed_when: false

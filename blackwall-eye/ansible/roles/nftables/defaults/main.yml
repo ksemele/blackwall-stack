@@ -16,3 +16,6 @@ nft_restricted: []
 
 nft_forward_policy: accept
 nft_log_drops: true
+
+# Main nftables config loaded by nftables.service (differs per OS family)
+nft_conf_path: "{{ '/etc/sysconfig/nftables.conf' if ansible_os_family == 'RedHat' else '/etc/nftables.conf' }}"
