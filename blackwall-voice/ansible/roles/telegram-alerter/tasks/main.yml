@@ -1,4 +1,16 @@
 ---
+# Empty secrets render an alerter that can never deliver (e.g. a lab run
+# without `direnv exec .`). Fail before touching the host.
+- name: Require Telegram credentials
+  ansible.builtin.assert:
+    that:
+      - telegram_bot_token | default('') | length > 0
+      - telegram_chat_id | default('') | string | length > 0
+    fail_msg: >-
+      telegram_bot_token / telegram_chat_id is empty. In the lab run through
+      `direnv exec .` (values come from .envrc), elsewhere use ansible-vault.
+    quiet: true
+
 - name: Ensure python3 is installed
   ansible.builtin.package:
     name: python3
