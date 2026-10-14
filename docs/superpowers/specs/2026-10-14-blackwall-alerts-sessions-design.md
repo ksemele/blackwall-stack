@@ -93,7 +93,7 @@ contexts:
       server:   127.0.0.1
       port:     9200
       user:     admin
-      password: ${BW_LAB_INDEXER_PASSWORD}
+      password: Blackwall1!     # lab-only, public (tests/README.md)
       tls:
         insecure_skip_verify: true
       alerts:
@@ -114,8 +114,10 @@ contexts:
   (nftables on the manager already allows 9200).
 - `bw-check ports` probes 9200; `bw-check wazuh` asserts the indexer answers and
   rule 100100 is loaded on the manager.
-- `.envrc.example` gains `BW_LAB_INDEXER_PASSWORD` (lab value is public:
-  `Blackwall1!`, see `tests/README.md`).
+- The `lab` context uses the literal lab password (`Blackwall1!`, already public
+  in `tests/README.md`) rather than an env var: `config.ExpandEnv` treats an
+  unset variable as a fatal error, so an env-var password would stop the whole
+  TUI from starting for anyone without it.
 
 ### 4.4 Session snapshots (`blackwall-eye`)
 
@@ -132,6 +134,10 @@ contexts:
 
   Toggle: `wazuh_sessions_enabled` (default `true`).
 
+- **Manager role** — the `ossec.conf` template gains the standard `<ruleset>`
+  section (default `ruleset/` dirs + `etc/decoders`, `etc/rules`, the shipped CDB
+  lists). Without it the built-in rules still load, but `GET /rules` fails with
+  error 1106 and custom rules in `etc/rules` are not guaranteed to load.
 - **Manager role** — new file `/var/ossec/etc/rules/blackwall_rules.xml`
   (template in the role, notifies a manager restart):
 
@@ -150,6 +156,25 @@ contexts:
   `check_diff` stores an alert only when the output changes (a login or a
   logout), so the indexer gets one snapshot per event instead of one per minute.
   Level 3 is the minimum stored as an alert.
+
+### 4.5 App plumbing the new view depends on
+
+Found while planning (2026-10-14); each is an existing bug that `:alerts` would inherit:
+
+- **Global keys win over views.** The app handles `q`, `Tab`, digits, `:`, `?`
+  and `p` before the active view, so typing `q` into a `/` filter quits the TUI.
+  New `views.KeyCapturer` interface: while the active view captures keys, the app
+  delivers every key to it (only `ctrl+c` still quits).
+- **`p` is swallowed.** The app consumes `p` for a `PauseToggle` hook that
+  `main.go` never sets, so pause never reaches a view. With no hook, `p` now
+  falls through to the active view.
+- **Ticks have no owner.** `tickcmd.TickMsg` goes to whichever view is active,
+  so a tick armed by `:agents` would drive `:alerts`. The alerts view uses its
+  own tick type carrying a generation number; stale generations are dropped.
+- **Jump to an agent's alerts.** New `app.ShowAgentAlertsMsg{AgentID, AgentName}`:
+  the app activates `:alerts` and hands it the message.
+- **Scrolling helper.** The `scrollist` used by Top/Packages moves from the
+  agents package to `internal/ui/scroll` so the alert card and Sessions tab share it.
 
 ## 5. The `:alerts` view
 
