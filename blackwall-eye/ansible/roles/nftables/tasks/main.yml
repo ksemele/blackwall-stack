@@ -3,6 +3,12 @@
   ansible.builtin.meta: end_host
   when: not nft_enabled
 
+- name: Refresh apt cache
+  ansible.builtin.apt:
+    update_cache: true
+    cache_valid_time: 3600
+  when: ansible_os_family == 'Debian'
+
 - name: Install nftables
   ansible.builtin.package:
     name: nftables
@@ -17,13 +23,9 @@
     mode: "0755"
 
 - name: Render ruleset to a staging path
-  ansible.builtin.template:
-    src: blackwall-base.nft.j2
-    dest: /etc/nftables.d/.blackwall-base.nft.new
-    owner: root
-    group: root
-    mode: "0600"
-  changed_when: false
+  ansible.builtin.include_tasks: render.yml
+  vars:
+    nft_render_dest: /etc/nftables.d/.blackwall-base.nft.new
 
 - name: Syntax-check the rendered ruleset
   ansible.builtin.command: nft -c -f /etc/nftables.d/.blackwall-base.nft.new

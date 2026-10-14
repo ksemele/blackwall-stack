@@ -1,0 +1,9 @@
+---
+# Renders blackwall_base to nft_render_dest. Used by main.yml (staging file on
+# the host) and by tools/nft-equiv (a local file).
+- name: Render blackwall_base ruleset
+  ansible.builtin.template:
+    src: blackwall-base.nft.j2
+    dest: "{{ nft_render_dest }}"
+    mode: "0600"
+  changed_when: false

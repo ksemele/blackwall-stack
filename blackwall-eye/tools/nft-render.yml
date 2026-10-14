@@ -1,0 +1,11 @@
+---
+# Local render of the nftables role template for one inventory host.
+# Role defaults keep their usual (lowest) precedence, so inventory values win.
+- name: Render blackwall_base for one host
+  hosts: "{{ target }}"
+  gather_facts: false
+  tasks:
+    - name: Render
+      ansible.builtin.include_role:
+        name: nftables
+        tasks_from: render

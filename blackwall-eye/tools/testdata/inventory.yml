@@ -1,0 +1,8 @@
+# Fixture hosts for tools/nft-equiv. Placeholder values only (RFC 5737).
+all:
+  hosts:
+    default:
+      nft_public_tcp: [22, 9100]
+      nft_restricted:
+        - port: 9999
+          sources: [192.0.2.10]

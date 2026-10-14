@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+#
+# nft-equiv — does the nftables role render the same blackwall_base table as a
+# reference .nft file?
+#
+#   tools/nft-equiv <inventory> <host> <reference.nft>
+#
+# Renders the role template for <host> locally, loads both files one after the
+# other into a throwaway container (its own network namespace) and diffs
+# `nft list table inet blackwall_base`. nft's listing is the normal form:
+# comments, defines, whitespace and set element order do not matter.
+# Exit: 0 equal, 1 different, 2 usage or setup error.
+
+set -euo pipefail
+
+[ $# -eq 3 ] || { echo "usage: $0 <inventory> <host> <reference.nft>" >&2; exit 2; }
+inv="$(cd "$(dirname "$1")" && pwd)/$(basename "$1")"
+host="$2"
+ref="$(cd "$(dirname "$3")" && pwd)/$(basename "$3")"
+here="$(cd "$(dirname "$0")/.." && pwd)"   # blackwall-eye/
+
+work="$(mktemp -d)"; trap 'rm -rf "$work"' EXIT
+cp "$ref" "$work/reference.nft"
+
+( cd "$here" && ansible-playbook -i "$inv" tools/nft-render.yml \
+    -e target="$host" -e nft_render_dest="$work/rendered.nft" \
+    -e ansible_connection=local \
+    -e 'ansible_python_interpreter={{ ansible_playbook_python }}' >/dev/null ) \
+  || { echo "render failed for host $host" >&2; exit 2; }
+
+docker run --rm --cap-add NET_ADMIN -v "$work:/w" alpine:3.20 sh -euc '
+  apk add -q nftables >/dev/null
+  nft -f /w/reference.nft
+  nft list table inet blackwall_base > /w/reference.list
+  nft delete table inet blackwall_base
+  nft -f /w/rendered.nft
+  nft list table inet blackwall_base > /w/rendered.list
+' || { echo "nft could not load one of the files" >&2; exit 2; }
+
+if diff -u "$work/reference.list" "$work/rendered.list"; then
+  echo "equal: $host renders the same blackwall_base as $(basename "$ref")"
+else
+  exit 1
+fi
