@@ -179,11 +179,11 @@ func run() error {
 			if err != nil {
 				return app.ContextSwitchedMsg{Name: name, Err: err}
 			}
-			if err := config.SetCurrent(cfgPath, name); err != nil {
-				return app.ContextSwitchedMsg{Name: name, Err: err}
-			}
 			newIdx, newIdxAddr, err := alertsview.SearcherFor(ctx.Indexer)
 			if err != nil {
+				return app.ContextSwitchedMsg{Name: name, Err: err}
+			}
+			if err := config.SetCurrent(cfgPath, name); err != nil {
 				return app.ContextSwitchedMsg{Name: name, Err: err}
 			}
 			alertsView.Replace(newIdx, alertsSettings(name, ctx.Indexer))

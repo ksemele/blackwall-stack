@@ -263,3 +263,48 @@ func TestRender_FitsHeight(t *testing.T) {
 		t.Errorf("view height %d > 30", h)
 	}
 }
+
+func TestTick_FilterKeepsSelectionByID(t *testing.T) {
+	f := &fakeSearcher{results: [][]indexer.Alert{
+		{alert("M2", 3, 7, "002", "h1", "new user"), alert("N0", 2, 7, "002", "h1", "other"), alert("M1", 1, 7, "002", "h1", "user gone")},
+		{alert("P", 7, 7, "002", "h1", "user added"), alert("n6", 6, 7, "002", "h1", "x"), alert("n5", 5, 7, "002", "h1", "x"), alert("n4", 4, 7, "002", "h1", "x")},
+	}}
+	v := newTestView(f)
+	drain(t, v, v.Init())
+	_, _ = v.Update(key("/"))
+	for _, r := range "user" {
+		_, _ = v.Update(key(string(r)))
+	}
+	_, _ = v.Update(key("enter"))
+	_, _ = v.Update(key("down")) // cursor on M1 (visible row 1)
+
+	drain(t, v, func() tea.Msg { return tickMsg{gen: v.gen} })
+
+	if got := v.visible()[v.cursor].ID; got != "M1" {
+		t.Errorf("cursor on %s, want M1", got)
+	}
+	if v.newCount != 1 {
+		t.Errorf("newCount = %d, want 1", v.newCount)
+	}
+	_, _ = v.Update(key("enter")) // must not panic
+	if v.card == nil || v.card.alert.ID != "M1" {
+		t.Errorf("card = %+v, want alert M1", v.card)
+	}
+}
+
+func TestReplace_AppliedOnNextInit(t *testing.T) {
+	a := &fakeSearcher{results: [][]indexer.Alert{{alert("A", 1, 7, "002", "h1", "a")}}}
+	b := &fakeSearcher{}
+	v := newTestView(a)
+	drain(t, v, v.Init())
+	st := settings()
+	st.Context = "other"
+	v.Replace(b, st)
+	drain(t, v, v.Init())
+	if len(b.queries) == 0 || len(a.queries) != 1 {
+		t.Errorf("queries a=%d b=%d, want 1 and >=1", len(a.queries), len(b.queries))
+	}
+	if len(v.rows) != 0 {
+		t.Errorf("old rows survived: %s", ids(v.rows))
+	}
+}

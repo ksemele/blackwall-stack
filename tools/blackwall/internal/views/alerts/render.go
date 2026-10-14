@@ -21,13 +21,16 @@ var cols = []table.Col{
 }
 
 // visible returns the rows that pass the local text filter.
-func (v *View) visible() []indexer.Alert {
+func (v *View) visible() []indexer.Alert { return v.filtered(v.rows) }
+
+// filtered applies the local text filter to rows.
+func (v *View) filtered(rows []indexer.Alert) []indexer.Alert {
 	if v.filter == "" {
-		return v.rows
+		return rows
 	}
 	f := strings.ToLower(v.filter)
 	var out []indexer.Alert
-	for _, a := range v.rows {
+	for _, a := range rows {
 		hay := strings.ToLower(a.Rule.Description + " " + a.Agent.Name + " " + a.Rule.ID + " " + a.FullLog)
 		if strings.Contains(hay, f) {
 			out = append(out, a)

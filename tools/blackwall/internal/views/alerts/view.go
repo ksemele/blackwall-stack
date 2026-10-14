@@ -5,6 +5,7 @@ package alerts
 import (
 	"context"
 	"sort"
+	"sync"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -75,21 +76,53 @@ type View struct {
 	card      *card // non-nil while the alert card is open (Task 9)
 
 	tick func(gen int) tea.Cmd // replaced in tests
+
+	// pending holds a Replace request made off the UI loop; it is applied at
+	// the start of Init/Update.
+	mu      sync.Mutex
+	pending *replacement
+}
+
+type replacement struct {
+	s  Searcher
+	st Settings
 }
 
 func New(s Searcher, st Settings) *View {
 	v := &View{}
-	v.Replace(s, st)
+	v.apply(s, st)
 	return v
 }
 
-// Replace swaps the searcher and settings (context switch) and drops all state.
+// Replace requests a swap of the searcher and settings (context switch). It is
+// safe to call from any goroutine; the swap, which drops all state, happens on
+// the next Init or Update.
 func (v *View) Replace(s Searcher, st Settings) {
+	v.mu.Lock()
+	v.pending = &replacement{s: s, st: st}
+	v.mu.Unlock()
+}
+
+func (v *View) applyPending() {
+	v.mu.Lock()
+	p := v.pending
+	v.pending = nil
+	v.mu.Unlock()
+	if p != nil {
+		v.apply(p.s, p.st)
+	}
+}
+
+func (v *View) apply(s Searcher, st Settings) {
 	if st.Refresh <= 0 {
 		st.Refresh = 3 * time.Second
 	}
+	tick := v.tick
 	*v = View{searcher: s, st: st, minLevel: st.MinLevel, excludeOn: true,
-		width: v.width, height: v.height, gen: v.gen + 1}
+		width: v.width, height: v.height, gen: v.gen + 1, tick: tick}
+	if v.tick != nil {
+		return
+	}
 	v.tick = func(gen int) tea.Cmd {
 		return tea.Tick(v.st.Refresh, func(time.Time) tea.Msg { return tickMsg{gen: gen} })
 	}
@@ -110,7 +143,10 @@ func (v *View) Hints() []footer.Hint {
 }
 
 // Init (re)loads from scratch whenever the view is activated.
-func (v *View) Init() tea.Cmd { return v.reload() }
+func (v *View) Init() tea.Cmd {
+	v.applyPending()
+	return v.reload()
+}
 
 func (v *View) reload() tea.Cmd {
 	v.gen++
@@ -146,6 +182,7 @@ func (v *View) load(incremental bool) tea.Cmd {
 }
 
 func (v *View) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	v.applyPending()
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		v.width, v.height = msg.Width, msg.Height
@@ -182,11 +219,33 @@ func (v *View) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			v.cursor, v.offset, v.newCount = 0, 0, 0
 			return v, nil
 		}
-		var added int
-		v.rows, added = merge(v.rows, msg.alerts, maxRows)
+		selID := ""
+		if vis := v.visible(); v.cursor > 0 && v.cursor < len(vis) {
+			selID = vis[v.cursor].ID
+		}
+		var fresh []indexer.Alert
+		oldRows := v.rows
+		v.rows, _ = merge(v.rows, msg.alerts, maxRows)
 		if v.cursor > 0 {
-			v.cursor = min(v.cursor+added, len(v.rows)-1)
-			v.newCount += added
+			known := make(map[string]bool, len(oldRows))
+			for _, r := range oldRows {
+				known[r.ID] = true
+			}
+			for _, a := range v.filtered(msg.alerts) {
+				if !known[a.ID] {
+					known[a.ID] = true
+					fresh = append(fresh, a)
+				}
+			}
+			v.newCount += len(fresh)
+			vis := v.visible()
+			for i, a := range vis {
+				if a.ID == selID {
+					v.cursor = i
+					break
+				}
+			}
+			v.cursor = max(min(v.cursor, len(vis)-1), 0)
 		}
 		return v, nil
 
@@ -240,6 +299,7 @@ func (v *View) key(msg tea.KeyMsg) tea.Cmd {
 		}
 	case "enter":
 		if len(rows) > 0 {
+			v.cursor = max(min(v.cursor, len(rows)-1), 0)
 			v.card = newCard(rows[v.cursor], v.width, v.height)
 		}
 	case "+", "=":
