@@ -2,13 +2,22 @@
 module: blackwall-eye
 status: in_progress
 stage: 1
-last_updated: 2026-10-12
-last_task: "wazuh-agent pin, rootcheck+SCA on agents, docker group for containerised agents, dead/ghost fixtures in bw-lab up, bw-status replaced by blackwall --once"
+last_updated: 2026-10-14
+last_task: "session snapshots: agent runs last, manager rule 100100 (check_diff), explicit <ruleset> in manager ossec.conf, bw-check asserts the rule"
 next_task: "Port hosts/example.com/nftables/*.nft into the nftables role (the prod config is still outside config-as-code); interactive TUI smoke test against the live lab"
 blockers: []
 ---
 
 ## Done
+
+- 2026-10-14: login sessions snapshot for the blackwall TUI Sessions tab.
+  - Manager `ossec.conf` now declares `<ruleset>` explicitly (fixes
+    `GET /rules` error 1106); `blackwall_rules.xml` deployed to `etc/rules/`.
+  - Rule 100100 (level 3, group `blackwall_sessions`, `check_diff`, child of 530)
+    stores an alert whenever the `last` output changes.
+  - Agents run `last --time-format iso -w -n 50` every 60 s
+    (`wazuh_sessions_enabled`, `wazuh_sessions_frequency`).
+  - `bw-check` asserts rule 100100 is loaded; lab: 30 passed, 0 failed.
 
 - 2026-10-12: full from-scratch lab run and the fixes it led to.
   - `wazuh-agent` was installed unpinned (apt served 4.14.8 against a 4.14.7

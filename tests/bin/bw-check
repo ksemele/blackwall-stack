@@ -190,6 +190,17 @@ check_wazuh() {
     bw_fail "indexer does not answer at $BW_INDEXER_URL (code '$icode')"
   fi
 
+  local token rules
+  token="$(curl -sk -m 5 -u wazuh:wazuh -X POST \
+             'https://127.0.0.1:55000/security/user/authenticate?raw=true' 2>/dev/null)"
+  rules="$(curl -sk -m 5 -H "Authorization: Bearer $token" \
+             'https://127.0.0.1:55000/rules?rule_ids=100100' 2>/dev/null)"
+  if bw_json_true "d['data']['total_affected_items'] == 1" <<<"$rules"; then
+    bw_pass "rule 100100 (blackwall sessions) is loaded"
+  else
+    bw_fail "rule 100100 is not loaded on the manager"
+  fi
+
   check_fixtures
 
   local code

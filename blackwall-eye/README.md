@@ -66,6 +66,19 @@ remotes, or apt-cacher-ng for a plain cache) gives:
 The Docker lab already runs a small version of this: see
 [tests/README.md — apt cache](../tests/README.md#apt-cache).
 
+### Login sessions snapshot
+
+The `wazuh-agent` role makes every agent run `last --time-format iso -w -n 50`
+every `wazuh_sessions_frequency` seconds (default 60; disable with
+`wazuh_sessions_enabled: false`). The `wazuh-manager` role installs
+`/var/ossec/etc/rules/blackwall_rules.xml` with rule **100100** (level 3, group
+`blackwall_sessions`, `check_diff`): the output is stored as an alert only when
+it changes, i.e. on each login or logout. The `blackwall` TUI reads the newest
+snapshot for its Sessions tab.
+
+The manager config now also declares the standard `<ruleset>` explicitly;
+before, `GET /rules` failed with error 1106.
+
 ## Verify
 
 ```bash

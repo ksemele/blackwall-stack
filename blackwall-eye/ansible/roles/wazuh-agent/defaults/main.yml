@@ -28,3 +28,9 @@ wazuh_syscollector_interval: "5m"
 # with the agent, picked automatically for the host OS)
 wazuh_rootcheck_frequency: 43200
 wazuh_sca_interval: "12h"
+
+# Login sessions snapshot for the blackwall TUI Sessions tab: the agent runs
+# `last` every wazuh_sessions_frequency seconds; the manager rule 100100
+# stores the output whenever it changes.
+wazuh_sessions_enabled: true
+wazuh_sessions_frequency: 60
