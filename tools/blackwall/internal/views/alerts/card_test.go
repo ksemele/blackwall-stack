@@ -67,11 +67,50 @@ func TestView_EnterOpensCardEscCloses(t *testing.T) {
 	v := newTestView(f)
 	drain(t, v, v.Init())
 	_, _ = v.Update(key("enter"))
-	if !strings.Contains(v.View(), "PCI DSS") {
-		t.Fatalf("card not shown:\n%s", v.View())
+	out := v.View()
+	if !strings.Contains(out, "Successful login during non-business hours.") || !strings.Contains(out, "17101") {
+		t.Fatalf("card not shown:\n%s", out)
 	}
 	_, _ = v.Update(key("esc"))
-	if strings.Contains(v.View(), "PCI DSS") {
-		t.Error("esc must close the card")
+	if !strings.Contains(v.View(), "level ≥") {
+		t.Errorf("esc must return to the feed:\n%s", v.View())
+	}
+}
+
+func TestCard_ComplianceIsLastSection(t *testing.T) {
+	out := newCard(richAlert(), 100, 0).view()
+	if strings.Index(out, "PCI DSS") < strings.Index(out, "Full log") {
+		t.Errorf("PCI DSS must come after Full log:\n%s", out)
+	}
+}
+
+func TestCard_StripsTerminalControls(t *testing.T) {
+	a := richAlert()
+	a.FullLog = "evil\x1b[2J\x1b]0;pwned\x07line\r\ttab"
+	a.Data = map[string]any{"k\x1b[31m": "v\x07al"}
+	out := newCard(a, 100, 0).view()
+	for _, bad := range []string{"\x1b", "\x07", "\r"} {
+		if strings.Contains(out, bad) {
+			t.Errorf("output contains %q: %q", bad, out)
+		}
+	}
+	for _, want := range []string{"evil", "line", "tab"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("missing %q in:\n%s", want, out)
+		}
+	}
+}
+
+func TestSanitize(t *testing.T) {
+	cases := map[string]string{
+		"a\tb":              "a b",
+		"x\x00y\x7fz":       "xyz",
+		"c1\u0085\u009fend": "c1end",
+		"héllo ✓":           "héllo ✓",
+	}
+	for in, want := range cases {
+		if got := sanitize(in); got != want {
+			t.Errorf("sanitize(%q) = %q, want %q", in, got, want)
+		}
 	}
 }

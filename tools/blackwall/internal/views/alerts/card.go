@@ -60,6 +60,24 @@ func wrap(s string, w int) []string {
 	return out
 }
 
+// sanitize makes attacker-controlled log text safe to print: tabs become a
+// space, other C0 controls, DEL and C1 controls are dropped, everything else
+// is kept. Without it an alert's full_log could carry ANSI escapes that
+// rewrite the terminal.
+func sanitize(s string) string {
+	var b strings.Builder
+	for _, r := range s {
+		switch {
+		case r == '\t':
+			b.WriteByte(' ')
+		case r < 0x20, r == 0x7f, r >= 0x80 && r <= 0x9f:
+		default:
+			b.WriteRune(r)
+		}
+	}
+	return b.String()
+}
+
 // flatten turns nested data into "a.b.c" -> value pairs.
 func flatten(prefix string, v any, out map[string]string) {
 	if m, ok := v.(map[string]any); ok {
@@ -95,21 +113,6 @@ func (c *card) lines() []string {
 	add(fmt.Sprintf("id %s · level %d · fired %d×", a.Rule.ID, a.Rule.Level, a.Rule.FiredTimes))
 	add("groups: " + strings.Join(a.Rule.Groups, ", "))
 
-	comp := []struct {
-		name string
-		vals []string
-	}{{"PCI DSS", a.Rule.PCIDSS}, {"GDPR", a.Rule.GDPR}, {"NIST 800-53", a.Rule.NIST}, {"HIPAA", a.Rule.HIPAA}, {"TSC", a.Rule.TSC}}
-	first := true
-	for _, cv := range comp {
-		if len(cv.vals) == 0 {
-			continue
-		}
-		if first {
-			section("Compliance")
-			first = false
-		}
-		add(cv.name + ": " + strings.Join(cv.vals, ", "))
-	}
 	if m := a.Rule.MITRE; len(m.ID)+len(m.Tactic)+len(m.Technique) > 0 {
 		section("MITRE ATT&CK")
 		add("tactic:    " + strings.Join(m.Tactic, ", "))
@@ -131,14 +134,29 @@ func (c *card) lines() []string {
 		}
 		sort.Strings(keys)
 		for _, k := range keys {
-			add(k + ": " + flat[k])
+			add(sanitize(k) + ": " + sanitize(flat[k]))
 		}
 	}
 
 	if a.FullLog != "" {
 		section("Full log")
-		add(a.FullLog)
+		add(sanitize(a.FullLog))
 	}
 
+	comp := []struct {
+		name string
+		vals []string
+	}{{"PCI DSS", a.Rule.PCIDSS}, {"GDPR", a.Rule.GDPR}, {"NIST 800-53", a.Rule.NIST}, {"HIPAA", a.Rule.HIPAA}, {"TSC", a.Rule.TSC}}
+	first := true
+	for _, cv := range comp {
+		if len(cv.vals) == 0 {
+			continue
+		}
+		if first {
+			section("Compliance")
+			first = false
+		}
+		add(cv.name + ": " + strings.Join(cv.vals, ", "))
+	}
 	return l
 }
