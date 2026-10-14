@@ -7,6 +7,7 @@ Docker environment shared by all Blackwall modules.
 | `black-master-00` | Wazuh manager + indexer + dashboard (all-in-one) |
 | `black-host-01` | Wazuh agent + auditd target |
 | `black-dead-98` | agent fixture, stopped on purpose (`disconnected` status) |
+| `black-rocky-02` | Rocky Linux 9, firewall roles on the RHEL family |
 | `black-metrics-00` | Prometheus |
 | `black-grafana-00` | Grafana |
 | `black-aptcache-00` | apt-cacher-ng — apt cache for the nodes, lab only |
@@ -180,6 +181,7 @@ Unset variables render as empty strings — playbooks still run, delivery just f
 | `black-master-00` | manager + indexer + dashboard | `2200→22` | `5601→443`, `127.0.0.1:55000→55000`, `127.0.0.1:9200→9200` | `172.28.0.10` |
 | `black-host-01` | agent + auditd target | `2201→22` | — | `172.28.0.11` |
 | `black-dead-98` | agent fixture — disconnected | `2202→22` | — | `172.28.0.98` |
+| `black-rocky-02` | Rocky Linux 9 — firewall roles | `2203→22` | — | `172.28.0.15` |
 | `black-metrics-00` | Prometheus | — | `9090→9090` | `172.28.0.12` |
 | `black-grafana-00` | Grafana | — | `3000→3000` | `172.28.0.13` |
 | `black-aptcache-00` | apt-cacher-ng | — | — | `172.28.0.14` |

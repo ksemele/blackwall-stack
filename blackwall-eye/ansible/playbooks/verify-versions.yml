@@ -15,6 +15,8 @@
         - wazuh-dashboard
         - filebeat
         - nftables
+      rhel9:
+        - nftables
       wazuh_agents:
         - wazuh-agent
         - auditd
@@ -26,11 +28,17 @@
         host_packages: >-
           {{ expected_packages['wazuh_managers']
              if 'wazuh_managers' in group_names
+             else expected_packages['rhel9']
+             if 'rhel9' in group_names
              else expected_packages['wazuh_agents'] }}
 
     - name: Query installed versions
       ansible.builtin.shell: >-
+        {% if 'rhel9' in group_names %}
+        rpm -q --qf '%{NAME} %{VERSION}-%{RELEASE} install ok installed\n' {{ item }} 2>/dev/null || true
+        {% else %}
         dpkg-query -W -f='${Package} ${Version} ${Status}\n' {{ item }} 2>/dev/null || true
+        {% endif %}
       register: pkg_query
       changed_when: false
       loop: "{{ host_packages }}"

@@ -1,0 +1,4 @@
+---
+# RHEL-family lab node (Rocky Linux 9). Firewall only — not a Wazuh agent.
+nft_public_tcp: [22, 9100]
+node_exporter_install_method: tarball

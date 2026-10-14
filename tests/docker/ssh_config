@@ -25,3 +25,11 @@ Host black-dead-98
     StrictHostKeyChecking no
     UserKnownHostsFile /dev/null
     LogLevel ERROR
+
+Host black-rocky-02
+    HostName localhost
+    Port 2203
+    User root
+    StrictHostKeyChecking no
+    UserKnownHostsFile /dev/null
+    LogLevel ERROR
