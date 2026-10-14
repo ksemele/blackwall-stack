@@ -11,7 +11,7 @@ import (
 )
 
 func TestDetail_RendersAllFields(t *testing.T) {
-	d := NewDetail(&fakeClient{}, "001")
+	d := NewDetail(&fakeClient{}, nil, "001")
 	d.SetDetail(wazuh.AgentDetail{Agent: wazuh.Agent{
 		ID: "001", Name: "host-01", IP: "10.0.0.5", Status: "active",
 		Version: "Wazuh v4.14.5", Manager: "master-00",
@@ -26,7 +26,7 @@ func TestDetail_RendersAllFields(t *testing.T) {
 }
 
 func TestDetail_EscEmitsBack(t *testing.T) {
-	d := NewDetail(&fakeClient{}, "001")
+	d := NewDetail(&fakeClient{}, nil, "001")
 	_, cmd := d.Update(tea.KeyMsg{Type: tea.KeyEsc})
 	if cmd == nil {
 		t.Fatal("expected cmd on Esc")
@@ -37,7 +37,7 @@ func TestDetail_EscEmitsBack(t *testing.T) {
 }
 
 func TestDetail_HKeySwitchesToHardwareTab(t *testing.T) {
-	d := NewDetail(&fakeClient{}, "001")
+	d := NewDetail(&fakeClient{}, nil, "001")
 	next, _ := d.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'h'}})
 	dm := next.(*DetailModel)
 	if dm.activeTab != 1 {
@@ -46,7 +46,7 @@ func TestDetail_HKeySwitchesToHardwareTab(t *testing.T) {
 }
 
 func TestDetail_OKeyReturnsToOverviewTab(t *testing.T) {
-	d := NewDetail(&fakeClient{}, "001")
+	d := NewDetail(&fakeClient{}, nil, "001")
 	// first switch away
 	next, _ := d.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'h'}})
 	dm := next.(*DetailModel)
@@ -59,7 +59,7 @@ func TestDetail_OKeyReturnsToOverviewTab(t *testing.T) {
 }
 
 func TestDetail_TabbarRenderedWithHardwareActive(t *testing.T) {
-	d := NewDetail(&fakeClient{}, "001")
+	d := NewDetail(&fakeClient{}, nil, "001")
 	d.activeTab = 1
 	out := d.View()
 	if !strings.Contains(out, "Hardware") {
@@ -68,7 +68,7 @@ func TestDetail_TabbarRenderedWithHardwareActive(t *testing.T) {
 }
 
 func TestDetail_HKeyActivatesHardwareSubview(t *testing.T) {
-	d := NewDetail(&fakeClient{}, "001")
+	d := NewDetail(&fakeClient{}, nil, "001")
 	next, _ := d.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'h'}})
 	dm := next.(*DetailModel)
 
@@ -85,7 +85,7 @@ func TestDetail_HKeyActivatesHardwareSubview(t *testing.T) {
 }
 
 func TestDetail_NKeyActivatesNetworkSubview(t *testing.T) {
-	d := NewDetail(&fakeClient{}, "001")
+	d := NewDetail(&fakeClient{}, nil, "001")
 	next, _ := d.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'n'}})
 	dm := next.(*DetailModel)
 
@@ -102,7 +102,7 @@ func TestDetail_NKeyActivatesNetworkSubview(t *testing.T) {
 }
 
 func TestDetail_TKeyActivatesProcessesSubview(t *testing.T) {
-	d := NewDetail(&fakeClient{}, "001")
+	d := NewDetail(&fakeClient{}, nil, "001")
 	next, _ := d.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'t'}})
 	dm := next.(*DetailModel)
 
@@ -119,7 +119,7 @@ func TestDetail_TKeyActivatesProcessesSubview(t *testing.T) {
 }
 
 func TestDetail_KKeyActivatesPackagesSubview(t *testing.T) {
-	d := NewDetail(&fakeClient{}, "001")
+	d := NewDetail(&fakeClient{}, nil, "001")
 	next, _ := d.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'k'}})
 	dm := next.(*DetailModel)
 
@@ -136,7 +136,7 @@ func TestDetail_KKeyActivatesPackagesSubview(t *testing.T) {
 }
 
 func TestDetail_SKeyActivatesSecuritySubview(t *testing.T) {
-	d := NewDetail(&fakeClient{}, "001")
+	d := NewDetail(&fakeClient{}, nil, "001")
 	next, _ := d.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'s'}})
 	dm := next.(*DetailModel)
 
@@ -153,7 +153,7 @@ func TestDetail_SKeyActivatesSecuritySubview(t *testing.T) {
 }
 
 func TestDetail_FilteringSubviewCapturesKeys(t *testing.T) {
-	d := NewDetail(&fakeClient{}, "001")
+	d := NewDetail(&fakeClient{}, nil, "001")
 
 	// Switch to processes tab (t) and trigger init.
 	next, _ := d.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'t'}})
@@ -188,7 +188,7 @@ func TestDetail_FilteringSubviewCapturesKeys(t *testing.T) {
 }
 
 func TestDetail_HardwareSubviewReceivesMsg(t *testing.T) {
-	d := NewDetail(&fakeClient{}, "001")
+	d := NewDetail(&fakeClient{}, nil, "001")
 	// Switch to hardware tab.
 	next, _ := d.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'h'}})
 	dm := next.(*DetailModel)
@@ -211,7 +211,7 @@ func TestDetail_HardwareSubviewReceivesMsg(t *testing.T) {
 }
 
 func TestDetail_ContainerWarning(t *testing.T) {
-	d := NewDetail(&fakeClient{}, "001")
+	d := NewDetail(&fakeClient{}, nil, "001")
 	d.SetDetail(wazuh.AgentDetail{Agent: wazuh.Agent{ID: "001", Name: "host-01", Status: "active"}})
 	if out := d.View(); strings.Contains(out, "DOCKER") || strings.Contains(out, containerWarning) {
 		t.Errorf("plain host shows container warning:\n%s", out)

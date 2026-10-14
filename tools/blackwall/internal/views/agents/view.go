@@ -1,6 +1,7 @@
 package agents
 
 import (
+	"sync"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -18,6 +19,34 @@ type View struct {
 	// size is the last terminal size seen. The detail model is created on
 	// Enter, after the startup WindowSizeMsg, so it must be handed this.
 	size tea.WindowSizeMsg
+
+	idx AlertSearcher // nil when the context has no indexer
+	// pendingIdx holds a SetIndexer request made off the UI loop (context
+	// switch runs in a tea.Cmd goroutine); it is applied on the UI loop at the
+	// start of Init/Update.
+	mu         sync.Mutex
+	pendingIdx *indexerSwap
+}
+
+type indexerSwap struct{ idx AlertSearcher }
+
+// SetIndexer swaps the indexer used by the agent card (context switch). Safe
+// to call from any goroutine; takes effect on the next Init/Update.
+func (v *View) SetIndexer(idx AlertSearcher) {
+	v.mu.Lock()
+	v.pendingIdx = &indexerSwap{idx: idx}
+	v.mu.Unlock()
+}
+
+func (v *View) applyPending() {
+	v.mu.Lock()
+	p := v.pendingIdx
+	v.pendingIdx = nil
+	v.mu.Unlock()
+	if p != nil {
+		v.idx = p.idx
+		v.detail = nil
+	}
 }
 
 // NewView returns a View wrapping a new list Model.
@@ -44,18 +73,20 @@ func (v *View) Hints() []footer.Hint {
 }
 
 func (v *View) Init() tea.Cmd {
+	v.applyPending()
 	v.detail = nil
 	return v.list.Init()
 }
 
 func (v *View) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	v.applyPending()
 	if ws, ok := msg.(tea.WindowSizeMsg); ok {
 		v.size = ws
 	}
 
 	// Handle detail push.
 	if sd, ok := msg.(app.SwitchToDetailMsg); ok {
-		v.detail = NewDetail(v.list.client, sd.AgentID)
+		v.detail = NewDetail(v.list.client, v.idx, sd.AgentID)
 		if v.size.Height > 0 {
 			_, _ = v.detail.Update(v.size)
 		}

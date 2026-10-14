@@ -155,6 +155,9 @@ func run() error {
 		return st
 	}
 	alertsView := alertsview.New(idx, alertsSettings(cfg.Current, currentCtx.Indexer))
+	if idx != nil {
+		agentsList.SetIndexer(idx)
+	}
 	registered := []views.View{ctxView, agentsList, alertsView}
 	liveIndexer := idxAddr
 
@@ -187,6 +190,11 @@ func run() error {
 				return app.ContextSwitchedMsg{Name: name, Err: err}
 			}
 			alertsView.Replace(newIdx, alertsSettings(name, ctx.Indexer))
+			if newIdx != nil {
+				agentsList.SetIndexer(newIdx)
+			} else {
+				agentsList.SetIndexer(nil)
+			}
 			liveIndexer = newIdxAddr
 			cfg.Current = name
 			liveCtx = name

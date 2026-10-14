@@ -115,7 +115,7 @@ blackwall --once                       # print agents and exit (script-friendly)
 ## Agent detail
 
 Open an agent from the agents list with `↵` to enter detail. The detail screen
-has six tabs, switchable by hotkey:
+has seven tabs, switchable by hotkey:
 
 | Tab | Key | Content |
 |---|---|---|
@@ -125,6 +125,7 @@ has six tabs, switchable by hotkey:
 | Packages | `k` | Installed packages (filterable with `/`) |
 | Network | `n` | Interfaces, addresses, open ports |
 | Security | `s` | FIM scan, rootcheck findings, SCA compliance |
+| Sessions | `e` | Logins from the latest `last` snapshot (rule 100100); active first, `⚠` marks a login coinciding with a level 7+ alert. Needs the indexer |
 
 Agents enrolled into the Wazuh group `docker` (the `wazuh-agent` role does this
 for hosts with `/.dockerenv`) get a red `[docker]` tag in the list and a `DOCKER`
@@ -132,7 +133,8 @@ badge plus warning in detail: container kernels may lack audit support, so
 auditd detections do not fire there. See
 [tests/README.md](../../tests/README.md#container-limitations).
 
-Press `esc` to return to the agents list, `r` to force a refresh.
+Press `esc` to return to the agents list, `r` to force a refresh, `l` to jump
+to `:alerts` filtered to this agent.
 
 While in Top or Packages, press `/` to start typing a substring filter.
 `Enter` applies it, `Esc` clears.
