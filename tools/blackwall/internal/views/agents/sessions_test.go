@@ -52,8 +52,11 @@ func TestSessions_ActiveFirstMarkedHistoryAfter(t *testing.T) {
 	m.now = func() time.Time { return time.Date(2026, 10, 14, 2, 49, 0, 0, time.UTC) }
 	runCmd(t, m, m.Init())
 
-	if q := f.queries[0]; q.RuleID != "100100" || q.AgentID != "002" || q.Size != 1 || q.MinLevel != 0 || len(q.ExcludeGroups) != 0 {
+	if q := f.queries[0]; q.RuleID != "100100" || q.AgentID != "002" || q.Size != 1 || q.MinLevel != 0 || len(q.ExcludeGroups) != 0 || !q.NoTimeLimit {
 		t.Errorf("snapshot query = %+v", q)
+	}
+	if q := f.queries[1]; q.MinLevel != 7 || len(q.ExcludeGroups) != 1 || q.ExcludeGroups[0] != "sca" {
+		t.Errorf("suspicious lookup must exclude sca: %+v", q)
 	}
 	out := m.View()
 	root := strings.Index(out, "root")
@@ -110,4 +113,43 @@ func TestDetail_SessionsTabAndAlertsJump(t *testing.T) {
 
 func wazuhDetail(id, name string) wazuh.AgentDetail {
 	return wazuh.AgentDetail{Agent: wazuh.Agent{ID: id, Name: name, Status: "active"}}
+}
+
+type evilIdx struct{}
+
+func (evilIdx) SearchAlerts(_ context.Context, q indexer.AlertQuery) ([]indexer.Alert, error) {
+	if q.RuleID == "100100" {
+		return []indexer.Alert{{Time: time.Date(2026, 10, 14, 2, 49, 0, 0, time.UTC),
+			FullLog: "ossec: output: 'x':\nev\x1b[31mil   pts/9   1.2.3.4\x1b]0;x\x07   2026-10-14T02:40:00+00:00   still logged in\ngarbage \x1b[2J line\n"}}, nil
+	}
+	return nil, nil
+}
+
+func TestSessions_StripsControlsFromCells(t *testing.T) {
+	m := NewSessions(evilIdx{}, "002")
+	runCmd(t, m, m.Init())
+	out := m.View()
+	if strings.ContainsAny(out, "\x1b\x07") {
+		t.Errorf("control chars in view: %q", out)
+	}
+	if !strings.Contains(out, "ev[31mil") {
+		t.Errorf("session row missing:\n%s", out)
+	}
+	e := NewSessions(emptyIdx{}, "002")
+	e.loaded, e.err = true, "boom\x1b[2J"
+	if strings.Contains(e.View(), "\x1b[2J") {
+		t.Errorf("error text not sanitized: %q", e.View())
+	}
+}
+
+func TestDetail_AlertsJumpFallsBackToAgentID(t *testing.T) {
+	d := NewDetail(&fakeClient{}, &fakeIdx{}, "002")
+	_, cmd := d.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'l'}})
+	if cmd == nil {
+		t.Fatal("l must emit a command")
+	}
+	got, ok := cmd().(app.ShowAgentAlertsMsg)
+	if !ok || got.AgentName != "002" {
+		t.Errorf("l emitted %#v, want AgentName=002", got)
+	}
 }

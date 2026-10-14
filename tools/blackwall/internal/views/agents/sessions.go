@@ -12,6 +12,7 @@ import (
 	"github.com/greengrunt/blackwall/tools/blackwall/internal/indexer"
 	"github.com/greengrunt/blackwall/tools/blackwall/internal/sessions"
 	"github.com/greengrunt/blackwall/tools/blackwall/internal/ui/footer"
+	"github.com/greengrunt/blackwall/tools/blackwall/internal/ui/safe"
 	"github.com/greengrunt/blackwall/tools/blackwall/internal/ui/scroll"
 	"github.com/greengrunt/blackwall/tools/blackwall/internal/ui/styles"
 	"github.com/greengrunt/blackwall/tools/blackwall/internal/ui/table"
@@ -68,7 +69,7 @@ func (m *SessionsModel) Init() tea.Cmd {
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
-		snaps, err := idx.SearchAlerts(ctx, indexer.AlertQuery{RuleID: sessionsRuleID, AgentID: id, Size: 1})
+		snaps, err := idx.SearchAlerts(ctx, indexer.AlertQuery{RuleID: sessionsRuleID, AgentID: id, Size: 1, NoTimeLimit: true})
 		if err != nil {
 			return sessionsLoadedMsg{err: err}
 		}
@@ -106,7 +107,7 @@ func markSuspicious(ctx context.Context, idx AlertSearcher, agentID string, rows
 	if oldest.IsZero() {
 		return out
 	}
-	alerts, err := idx.SearchAlerts(ctx, indexer.AlertQuery{AgentID: agentID, MinLevel: 7, Since: oldest.Add(-time.Minute)})
+	alerts, err := idx.SearchAlerts(ctx, indexer.AlertQuery{AgentID: agentID, MinLevel: 7, ExcludeGroups: []string{"sca"}, Since: oldest.Add(-time.Minute)})
 	if err != nil {
 		return out
 	}
@@ -165,7 +166,7 @@ func (m *SessionsModel) View() string {
 	case !m.loaded:
 		return "loading sessions…\n"
 	case m.err != "":
-		return styles.Error.Render("⚠ indexer: "+m.err) + "\n"
+		return styles.Error.Render("⚠ indexer: "+safe.Line(m.err)) + "\n"
 	case m.none:
 		return "no session snapshot yet — appears after the next login/logout (rule 100100)\n"
 	}
@@ -178,10 +179,10 @@ func (m *SessionsModel) View() string {
 	rows := make([]string, 0, len(m.rows))
 	for i, s := range m.rows {
 		if s.Raw != "" {
-			rows = append(rows, styles.Dim.Render(s.Raw))
+			rows = append(rows, styles.Dim.Render(safe.Line(s.Raw)))
 			continue
 		}
-		user := s.User
+		user := safe.Line(s.User)
 		if m.suspicious[i] {
 			user = "⚠ " + user
 		}
@@ -190,13 +191,13 @@ func (m *SessionsModel) View() string {
 		case s.Active:
 			logout = "still logged in"
 		case s.End != "":
-			logout = s.End
+			logout = safe.Line(s.End)
 		}
 		dur := humanDuration(s.Duration(now))
 		if s.Active {
 			dur += " ●"
 		}
-		row := table.Row(widths, []string{user, s.TTY, s.From, wazuh.FormatLocalUTC(s.Login, local, utc), logout, dur})
+		row := table.Row(widths, []string{user, safe.Line(s.TTY), safe.Line(s.From), wazuh.FormatLocalUTC(s.Login, local, utc), logout, dur})
 		if s.Active {
 			row = styles.Active.Render(row)
 		} else if m.suspicious[i] {

@@ -162,6 +162,9 @@ func (m *DetailModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, m.Init()
 		case "l":
 			id, name := m.agentID, m.detail.Name
+			if name == "" {
+				name = id // detail not loaded yet
+			}
 			return m, func() tea.Msg { return app.ShowAgentAlertsMsg{AgentID: id, AgentName: name} }
 		}
 	}
