@@ -52,7 +52,7 @@ func ApplyDefaults(cfg Config) Config {
 	}
 	// MVP: default SelectContextOnStart to true when zero.
 	// This means "explicit false in YAML" is overridden to true,
-// but that is fine because main.go reads the raw YAML separately
+	// but that is fine because main.go reads the raw YAML separately
 	// to detect explicit-false and reapplies it. See Resolve.
 	if !cfg.SelectContextOnStart {
 		cfg.SelectContextOnStart = true

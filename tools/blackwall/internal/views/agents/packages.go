@@ -36,9 +36,9 @@ type PackagesModel struct {
 
 func NewPackages(c PackagesClient, agentID string) *PackagesModel {
 	return &PackagesModel{
-		client: c,
+		client:  c,
 		agentID: agentID,
-		sl: scroll.List{HeaderRows: 2, FooterRows: 2},
+		sl:      scroll.List{HeaderRows: 2, FooterRows: 2},
 	}
 }
 
