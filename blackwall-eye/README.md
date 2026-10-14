@@ -76,6 +76,10 @@ every `wazuh_sessions_frequency` seconds (default 60; disable with
 it changes, i.e. on each login or logout. The `blackwall` TUI reads the newest
 snapshot for its Sessions tab.
 
+`last` reads wtmp, which only records sessions with a PTY: non-interactive
+`ssh host cmd`, scp and Ansible runs do not appear in the snapshot or in the
+Sessions tab.
+
 The manager config now also declares the standard `<ruleset>` explicitly;
 before, `GET /rules` failed with error 1106.
 
