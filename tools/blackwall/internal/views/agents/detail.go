@@ -82,7 +82,7 @@ func (m *DetailModel) Name() string { return ":agent-detail" }
 
 func (m *DetailModel) Hints() []footer.Hint {
 	base := []footer.Hint{
-		{Key: "o/h/t/k/n/s/e", Desc: "tabs"},
+		{Key: "←/→ o/h/t/k/n/s/e", Desc: "tabs"},
 		{Key: "l", Desc: "alerts"},
 		{Key: "esc", Desc: "back"},
 		{Key: "r", Desc: "refresh"},
@@ -149,14 +149,21 @@ func (m *DetailModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 		if idx, ok := tabIndex[msg.String()]; ok {
-			m.activeTab = idx
-			if sub, hasSub := m.subs[idx]; hasSub {
-				return m, sub.Init()
-			}
-			return m, nil
+			return m, m.switchTab(idx)
 		}
 		switch msg.String() {
-		case "esc", "left":
+		case "right":
+			if m.activeTab < len(detailTabs)-1 {
+				return m, m.switchTab(m.activeTab + 1)
+			}
+			return m, nil
+		case "left":
+			// ← from the first tab leaves the card, like esc.
+			if m.activeTab > 0 {
+				return m, m.switchTab(m.activeTab - 1)
+			}
+			return m, func() tea.Msg { return app.BackMsg{} }
+		case "esc":
 			return m, func() tea.Msg { return app.BackMsg{} }
 		case "r":
 			return m, m.Init()
@@ -176,6 +183,15 @@ func (m *DetailModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	return m, nil
+}
+
+// switchTab activates tab idx and starts its sub-view loading, if any.
+func (m *DetailModel) switchTab(idx int) tea.Cmd {
+	m.activeTab = idx
+	if sub, ok := m.subs[idx]; ok {
+		return sub.Init()
+	}
+	return nil
 }
 
 // renderOverview renders agent metadata (was the full View content before tabbar).

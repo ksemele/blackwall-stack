@@ -66,7 +66,8 @@ func (v *View) View() string {
 	b.WriteString("\n")
 
 	b.WriteString(styles.HelpHeading.Render("Agent detail") + "\n")
-	b.WriteString(row("ESC / ←", "Back to list"))
+	b.WriteString(row("← / →", "Previous / next tab (← on Overview: back)"))
+	b.WriteString(row("ESC", "Back to list"))
 	b.WriteString(row("r", "Refresh"))
 	b.WriteString("\n")
 

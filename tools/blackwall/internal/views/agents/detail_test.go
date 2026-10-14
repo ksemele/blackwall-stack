@@ -36,6 +36,39 @@ func TestDetail_EscEmitsBack(t *testing.T) {
 	}
 }
 
+func TestDetail_ArrowsCycleTabs(t *testing.T) {
+	var m tea.Model = NewDetail(&fakeClient{}, nil, "001")
+	right := tea.KeyMsg{Type: tea.KeyRight}
+	left := tea.KeyMsg{Type: tea.KeyLeft}
+
+	m, _ = m.Update(right)
+	m, _ = m.Update(right)
+	if got := m.(*DetailModel).activeTab; got != 2 {
+		t.Fatalf("activeTab = %d after → →, want 2", got)
+	}
+	m, _ = m.Update(left)
+	if got := m.(*DetailModel).activeTab; got != 1 {
+		t.Fatalf("activeTab = %d after ←, want 1", got)
+	}
+	for range detailTabs {
+		m, _ = m.Update(right)
+	}
+	if got := m.(*DetailModel).activeTab; got != len(detailTabs)-1 {
+		t.Errorf("activeTab = %d, want last tab %d (→ stops at the end)", got, len(detailTabs)-1)
+	}
+}
+
+func TestDetail_LeftOnOverviewEmitsBack(t *testing.T) {
+	d := NewDetail(&fakeClient{}, nil, "001")
+	_, cmd := d.Update(tea.KeyMsg{Type: tea.KeyLeft})
+	if cmd == nil {
+		t.Fatal("expected cmd on ← from Overview")
+	}
+	if _, ok := cmd().(app.BackMsg); !ok {
+		t.Errorf("msg type = %T, want BackMsg", cmd())
+	}
+}
+
 func TestDetail_HKeySwitchesToHardwareTab(t *testing.T) {
 	d := NewDetail(&fakeClient{}, nil, "001")
 	next, _ := d.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'h'}})
