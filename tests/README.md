@@ -115,8 +115,9 @@ asking for the password.
 The sentinel (`black-sentinel-03`) is a separate Wazuh stack: it is excluded
 from the main-stack checks and provisions (`hosts: all` plays run with
 `!sentinel`) and has its own target `sentinel`. Its podman fixture needs the
-`containers.podman` Ansible collection on the controller
-(`ansible-galaxy collection install containers.podman`).
+`containers.podman` Ansible collection on the controller, and the indexer role
+needs `ansible.posix` (`ansible-galaxy collection install containers.podman
+ansible.posix`).
 
 ```bash
 tests/bin/bw-check all        # everything; exit code 0 only when nothing failed
