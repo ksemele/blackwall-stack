@@ -8,8 +8,8 @@ Status: **planned — not started** (Fang backlog item 3).
 
 Ban sources on evidence Wazuh already has but the kernel doesn't: failed SSH
 logins (completed TCP sessions — not spoofable), web attacks seen in nginx
-logs, repeat offenders across Fang/Eye alerts. Bans land in the same nftables
-ban set as the in-kernel detectors, with a timeout.
+logs, repeat offenders across Fang/Eye alerts. Bans land in their own nftables
+set `ban_wazuh` (see 2.1), with a timeout.
 
 ## 2. Design
 
@@ -29,7 +29,6 @@ ban set as the in-kernel detectors, with a timeout.
 | Wazuh rule(s) | Meaning | Ban timeout |
 |---|---|---|
 | 5710/5712/5716/5720/5763 (sshd failures, brute force) | failed logins, completed sessions | 1h |
-| 100202 / 100211 repeated (frequency composite, same srcip) | persistent scanner | 1h |
 | web attack rules from nginx logs (when collected) | exploit attempts | 1h |
 
 Triggers, levels and timeouts are role variables; start with SSH only.

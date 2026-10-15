@@ -42,9 +42,8 @@ nothing is dropped) before enforcement is switched on.
 
 **Backlog:**
 
-3. **Wazuh active response** — a nftables active-response script that bans on
-   Wazuh rules (failed SSH logins 5710/5763, scan 100202, ...) into
-   `blocklist_dynamic`. Bans on completed TCP sessions, i.e. not spoofable.
+3. **Wazuh active response** — see the spec
+   `docs/superpowers/specs/2026-10-16-fang-active-response-design.md`.
 
 **Idea — separate module:**
 

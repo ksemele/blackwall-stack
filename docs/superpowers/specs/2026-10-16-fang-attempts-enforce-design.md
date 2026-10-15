@@ -25,7 +25,11 @@ in the kernel, with every ban visible in Wazuh.
 
 ### 2.2 Ban set and rules
 
-- New set `blocklist_dynamic` (`ipv4_addr`, `flags dynamic,timeout`, size
+- **Open decision (decide in this spec's plan):** one shared `blocklist_dynamic`
+  set versus per-detector sets (`ban_ssh`, `ban_scan`, `ban_rate`). Recommended:
+  per-detector sets, so the reason for a ban is visible. Below, `blocklist_dynamic`
+  stands for "the ban set(s)".
+- Ban set (`blocklist_dynamic`; `ipv4_addr`, `flags dynamic,timeout`, size
   65536, counters). Ban timeouts per detector: `fang_ban_timeout_ssh` (1h),
   `fang_ban_timeout_scan` (15m — closed-port SYNs are spoofable, keep it
   short), `fang_ban_timeout_rate` (10m).
@@ -52,7 +56,10 @@ in the kernel, with every ban visible in Wazuh.
 ### 2.4 Safety
 
 - Allowlist (admin, monitoring, agent sources, Cloudflare, host addresses)
-  is accepted before any ban rule — never banned.
+  is accepted before any ban rule — never banned. The controller / Ansible
+  path (the source every provisioning run and operator ssh arrives from) must
+  be in `fang_allowlist` too, or enforcement would lock the operator out;
+  the lab allowlists 172.28.0.1 for this reason.
 - Established connections are accepted before the ban rule: an active SSH
   session of the owner survives a ban of its address for new connections.
 - An emergency unban path documented: `nft flush set inet blackwall_fang
@@ -67,6 +74,8 @@ in the kernel, with every ban visible in Wazuh.
 - black-host-01 under the rate -> never banned.
 - Ban event visible in the sentinel indexer.
 - `fang_ban_rate: false` -> rate-flagged source is not banned.
+- The controller source (172.28.0.1) is never flagged or banned; `bw-check
+  fang` asserts it is absent from all flagged/ban sets after the run.
 - Restore observe at the end (trap on INT/TERM).
 
 ## 4. Out of scope

@@ -139,7 +139,12 @@ sentinel; asserts growth over a baseline taken at the start, since flagged entri
 Limits and tuning:
 
 - Legitimate high-rate sources belong in `fang_allowlist`: uptime and monitoring probes, NAT'd
-  offices, and blackwall-scan's own perimeter recon (it looks like a scanner by design).
+  offices, blackwall-scan's own perimeter recon (it looks like a scanner by design), and the
+  operator's own Ansible/SSH source (the controller path: every provisioning run and ssh session
+  arrives from it and would otherwise be flagged constantly).
+- Every refresh (daily timer, config change) replaces the table, so meters and flagged sets reset:
+  a flagged source alerts again once after a refresh. On a first run without any Cloudflare data,
+  layer 2 is skipped until the next successful refresh.
 - Blind spot: a spoofed-source SYN flood can fill the meter sets (65536 sources); the rule then
   silently stops tracking new sources until entries time out (5m). Observe has nothing to
   protect; enforcement must account for it.
