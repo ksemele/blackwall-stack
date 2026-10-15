@@ -5,7 +5,7 @@
 
 - name: Install wazuh-dashboard package
   apt:
-    name: "wazuh-dashboard={{ wazuh_version }}-*"
+    name: "wazuh-dashboard{{ wazuh_pkg_suffix }}"
     state: present
     update_cache: true
 

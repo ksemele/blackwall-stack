@@ -3,28 +3,16 @@
   shell: while fuser /var/lib/dpkg/lock-frontend /var/lib/dpkg/lock >/dev/null 2>&1; do sleep 2; done
   changed_when: false
 
-- name: Install prerequisites (gnupg, curl)
+- name: Install prerequisites (curl)
   apt:
     name:
-      - gnupg
       - curl
     state: present
     update_cache: true
 
-- name: Add Wazuh GPG key
-  apt_key:
-    url: "{{ wazuh_apt_key_url }}"
-    state: present
-
-- name: Add Wazuh apt repository
-  apt_repository:
-    repo: "{{ wazuh_apt_repo }}"
-    state: present
-    filename: wazuh
-
 - name: Install wazuh-manager package
   apt:
-    name: "wazuh-manager={{ wazuh_version }}-*"
+    name: "wazuh-manager{{ wazuh_pkg_suffix }}"
     state: present
     update_cache: true
 

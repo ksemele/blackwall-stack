@@ -204,7 +204,7 @@ mount at `tests/.apt-cache/` (gitignored), so it survives `bw-lab down` and
 
 `packages.wazuh.com` is HTTPS-only, and a proxy cannot cache through a CONNECT
 tunnel. So the lab inventory (`tests/inventory/group_vars/all.yml`) points
-`wazuh_apt_repo` at `http://packages.wazuh.com/...`, and the cache remaps that
+`wazuh_apt_repo_url` at `http://packages.wazuh.com/...`, and the cache remaps that
 to the `https://` upstream (`tests/docker/images/aptcache/blackwall.conf`).
 Packages are still verified by the Wazuh GPG signature on the repo metadata.
 Role defaults keep `https://` — none of this exists outside the lab.
@@ -758,7 +758,7 @@ blackwall/                                  # repo root
 │   ├── inventory/
 │   │   ├── hosts.yml
 │   │   └── group_vars/                     # loaded because it sits next to the inventory
-│   │       ├── all.yml                     # lab: wazuh_apt_repo via the apt cache
+│   │       ├── all.yml                     # lab: wazuh_apt_repo_url via the apt cache
 │   │       ├── wazuh_managers.yml
 │   │       └── wazuh_agents.yml
 │   ├── triggers/

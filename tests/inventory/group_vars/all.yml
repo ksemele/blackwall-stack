@@ -8,4 +8,4 @@ bw_lab: true
 # (tests/docker/images/aptcache/blackwall.conf). Package integrity still comes
 # from the Wazuh GPG signature on the repo metadata, not from TLS. The role
 # defaults keep https://, so nothing changes outside the lab.
-wazuh_apt_repo: "deb http://packages.wazuh.com/4.x/apt/ stable main"
+wazuh_apt_repo_url: "http://packages.wazuh.com/4.x/apt/"

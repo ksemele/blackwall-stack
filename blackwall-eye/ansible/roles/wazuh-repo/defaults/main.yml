@@ -1,0 +1,7 @@
+---
+# Single source of the Wazuh package version and repositories for every
+# Wazuh role (meta dependency). An agent newer than the manager is unsupported.
+wazuh_version: "4.14.7"
+wazuh_gpg_key_url: "https://packages.wazuh.com/key/GPG-KEY-WAZUH"
+wazuh_apt_repo_url: "https://packages.wazuh.com/4.x/apt/"
+wazuh_yum_repo_url: "https://packages.wazuh.com/4.x/yum/"

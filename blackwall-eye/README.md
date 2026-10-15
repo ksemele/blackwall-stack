@@ -43,13 +43,15 @@ ansible-playbook ansible/playbooks/monitored-host.yml
 
 ### Package source (production)
 
-The roles install Wazuh from `wazuh_apt_repo` (default: the public
-`https://packages.wazuh.com/4.x/apt/`) at the version pinned in `wazuh_version`.
+The `wazuh-repo` role (a meta dependency of all four Wazuh roles) owns the package
+source: apt via `wazuh_apt_repo_url` (default: the public
+`https://packages.wazuh.com/4.x/apt/`), yum via `wazuh_yum_repo_url`, signed by
+`wazuh_gpg_key_url`, at the version pinned in `wazuh_version`.
 For a fleet, point it at a company-wide package mirror instead — one variable,
 no role changes:
 
 ```yaml
-wazuh_apt_repo: "deb https://apt.internal.example/wazuh/4.14.7 stable main"
+wazuh_apt_repo_url: "https://apt.internal.example/wazuh/4.14.7"
 ```
 
 A versioned internal mirror (aptly/pulp snapshots, Artifactory or Nexus apt
