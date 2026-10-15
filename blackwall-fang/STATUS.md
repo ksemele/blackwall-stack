@@ -1,10 +1,10 @@
 ---
 module: blackwall-fang
-status: pending
+status: in_progress
 stage: 5
 last_updated: 2026-10-15
-last_task: "Module created; scope agreed: defensive blocking first (production), counter-attack research later"
-next_task: "Layer 1: reputation blocklists (Spamhaus DROP/EDROP, FireHOL level1) into an nftables set; then layer 2: in-kernel ban on connection attempts"
+last_task: "Layer 1 role fang-reputation (table, refresh script, daily timer, observe/enforce) deployed on the lab sentinel; events and checks pending"
+next_task: "Layer 1: Wazuh event for blocklist hits, bw-check fang; then layer 2: in-kernel ban on connection attempts"
 blockers: []
 ---
 

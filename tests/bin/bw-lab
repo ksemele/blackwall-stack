@@ -25,9 +25,10 @@ Commands:
   down [--keep-data]                  stop the environment (volumes removed by default)
   reset                               down -v + wipe Wazuh certs + up
   status                              containers, ports, monitoring health
-  provision <target> [ansible args]   ansible only: eye|nftables|metrics|voice|cf-wall|brain|sentinel|fixtures|all
+  provision <target> [ansible args]   ansible only: eye|nftables|metrics|voice|cf-wall|brain|sentinel|fang|fixtures|all
                                       (voice and brain take extra args, e.g. -e brain_enabled=false;
-                                      brain also re-runs voice with them when voice is deployed)
+                                      brain also re-runs voice with them when voice is deployed;
+                                      fang takes extra args too, e.g. -e fang_mode=enforce, and is not in `all`)
   ssh <host> [command...]             shell into a test container
   logs <service> [-f]                 compose logs for one service
   open <target>                       open in a browser: dashboard|grafana|prometheus
@@ -77,6 +78,10 @@ cmd_provision() {
       bw_ansible blackwall-eye ../tests/triggers/sentinel-podman.yml
       bw_ansible blackwall-eye ansible/playbooks/sentinel.yml
       ;;
+    fang)
+      bw_info "provision: fang (reputation blocklists on the sentinel group)"
+      bw_ansible blackwall-fang ansible/playbooks/fang.yml "$@"
+      ;;
     fixtures)
       bw_info "provision: broken-agent fixtures (ghost-99 never_connected, dead-98 stopped)"
       bw_ansible blackwall-eye ../tests/triggers/broken-agents.yml
@@ -119,7 +124,7 @@ cmd_provision() {
       cmd_provision fixtures
       ;;
     *)
-      bw_die "unknown target: $target (eye|nftables|metrics|voice|cf-wall|brain|sentinel|fixtures|all)"
+      bw_die "unknown target: $target (eye|nftables|metrics|voice|cf-wall|brain|sentinel|fang|fixtures|all)"
       ;;
   esac
 }

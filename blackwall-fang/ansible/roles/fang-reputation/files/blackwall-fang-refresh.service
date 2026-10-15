@@ -1,0 +1,12 @@
+[Unit]
+Description=Blackwall: refresh Fang reputation blocklists (nftables inet blackwall_fang)
+After=network-online.target nftables.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/blackwall-fang-refresh
+# The script reads /etc/blackwall/fang.conf itself.
+# A failed refresh (network glitch, bad data, rejected ruleset) changes nothing
+# and leaves this unit failed: that is the visible signal. The next timer run retries.
+# Exit 2 = first run without data, an empty blocklist was loaded (fail open).

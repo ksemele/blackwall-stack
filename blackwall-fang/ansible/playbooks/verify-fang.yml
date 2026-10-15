@@ -1,0 +1,42 @@
+---
+- name: Verify Fang reputation blocklists
+  hosts: fang
+  become: true
+  gather_facts: false
+
+  vars:
+    fang_file: /etc/nftables.d/blackwall-fang.nft
+
+  tasks:
+    - name: Dump table as JSON
+      ansible.builtin.command: nft -j list table inet blackwall_fang
+      register: fang_json
+      changed_when: false
+
+    - name: Collect sets and the prerouting chain
+      ansible.builtin.set_fact:
+        fang_sets: >-
+          {{ (fang_json.stdout | from_json).nftables | selectattr('set', 'defined')
+             | map(attribute='set') | list }}
+        fang_chain: >-
+          {{ (fang_json.stdout | from_json).nftables | selectattr('chain', 'defined')
+             | map(attribute='chain') | selectattr('name', 'eq', 'prerouting') | first | default({}) }}
+
+    - name: Assert sets exist, allowlist is filled and the hook is prerouting -160
+      ansible.builtin.assert:
+        that:
+          - (fang_sets | map(attribute='name') | sort) == ['allow_v4', 'blocklist_static', 'fang_hits']
+          - (fang_sets | selectattr('name', 'eq', 'allow_v4') | map(attribute='elem') | first | default([]) | length) >= 1
+          - (fang_sets | selectattr('name', 'eq', 'blocklist_static') | map(attribute='elem') | first | default([]) | length) >= 1
+          - fang_chain.hook | default('') == 'prerouting'
+          - fang_chain.prio | default(0) | int == -160
+        fail_msg: "blackwall_fang on {{ inventory_hostname }} is incomplete: {{ fang_chain }}"
+
+    - name: Generated file passes nft -c
+      ansible.builtin.command: nft -c -f {{ fang_file }}
+      changed_when: false
+
+    - name: Timer is enabled and active
+      ansible.builtin.command: "systemctl {{ item }} blackwall-fang-refresh.timer"
+      changed_when: false
+      loop: [is-enabled, is-active]

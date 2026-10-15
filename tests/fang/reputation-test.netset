@@ -1,0 +1,15 @@
+# Lab reputation list (FireHOL netset format) for blackwall-fang.
+# 172.28.0.15 is black-rocky-02; 172.28.0.10 is black-master-00 (allowlisted:
+# must be carved out). The rest is junk that must be filtered.
+172.28.0.15/32
+172.28.0.10/32
+0.0.0.0/8
+10.0.0.0/8
+100.64.0.0/10
+127.0.0.0/8
+172.16.0.0/12
+192.168.0.0/16
+224.0.0.0/3
+1.2.3.0/24
+2.3.4.0/24
+3.4.5.0/24

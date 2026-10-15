@@ -1,0 +1,32 @@
+---
+# observe: sets fill, hits are counted and alerted, nothing is dropped.
+# enforce: the same, plus drop.
+fang_mode: observe
+
+# External interface. Required: no autodetect (a wrong name would make
+# `iifname != WAN accept` accept everything).
+fang_wan_if: ""
+
+# Never blocked, in addition to Cloudflare ranges (fetched) and this host's
+# own addresses: owner/admin/monitoring sources, IPv4 CIDRs.
+fang_allowlist: []
+
+# Reputation lists. https only (file:// needs fang_test_mode).
+fang_sources:
+  - https://www.spamhaus.org/drop/drop_v4.json
+  - https://iplists.firehol.org/files/firehol_level1.netset
+fang_cloudflare_url: https://www.cloudflare.com/ips-v4
+
+# Abort the refresh when fewer blocklist entries survive filtering.
+fang_min_entries: 500
+
+# Refresh timer (systemd OnCalendar) and jitter.
+fang_refresh_calendar: daily
+fang_refresh_jitter: 1h
+
+# Lab only. Test mode allows file:// sources and lets fang_test_blockable
+# (private addresses, e.g. lab containers) through the reserved-range filter.
+# fang_test_files are copied from the controller to /etc/blackwall/fang-test/.
+fang_test_mode: false
+fang_test_blockable: []
+fang_test_files: []
