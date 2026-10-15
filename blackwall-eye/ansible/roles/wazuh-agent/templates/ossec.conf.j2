@@ -59,7 +59,7 @@
   <!-- Firewall drop events (rules 100200-100204, alias blackwall-fw) -->
   <localfile>
     <log_format>command</log_format>
-    <command>/usr/local/sbin/blackwall-fw-export</command>
+    <command>if [ -x /usr/local/sbin/blackwall-fw-export ]; then /usr/local/sbin/blackwall-fw-export; fi</command>
     <alias>blackwall-fw</alias>
     <frequency>{{ wazuh_fw_events_interval }}</frequency>
   </localfile>

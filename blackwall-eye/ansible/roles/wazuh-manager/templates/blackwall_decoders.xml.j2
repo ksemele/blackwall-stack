@@ -6,6 +6,15 @@
        ossec: output: 'blackwall-fw': blackwall-fw: kind=...
      Both decoders anchor on that whole prefix (children of the stock `ossec`
      decoder), so stray lines never match. The summary line has its own
+     decoder (no src). Type ossec keeps stock rules 500/530 matching. Rule
+     100200 matches the prefix plus the decoded fw_kind field. -->
+
+<!-- Firewall drop events: one line per source printed by
+     /usr/local/sbin/blackwall-fw-export (agent command localfile, alias
+     blackwall-fw). Full event:
+       ossec: output: 'blackwall-fw': blackwall-fw: kind=...
+     Both decoders anchor on that whole prefix (children of the stock `ossec`
+     decoder), so stray lines never match. The summary line has its own
      decoder (no src); rule 100200 keys on the
      decoded fw_kind field plus the prefix (type ossec keeps stock rule 500/530 matching). -->
 
