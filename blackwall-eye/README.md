@@ -163,7 +163,10 @@ On a public host expect regular 100201/100202 alerts from internet scanners.
 The exporter's per-source cooldown (`nft_track_report_cooldown`, default 3600 s)
 bounds this to one alert per source per kind per hour; drops from a source in
 cooldown accumulate silently and the next report carries `new` = packets since
-its last report. To tune: raise `nft_track_scan_threshold` (fewer scans count),
+its last report. Exceptions: after a firewall reload or the weekly cf-wall refresh
+a returning source may be reported immediately (state is rebuilt from the sets),
+and drops accumulated during cooldown are discarded if the source goes quiet
+until its set entry times out. To tune: raise `nft_track_scan_threshold` (fewer scans count),
 raise `nft_track_report_cooldown` (fewer repeats; `0` reports every growth),
 or raise Voice's `severity_threshold` above 8 to keep only origin-direct (10)
 alerts in Telegram. The first run after deploy or state loss is silent
