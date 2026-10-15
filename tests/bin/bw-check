@@ -607,7 +607,7 @@ _fe_count() {
 # input_drop total recorded by the exporter on host-01 for 172.28.0.15 (0 when absent).
 _fe_input_total() {
   _fe_ssh black-host-01 'cat /var/lib/blackwall-fw/state.json' 2>/dev/null \
-    | python3 -c 'import json,sys; print(json.load(sys.stdin).get("input_drop",{}).get("172.28.0.15",0))' 2>/dev/null
+    | python3 -c 'import json,sys; v=json.load(sys.stdin).get("input_drop",{}).get("172.28.0.15",0); print(v.get("s",0) if isinstance(v,dict) else v)' 2>/dev/null
 }
 
 # _fe_wait <main|sentinel> <rule> <agent> <srcip> <since> — poll up to 150 s, print the count.
@@ -621,7 +621,7 @@ _fe_wait() {
   printf '%s' "${n:-0}"
 }
 
-# Opt-in (~2 min): drops on the lab firewalls must become Wazuh alerts end to end.
+# Opt-in (~1 min): drops on the lab firewalls must become Wazuh alerts end to end.
 # rocky-02 (172.28.0.15, not in the sentinel's cfwall_admin_allow) generates the traffic.
 check_fw_events() {
   bw_info "fw-events"
