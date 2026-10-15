@@ -16,3 +16,6 @@ wazuh_fixture_agents: [black-dead-98]
 
 # Firewall drop events: poll fast so lab tests do not wait a minute.
 wazuh_fw_events_interval: 10
+
+# Report every growth: the fw-events check sends traffic from the same source twice.
+nft_track_report_cooldown: 0

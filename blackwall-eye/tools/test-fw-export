@@ -13,7 +13,8 @@ fresh() { mktemp -d "$tmp/s.XXXXXX"; }
 run() { # <fixture dir> <state dir> [extra env as VAR=val ...]
     local f=$1 s=$2; shift 2
     env BLACKWALL_FW_NFT_JSON_DIR="$fx/$f" BLACKWALL_FW_STATE_DIR="$s" \
-        BLACKWALL_FW_SCAN_THRESHOLD=20 BLACKWALL_FW_CONF=/nonexistent "$@" \
+        BLACKWALL_FW_SCAN_THRESHOLD=20 BLACKWALL_FW_REPORT_COOLDOWN=0 \
+        BLACKWALL_FW_CONF=/nonexistent "$@" \
         python3 "$exp" 2>/dev/null
 }
 check() { # <name> <expected> <actual>
@@ -90,6 +91,75 @@ $P src=198.51.100.9 new=9 total=9 burst=no
 $P src=198.51.100.8 new=8 total=8 burst=no
 blackwall-fw: kind=summary suppressed=7 burst=no" "$out"
 echo "$out" | grep -q . && check cap-state-saved "" "$(run many "$s" BLACKWALL_FW_MAX_LINES=3)"
+
+# Fixture generator: gen <dir> <kind=table.set> <ip=packets>... (nft JSON shape)
+gen() {
+    local d=$1 ts=$2; shift 2; mkdir -p "$d"
+    python3 - "$d" "$ts" "$@" <<'PY'
+import json, sys
+d, ts, *els = sys.argv[1:]
+table, name = ts.split(".")
+elem = [{"elem": {"val": ip, "expires": 3000, "counter": {"packets": int(n), "bytes": 60 * int(n)}}}
+        for ip, n in (e.split("=") for e in els)]
+doc = {"nftables": [{"metainfo": {"version": "1.0.9"}},
+                    {"set": {"family": "inet", "name": name, "table": table, "elem": elem}}]}
+json.dump(doc, open("%s/%s.json" % (d, ts), "w"))
+PY
+}
+runat() { # <fixture dir (absolute)> <state dir> <now> [extra env]
+    local f=$1 s=$2 now=$3; shift 3
+    env BLACKWALL_FW_NFT_JSON_DIR="$f" BLACKWALL_FW_STATE_DIR="$s" BLACKWALL_FW_SCAN_THRESHOLD=20 \
+        BLACKWALL_FW_REPORT_COOLDOWN=3600 BLACKWALL_FW_NOW="$now" BLACKWALL_FW_CONF=/nonexistent "$@" \
+        python3 "$exp" 2>/dev/null
+}
+
+# Cooldown: growth inside the window is silent and accumulates; the next report
+# after the window carries everything since the last report
+A="203.0.113.50"; T=blackwall_base.dropped_input
+s=$(fresh); f="$tmp/cd"
+gen "$f" $T $A=10; check cd-baseline "" "$(runat "$f" "$s" 1000)"
+gen "$f" $T $A=15; check cd-first "$P src=$A new=5 total=15 burst=no" "$(runat "$f" "$s" 1010)"
+gen "$f" $T $A=40; check cd-second-silent "" "$(runat "$f" "$s" 1020)"
+gen "$f" $T $A=90; check cd-burst-silent "" "$(runat "$f" "$s" 1030)"
+check cd-no-growth "" "$(runat "$f" "$s" 5000)"
+gen "$f" $T $A=95; check cd-after "$P src=$A new=80 total=95 burst=no" "$(runat "$f" "$s" 5000)"
+gen "$f" $T $A=96; check cd-reset "" "$(runat "$f" "$s" 5010)"
+# burst after the window is judged on this run's growth, not the accumulated sum
+s=$(fresh); gen "$f" $T $A=10; runat "$f" "$s" 1000 >/dev/null
+gen "$f" $T $A=15; runat "$f" "$s" 1010 >/dev/null
+gen "$f" $T $A=45; runat "$f" "$s" 1020 >/dev/null
+gen "$f" $T $A=70; check cd-burst-after "$P src=$A new=55 total=70 burst=yes" "$(runat "$f" "$s" 5000)"
+# cooldown 0 reports every growth
+s=$(fresh); gen "$f" $T $A=10; runat "$f" "$s" 1000 BLACKWALL_FW_REPORT_COOLDOWN=0 >/dev/null
+gen "$f" $T $A=15; check cd0-1 "$P src=$A new=5 total=15 burst=no" "$(runat "$f" "$s" 1001 BLACKWALL_FW_REPORT_COOLDOWN=0)"
+gen "$f" $T $A=18; check cd0-2 "$P src=$A new=3 total=18 burst=no" "$(runat "$f" "$s" 1002 BLACKWALL_FW_REPORT_COOLDOWN=0)"
+# reload (counter decrease) during cooldown: silent, then accumulated = old growth + total
+s=$(fresh); gen "$f" $T $A=10; runat "$f" "$s" 1000 >/dev/null
+gen "$f" $T $A=15; runat "$f" "$s" 1010 >/dev/null
+gen "$f" $T $A=25; check cd-reload-pre "" "$(runat "$f" "$s" 1020)"
+gen "$f" $T $A=4; check cd-reload-silent "" "$(runat "$f" "$s" 1030)"
+gen "$f" $T $A=6; check cd-reload-after "$P src=$A new=16 total=6 burst=no" "$(runat "$f" "$s" 5000)"
+# a source that left the set and returns re-enters normally
+s=$(fresh); gen "$f" $T $A=10; runat "$f" "$s" 1000 >/dev/null
+gen "$f" $T $A=15; runat "$f" "$s" 1010 >/dev/null
+gen "$f" $T 203.0.113.99=1; check cd-left "$P src=203.0.113.99 new=1 total=1 burst=no" "$(runat "$f" "$s" 1020)"
+gen "$f" $T $A=3 203.0.113.99=1; check cd-return "$P src=$A new=3 total=3 burst=no" "$(runat "$f" "$s" 1030)"
+# cooldown is per kind and per source
+s=$(fresh); gen "$f" $T $A=10 203.0.113.51=10; runat "$f" "$s" 1000 >/dev/null
+gen "$f" $T $A=15 203.0.113.51=10; runat "$f" "$s" 1010 >/dev/null
+gen "$f" $T $A=16 203.0.113.51=12; check cd-per-source "$P src=203.0.113.51 new=2 total=12 burst=no" "$(runat "$f" "$s" 1020)"
+# old-format state (plain ints) still works
+s=$(fresh); echo '{"input_drop": {"203.0.113.50": 10}}' > "$s/state.json"
+gen "$f" $T $A=15; check old-state "$P src=$A new=5 total=15 burst=no" "$(runat "$f" "$s" 1000)"
+
+# origin_direct is never hidden by the output cap
+s=$(fresh); echo '{}' > "$s/state.json"; f="$tmp/cap"
+els=(); for i in $(seq 1 250); do els+=("10.1.$((i / 250)).$((i % 250))=$((i + 30))"); done
+gen "$f" $T "${els[@]}"; gen "$f" blackwall_wall.origin_direct 203.0.113.77=1
+out=$(runat "$f" "$s" 1000 BLACKWALL_FW_MAX_LINES=200 BLACKWALL_FW_REPORT_COOLDOWN=0)
+check cap-origin-first "blackwall-fw: kind=origin_direct src=203.0.113.77 new=1 total=1 burst=no" "$(echo "$out" | head -1)"
+check cap-lines 201 "$(echo "$out" | wc -l | tr -d ' ')"
+check cap-summary "blackwall-fw: kind=summary suppressed=51 burst=no" "$(echo "$out" | tail -1)"
 
 # State cannot be written => nothing printed
 s=$(fresh); echo '{}' > "$s/state.json"; chmod 500 "$s"

@@ -37,6 +37,9 @@ nft_track_size: 65536
 nft_track_scan_threshold: 20
 # Cap on lines printed by one exporter run (highest growth first, rest summarised).
 nft_track_max_lines: 200
+# Seconds between two reports of the same source (kind, src); growth in
+# between accumulates silently. 0 = report every growth (lab).
+nft_track_report_cooldown: 3600
 
 # Main nftables config loaded by nftables.service (differs per OS family)
 nft_conf_path: "{{ '/etc/sysconfig/nftables.conf' if ansible_facts['os_family'] == 'RedHat' else '/etc/nftables.conf' }}"
