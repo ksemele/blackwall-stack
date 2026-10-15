@@ -76,7 +76,7 @@ tests/bin/bw-lab reset
 | `bw-lab down [--keep-data]` | stop the environment; volumes are removed unless `--keep-data` |
 | `bw-lab reset` | `down -v` + wipe Wazuh certificates + `up` |
 | `bw-lab status` | containers, published ports, health of Prometheus/Grafana/dashboard |
-| `bw-lab provision <target> [ansible args]` | ansible only: `eye`, `nftables`, `metrics`, `voice`, `cf-wall`, `brain`, `sentinel` (podman nginx fixture, then the full Wazuh server stack + firewall + cf-wall on black-sentinel-03; not part of `all`), `fixtures`, `all`; `voice` and `brain` pass extra args through, e.g. `-e brain_enabled=false` (the lab inventory derives Voice's `voice_max_level` from `brain_enabled`, so toggle both: `provision brain -e brain_enabled=X` and `provision voice -e brain_enabled=X`) |
+| `bw-lab provision <target> [ansible args]` | ansible only: `eye`, `nftables`, `metrics`, `voice`, `cf-wall`, `brain`, `sentinel` (podman nginx fixture, then the full Wazuh server stack + firewall + cf-wall on black-sentinel-03; not part of `all`), `fixtures`, `all`; `voice` and `brain` pass extra args through, e.g. `-e brain_enabled=false` (the lab inventory derives Voice's `voice_max_level` from `brain_enabled`, so `provision brain` re-runs the Voice playbook with the same args when Voice is deployed; the voice role also ignores the bound when `brain-analyst` is not running) |
 | `bw-lab ssh <host> [cmd...]` | shell into a container (root password `blackwall`) |
 | `bw-lab logs <service> [-f]` | compose logs for one service |
 | `bw-lab open <target>` | open `dashboard`, `grafana` or `prometheus` in a browser |

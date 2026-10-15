@@ -80,16 +80,16 @@ ansible-playbook ansible/playbooks/brain.yml \
 
 `brain_enabled` (default `true`) switches the analyst without uninstalling it:
 `false` stops and disables the service, the script, config and state stay in
-place. With Brain off Voice must forward everything again: re-deploy Voice
-with the same `-e brain_enabled=false` so its `voice_max_level` empties.
+place. With Brain off Voice must forward everything again: Voice drops its
+`voice_max_level` by itself at deploy time (it checks the service); in the lab
+`bw-lab provision brain ...` re-deploys Voice for you.
 
 ```bash
 ansible-playbook ansible/playbooks/brain.yml -e brain_enabled=false   # off
 ansible-playbook ansible/playbooks/brain.yml                          # on again
 ```
 
-In the lab: `tests/bin/bw-lab provision brain -e brain_enabled=false` and
-`tests/bin/bw-lab provision voice -e brain_enabled=false`; while it
+In the lab: `tests/bin/bw-lab provision brain -e brain_enabled=false` (re-deploys Voice too); while it
 is off, `bw-check brain` reports SKIP. Set it in the inventory to make it stick.
 Enabling requires `claude_api_key`, `telegram_bot_token` and `telegram_chat_id`
 (the role fails up front otherwise — in the lab run through `direnv exec .`);

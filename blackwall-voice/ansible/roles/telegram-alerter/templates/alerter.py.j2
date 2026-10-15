@@ -20,7 +20,7 @@ STATE_FILE     = "{{ alerter_state_file }}"
 LOG_FILE       = "{{ alerter_log_file }}"
 SEVERITY_THRESHOLD = {{ severity_threshold }}
 # Upper bound: alerts above it are left to Brain (None = no upper bound)
-MAX_LEVEL      = {% if voice_max_level | string | trim %}{{ voice_max_level | int }}{% else %}None{% endif %}
+MAX_LEVEL      = {% if voice_max_level_effective | string | trim %}{{ voice_max_level_effective | int }}{% else %}None{% endif %}
 
 # Synthetic test alerts of other modules (rule.id), never forwarded
 IGNORE_RULE_IDS = set({{ alerter_ignore_rule_ids | map('string') | list | tojson }})

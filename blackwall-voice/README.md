@@ -64,10 +64,15 @@ link lives in the inventory; the lab does it with a Jinja expression:
 voice_max_level: "{{ (analysis_threshold | int - 1) if (brain_enabled | default(true) | bool) else '' }}"
 ```
 
+Fail-safe: when `voice_max_level` is set, the Voice deploy checks that
+`brain-analyst` is enabled and active on the host. If it is not, the bound is
+ignored (Voice forwards everything `>= severity_threshold`) and the play prints
+`voice_max_level ignored: brain-analyst is not running on this host`. An alert
+can therefore never fall between the two roles.
+
 `brain_enabled` is Brain's toggle (default `true`). If you switch it with
-`-e`, pass the same `-e` to the Voice deploy, e.g.
-`bw-lab provision brain -e brain_enabled=false` then
-`bw-lab provision voice -e brain_enabled=false`.
+`-e` in the lab, `bw-lab provision brain ...` re-deploys Voice with the same
+args by itself (when Voice is installed).
 
 ### Dedup state
 

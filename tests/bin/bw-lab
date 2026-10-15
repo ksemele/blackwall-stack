@@ -26,7 +26,8 @@ Commands:
   reset                               down -v + wipe Wazuh certs + up
   status                              containers, ports, monitoring health
   provision <target> [ansible args]   ansible only: eye|nftables|metrics|voice|cf-wall|brain|sentinel|fixtures|all
-                                      (voice and brain take extra args, e.g. -e brain_enabled=false)
+                                      (voice and brain take extra args, e.g. -e brain_enabled=false;
+                                      brain also re-runs voice with them when voice is deployed)
   ssh <host> [command...]             shell into a test container
   logs <service> [-f]                 compose logs for one service
   open <target>                       open in a browser: dashboard|grafana|prometheus
@@ -91,6 +92,14 @@ cmd_provision() {
     brain)
       bw_info "provision: brain-analyst"
       bw_ansible blackwall-brain ansible/playbooks/brain.yml "$@"
+      # voice_max_level depends on Brain: keep Voice consistent (same args),
+      # but only if Voice is deployed.
+      if bw_ansible_adhoc blackwall-voice wazuh_managers -b \
+           -m stat -a 'path=/etc/systemd/system/voice-alerter.service' 2>&1 \
+           | grep -q '"exists": true'; then
+        bw_info "provision: telegram-alerter (re-run to match Brain)"
+        bw_ansible blackwall-voice ansible/playbooks/voice.yml "$@"
+      fi
       ;;
     all)
       # Order matters: nftables runs after the services so the firewall covers

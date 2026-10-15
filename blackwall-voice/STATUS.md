@@ -98,7 +98,7 @@ blockers: []
 ## Open questions
 
 - `telegram_bot_token` and `telegram_chat_id`: in the lab they come from env (`BW_TELEGRAM_*` in `.envrc`, direnv); scrubbed from git history on 2026-10-12. For prod — supplied from the owner's secret management (no ansible-vault).
-- `brain_enabled` passed with `-e` only reaches the role it is passed to: toggle Brain and re-deploy Voice with the same flag (or set `brain_enabled` in the inventory).
+- `voice_max_level` is ignored (with a warning) when `brain-analyst` is not running on the host; `bw-lab provision brain` re-runs Voice.
 
 ## Decisions
 

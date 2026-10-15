@@ -25,7 +25,7 @@ A Python script deployed as a systemd service on the manager host that:
 - Formats a human-readable Telegram message per alert
 - Sends via Telegram Bot API to a configured `chat_id`
 - Deduplicates: tracks sent `id` values to avoid resending on restart (state file, capped at `alerter_state_max_ids`, compacted hourly)
-- Optional upper bound `voice_max_level` (one message per alert when Brain is on) and `alerter_ignore_rule_ids` (Brain's verify rule)
+- Optional upper bound `voice_max_level` (one message per alert when Brain is on; ignored with a warning at deploy time if `brain-analyst` is not enabled and active on the host) and `alerter_ignore_rule_ids` (Brain's verify rule)
 - Restarts automatically on failure (systemd `Restart=on-failure`)
 
 ### 2. Wazuh Dashboard (deferred — not Stage 2)
