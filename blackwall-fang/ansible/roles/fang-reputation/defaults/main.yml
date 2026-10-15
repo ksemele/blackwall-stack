@@ -8,7 +8,10 @@ fang_mode: observe
 fang_wan_if: ""
 
 # Never blocked, in addition to Cloudflare ranges (fetched) and this host's
-# own addresses: owner/admin/monitoring sources, IPv4 CIDRs.
+# own addresses: owner/admin/monitoring sources, IPv4 CIDRs. Fang filters ALL
+# WAN ports including SSH, so enforce mode requires it to be non-empty: put the
+# admin addresses (the same as cfwall_admin_allow), monitoring and agent sources here,
+# e.g. fang_allowlist: "{{ cfwall_admin_allow + ['198.51.100.0/24'] }}" in the inventory.
 fang_allowlist: []
 
 # Reputation lists. https only (file:// needs fang_test_mode).
@@ -19,6 +22,10 @@ fang_cloudflare_url: https://www.cloudflare.com/ips-v4
 
 # Abort the refresh when fewer blocklist entries survive filtering.
 fang_min_entries: 500
+
+# A cache older than this is not trusted when the download fails or the fresh
+# data is rejected: the blocklist is emptied (fail open, exit 4, ERROR in syslog).
+fang_max_cache_age_days: 7
 
 # Refresh timer (systemd OnCalendar) and jitter.
 fang_refresh_calendar: daily

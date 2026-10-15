@@ -6,6 +6,7 @@ ALLOWLIST="{{ fang_allowlist | join(' ') }}"
 SOURCES="{{ fang_sources | join(' ') }}"
 CF_URL={{ fang_cloudflare_url }}
 MIN_ENTRIES={{ fang_min_entries }}
+MAX_CACHE_AGE_DAYS={{ fang_max_cache_age_days }}
 {% if fang_test_mode %}
 TEST_MODE=1
 TEST_BLOCKABLE="{{ fang_test_blockable | join(' ') }}"

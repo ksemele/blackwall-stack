@@ -8,11 +8,17 @@ with `nft -c`, loads it and only then persists it.
 
 Any failure before the load leaves the live table and the persisted file
 untouched. Source data (and the Cloudflare list) that was validated AND applied is cached
-under /var/lib/blackwall-fang/ (a cache write error only logs a warning). If a download fails, the table is rebuilt from that
-cache with the CURRENT mode and allowlist (exit 3). The very first run (no
-cache, no table, no persisted file) with no successful fetch loads an EMPTY
-blocklist (fail open) and exits 2.
-Exit codes: 0 ok, 1 aborted (nothing touched), 2 fail-open empty, 3 from cache.
+under /var/lib/blackwall-fang/ (a cache write error only logs a warning). If a download
+fails, or the fresh data is rejected (floor / format check), the table is rebuilt from that
+cache with the CURRENT mode and allowlist (exit 3). A cache older than
+MAX_CACHE_AGE_DAYS is not trusted: the table is rebuilt with an EMPTY blocklist (fail open,
+mode and allowlist unchanged, exit 4). The very first run (no cache, no table, no persisted
+file) with no successful fetch loads an EMPTY blocklist (fail open) and exits 2. With no
+cache at all, a rejected update aborts (exit 1, live table untouched).
+Exit codes: 0 ok, 1 aborted (nothing touched), 2 fail-open empty (first run),
+3 from cache, 4 cache too old -> empty blocklist.
+ERROR and WARNING lines also go to syslog (identifier blackwall-fang-refresh) so that
+Wazuh can alert on a degraded refresh.
 
 Config: /etc/blackwall/fang.conf (KEY=VALUE lines, see the fang-reputation role).
 Run:    blackwall-fang-refresh [--dry-run]
@@ -24,6 +30,7 @@ import json
 import os
 import subprocess
 import sys
+import syslog
 import tempfile
 import time
 import urllib.request
@@ -55,6 +62,22 @@ class FetchError(Abort):
 
 
 def log(msg):
+    """stderr always; ERROR/WARNING also to syslog (Wazuh alerts on them).
+
+    Under systemd stderr already lands in the journal under the same identifier,
+    so those lines go through syslog only (no duplicate event)."""
+    level = (syslog.LOG_ERR if msg.startswith("ERROR") else
+             syslog.LOG_WARNING if msg.startswith("WARNING") else None)
+    if level is not None:
+        try:
+            syslog.openlog("blackwall-fang-refresh", syslog.LOG_PID, syslog.LOG_DAEMON)
+            syslog.syslog(level, msg)
+            syslog.closelog()
+        except Exception:
+            level = None
+        else:
+            if os.environ.get("JOURNAL_STREAM"):
+                return
     print("[blackwall-fang-refresh] %s" % msg, file=sys.stderr)
 
 
@@ -111,7 +134,7 @@ def reserved_space(test_blockable=()):
     return subtract(RESERVED, list(test_blockable)) if test_blockable else list(RESERVED)
 
 
-def compute(raw_lists, cf_text, allowlist, host_addrs, min_entries, test_blockable=()):
+def compute(raw_lists, cf_text, allowlist, host_addrs, min_entries, test_blockable=(), names=None):
     """-> (blocklist, allow, n_before_allow). Raises Abort on a bad update."""
     reserved = reserved_space(test_blockable)
     kept = []
@@ -120,18 +143,19 @@ def compute(raw_lists, cf_text, allowlist, host_addrs, min_entries, test_blockab
     per_source = max(1, min_entries // max(1, len(raw_lists)))
     for i, text in enumerate(raw_lists):
         got = 0
+        label = "source #%d%s" % (i + 1, " (%s)" % names[i] if names else "")
         for n in parse_list(text):
             rest = subtract([n], reserved)
             if not rest:
                 continue  # entirely private / reserved
             if n.prefixlen < MIN_PREFIX:
-                raise Abort("suspicious prefix %s (shorter than /%d) -- update rejected"
-                            % (n, MIN_PREFIX))
+                raise Abort("suspicious prefix %s in %s (shorter than /%d) -- update rejected"
+                            % (n, label, MIN_PREFIX))
             kept.extend(rest)
             got += 1
         if got < per_source:
-            raise Abort("source #%d yielded only %d usable entries (minimum %d each) -- update rejected"
-                        % (i + 1, got, per_source))
+            raise Abort("%s yielded only %d usable entries (minimum %d each) -- update rejected"
+                        % (label, got, per_source))
     block = list(ipaddress.collapse_addresses(kept))
     if len(block) < min_entries:
         raise Abort("only %d blocklist entries after filtering (minimum %d) -- update rejected"
@@ -363,6 +387,10 @@ def main(argv):
         min_entries = int(conf.get("MIN_ENTRIES", "500"))
     except ValueError:
         raise Abort("MIN_ENTRIES is not a number")
+    try:
+        max_cache_age = int(conf.get("MAX_CACHE_AGE_DAYS", "7"))
+    except ValueError:
+        raise Abort("MAX_CACHE_AGE_DAYS is not a number")
     if mode not in ("observe", "enforce"):
         raise Abort("MODE must be observe or enforce, got %r" % mode)
     if not sources:
@@ -377,31 +405,64 @@ def main(argv):
 
     stamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     hosts = host_addresses()
+    cf_key = "cf:" + cf_url
+    names = sources + [cf_url]
+
+    def from_cache():
+        """-> (raw, cf_text, oldest age in s) or None when anything is not cached."""
+        raw = [cache_load(u) for u in sources]
+        cf = cache_load(cf_key)
+        if None in raw or cf is None:
+            return None
+        return raw, cf, max(cache_age(k) or 0 for k in sources + [cf_key])
+
+    def fail_open_empty():
+        _, allow, _ = compute([], None, allowlist, hosts, 0, blockable)
+        apply(render(wan_if, mode, allow, [], stamp), rules_out, dry_run)
+
+    def age_text(age):
+        return "%dh%02dm" % divmod(age // 60, 60)
+
     code = 0
+    fresh = False
+    why = None  # why the cache is used
     try:
         raw = [fetch(u, test_mode) for u in sources]
         cf_text = fetch(cf_url, test_mode)
         fresh = True
     except FetchError as e:
-        log("ERROR: %s" % e)
-        raw = [cache_load(u) for u in sources]
-        cf_text = cache_load("cf:" + cf_url)
-        if None in raw or cf_text is None:
+        why = "download failed: %s" % e
+    if fresh:
+        try:
+            block, allow, n_before = compute(raw, cf_text, allowlist, hosts, min_entries,
+                                             blockable, names)
+        except Abort as e:
+            if from_cache() is None:
+                raise
+            fresh = False
+            why = "fresh data rejected: %s" % e
+    if not fresh:
+        cached = from_cache()
+        if cached is None:
             # First install, nothing cached, live or persisted: fail open with
             # an empty blocklist rather than leaving no table at all.
             if not table_loaded() and not os.path.exists(rules_out):
-                log("first run without data: loading an EMPTY blocklist (fail open)")
-                _, allow, _ = compute([], None, allowlist, hosts, 0, blockable)
-                apply(render(wan_if, mode, allow, [], stamp), rules_out, dry_run)
+                log("WARNING: %s; first run without data: loading an EMPTY blocklist (fail open)" % why)
+                fail_open_empty()
                 return 2
-            raise
-        ages = [cache_age(k) for k in sources + ["cf:" + cf_url]]
-        log("WARNING: download failed, rebuilding from cached data (oldest cache file %s old) "
-            "with the current mode and allowlist"
-            % ("%dh%02dm" % divmod(max(a or 0 for a in ages) // 60, 60)))
-        fresh = False
+            raise FetchError(why)
+        raw, cf_text, age = cached
+        if age > max_cache_age * 86400:
+            log("ERROR: %s; the cached data is %s old (limit %d days): loading an EMPTY "
+                "blocklist (fail open), mode and allowlist unchanged"
+                % (why, age_text(age), max_cache_age))
+            fail_open_empty()
+            return 4
+        log("WARNING: %s; rebuilding from cached data (oldest cache file %s old) "
+            "with the current mode and allowlist" % (why, age_text(age)))
+        block, allow, n_before = compute(raw, cf_text, allowlist, hosts, min_entries,
+                                         blockable, names)
         code = 3
-    block, allow, n_before = compute(raw, cf_text, allowlist, hosts, min_entries, blockable)
     log("blocklist: %d entries (%d after carving the allowlist), allow: %d, mode: %s%s"
         % (n_before, len(block), len(allow), mode, "" if fresh else " [from cache]"))
     apply(render(wan_if, mode, allow, block, stamp), rules_out, dry_run)
@@ -409,7 +470,7 @@ def main(argv):
         try:
             for u, t in zip(sources, raw):
                 cache_save(u, t)
-            cache_save("cf:" + cf_url, cf_text)
+            cache_save(cf_key, cf_text)
         except OSError as e:
             log("WARNING: cannot write the cache in %s: %s (the table was applied)" % (STATE_DIR, e))
     log("done")

@@ -5,13 +5,17 @@
       - fang_wan_if != ''
       - fang_mode in ['observe', 'enforce']
       - fang_sources | length > 0
+      - fang_mode != 'enforce' or (fang_allowlist | length > 0)
+      - fang_max_cache_age_days | int > 0
       - fang_test_mode or (fang_test_blockable | length == 0 and fang_test_files | length == 0)
       - not fang_test_mode or (fang_sources | reject('match', '^file://') | list | length == 0)
       - fang_test_mode or (fang_sources | select('match', '^file://') | list | length == 0)
     fail_msg: >-
       fang_wan_if is required, fang_mode must be observe|enforce, test lists
-      need fang_test_mode, and fang_test_mode requires file:// sources only
-      (and file:// sources require fang_test_mode)
+      need fang_test_mode, fang_test_mode requires file:// sources only
+      (and file:// sources require fang_test_mode), and enforce mode needs a
+      non-empty fang_allowlist (Fang filters all WAN ports including SSH: list the
+      admin, monitoring and agent source addresses)
 
 - name: Require the Eye nftables setup first
   ansible.builtin.stat:
@@ -24,8 +28,8 @@
   loop_control:
     label: "{{ item }}"
 
-- name: Python 3 is present
-  ansible.builtin.command: python3 --version
+- name: Python 3.7 or newer is present
+  ansible.builtin.command: python3 -c 'import sys; sys.exit(0 if sys.version_info >= (3, 7) else 1)'
   changed_when: false
   check_mode: false
 
@@ -55,8 +59,8 @@
     mode: "0755"
 
 - name: Report blocklist hits through blackwall-fw-export
-  ansible.builtin.copy:
-    src: fw-export-fang.conf
+  ansible.builtin.template:
+    src: fw-export-fang.conf.j2
     dest: /etc/blackwall/fw-export.d/fang.conf
     owner: root
     group: root
@@ -121,22 +125,34 @@
 - name: Run pending refresh and systemd reload now
   ansible.builtin.meta: flush_handlers
 
-# Covers a host where the files were already in place but the table is gone.
+# Covers a host where the files were already in place but the table is gone
+# (not loaded, or not persisted).
+- name: Is the Fang table loaded?
+  ansible.builtin.command: nft list table inet blackwall_fang
+  register: fang_live
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Is the Fang table persisted?
+  ansible.builtin.stat:
+    path: /etc/nftables.d/blackwall-fang.nft
+  register: fang_persisted
+
 - name: Generate the table if it is missing
   ansible.builtin.command: /usr/local/sbin/blackwall-fang-refresh
-  args:
-    creates: /etc/nftables.d/blackwall-fang.nft
+  when: fang_live.rc != 0 or not fang_persisted.stat.exists
   register: fang_first
-  failed_when: fang_first.rc not in [0, 2, 3]
+  failed_when: fang_first.rc not in [0, 2, 3, 4]
 
 - name: WARNING - degraded refresh (fail-open empty blocklist, or applied from cache)
   ansible.builtin.debug:
     msg: >-
       WARNING on {{ inventory_hostname }}: the refresh could not download the lists.
-      rc=2 loaded an EMPTY blocklist (nothing is blocked); rc=3 rebuilt the table from
-      cached data with the current mode and allowlist. Check journalctl -u
-      blackwall-fang-refresh and the sources.
-  when: (fang_refresh.rc | default(0)) in [2, 3] or (fang_first.rc | default(0)) in [2, 3]
+      rc=2 (first run) or rc=4 (cache older than {{ fang_max_cache_age_days }} days) loaded an
+      EMPTY blocklist (nothing is blocked); rc=3 rebuilt the table from cached data with
+      the current mode and allowlist. Check journalctl -u blackwall-fang-refresh and the sources.
+  when: (fang_refresh.rc | default(0)) in [2, 3, 4] or (fang_first.rc | default(0)) in [2, 3, 4]
 
 - name: Enable the refresh timer
   ansible.builtin.systemd:

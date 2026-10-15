@@ -4,8 +4,9 @@
     daemon_reload: true
 
 # rc 2 = first run without data, an empty blocklist was loaded (fail open).
-# rc 3 = download failed, table rebuilt from cached data (current mode/allowlist).
+# rc 3 = download failed or data rejected, table rebuilt from cached data (current mode/allowlist).
+# rc 4 = cache older than fang_max_cache_age_days, empty blocklist loaded (fail open).
 - name: Refresh Fang blocklists
   ansible.builtin.command: /usr/local/sbin/blackwall-fang-refresh
   register: fang_refresh
-  failed_when: fang_refresh.rc not in [0, 2, 3]
+  failed_when: fang_refresh.rc not in [0, 2, 3, 4]
