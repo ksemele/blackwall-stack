@@ -33,6 +33,12 @@ only then applies it. `blackwall-cf-refresh.timer` repeats this weekly. The role
 runs the script on install and whenever the script or its config change, so a
 repeat run without changes does nothing.
 
+Packets that reach the final `counter drop` on the filtered ports first update
+the dynamic set `origin_direct` (IPv4, per-source counters, 1h idle timeout,
+65536 entries), so only direct-to-origin attempts are accounted. Inspect:
+`nft list set inet blackwall_wall origin_direct`. Each refresh replaces the
+table, so the counters start from zero again.
+
 ## Abort rule
 
 If fewer than `MIN_V4`/`MIN_V6` valid prefixes are fetched (junk page, truncated

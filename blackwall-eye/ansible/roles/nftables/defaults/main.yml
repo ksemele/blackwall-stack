@@ -25,5 +25,21 @@ nft_podman: {}
 nft_forward_policy: accept
 nft_log_drops: true
 
+# Per-source accounting of dropped packets (IPv4): dynamic sets dropped_input
+# (and dropped_forward when nft_forward_policy is drop) with per-element
+# counters, updated right before the final counter, so only dropped packets
+# are counted. Inspect: nft list set inet blackwall_base dropped_input
+nft_track_drops: true
+nft_track_timeout: 1h
+nft_track_size: 65536
+# Packets from one source between two exporter runs that make it a "burst"
+# (scan); rendered into /etc/blackwall/fw-export.conf for blackwall-fw-export.
+nft_track_scan_threshold: 20
+# Cap on lines printed by one exporter run (highest growth first, rest summarised).
+nft_track_max_lines: 200
+# Seconds between two reports of the same source (kind, src); growth in
+# between accumulates silently. 0 = report every growth (lab).
+nft_track_report_cooldown: 3600
+
 # Main nftables config loaded by nftables.service (differs per OS family)
 nft_conf_path: "{{ '/etc/sysconfig/nftables.conf' if ansible_facts['os_family'] == 'RedHat' else '/etc/nftables.conf' }}"

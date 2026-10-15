@@ -1,0 +1,172 @@
+#!/usr/bin/env bash
+# Unit test for blackwall-fw-export: fixture JSON, no nft needed.
+# Usage: tools/test-fw-export
+set -u
+command -v python3 >/dev/null || { echo "python3 not found" >&2; exit 2; }
+here=$(cd "$(dirname "$0")" && pwd)
+exp="$here/../ansible/roles/nftables/files/blackwall-fw-export"
+fx="$here/testdata/fw-export"
+fail=0
+tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT
+fresh() { mktemp -d "$tmp/s.XXXXXX"; }
+
+run() { # <fixture dir> <state dir> [extra env as VAR=val ...]
+    local f=$1 s=$2; shift 2
+    env BLACKWALL_FW_NFT_JSON_DIR="$fx/$f" BLACKWALL_FW_STATE_DIR="$s" \
+        BLACKWALL_FW_SCAN_THRESHOLD=20 BLACKWALL_FW_REPORT_COOLDOWN=0 \
+        BLACKWALL_FW_CONF=/nonexistent "$@" \
+        python3 "$exp" 2>/dev/null
+}
+check() { # <name> <expected> <actual>
+    if [ "$2" = "$3" ]; then echo "ok   $1"; else
+        echo "FAIL $1"; echo "--- expected"; echo "$2"; echo "--- got"; echo "$3"; fail=1; fi
+}
+
+P="blackwall-fw: kind=input_drop"
+st=$(fresh)
+check run1-baseline-silent "" "$(run run1 "$st")"
+check run1-again "" "$(run run1 "$st")"
+check run2-growth "$P src=203.0.113.3 new=30 total=30 burst=yes
+$P src=203.0.113.1 new=7 total=12 burst=no" "$(run run2 "$st")"
+check run3-reload "$P src=203.0.113.1 new=2 total=2 burst=no" "$(run run3 "$st")"
+check missing-set "" "$(run missing "$st")"
+run missing "$st"; check missing-exit 0 "$?"
+check after-missing "" "$(run run3 "$st")"
+
+# Real nft JSON, both versions: baseline, then identical fixture is silent
+for v in 1.0.2 1.0.9; do
+    s=$(fresh)
+    check "real-nft-$v baseline" "" "$(run real-nft-$v "$s")"
+    check "real-nft-$v unchanged" "" "$(run real-nft-$v "$s")"
+    # an empty state dict as baseline => everything is new
+    echo '{}' > "$s/state.json"
+    out=$(run real-nft-$v "$s")
+    case "$out" in *"kind=input_drop src="*"new="*"burst="*) echo "ok   real-nft-$v input_drop";;
+        *) echo "FAIL real-nft-$v: $out"; fail=1;; esac
+done
+s=$(fresh); echo '{}' > "$s/state.json"
+case "$(run real-nft-1.0.9 "$s")" in *"kind=origin_direct src="*) echo "ok   real-nft-1.0.9 origin_direct";;
+    *) echo "FAIL origin_direct"; fail=1;; esac
+
+# Burst boundary: new == threshold -> yes, threshold-1 -> no
+s=$(fresh); echo '{}' > "$s/state.json"
+check burst-boundary "$P src=203.0.113.10 new=20 total=20 burst=yes
+$P src=203.0.113.11 new=19 total=19 burst=no" "$(run boundary "$s")"
+
+# Config file alone sets threshold; env overrides it
+conf="$tmp/conf"; printf 'scan_threshold=3\nmax_lines=200\n' > "$conf"
+s=$(fresh); echo '{}' > "$s/state.json"
+out=$(env -u BLACKWALL_FW_SCAN_THRESHOLD BLACKWALL_FW_NFT_JSON_DIR="$fx/run2" \
+    BLACKWALL_FW_STATE_DIR="$s" BLACKWALL_FW_CONF="$conf" python3 "$exp" 2>/dev/null)
+check conf-threshold "$P src=203.0.113.3 new=30 total=30 burst=yes
+$P src=203.0.113.1 new=12 total=12 burst=yes
+$P src=203.0.113.2 new=1 total=1 burst=no" "$out"
+echo '{}' > "$s/state.json"
+out=$(run run2 "$s" BLACKWALL_FW_CONF="$conf" BLACKWALL_FW_SCAN_THRESHOLD=100)
+check env-over-conf "$P src=203.0.113.3 new=30 total=30 burst=no
+$P src=203.0.113.1 new=12 total=12 burst=no
+$P src=203.0.113.2 new=1 total=1 burst=no" "$out"
+
+# Corrupt / non-dict state => silent baseline, then normal
+s=$(fresh); echo 'not json' > "$s/state.json"
+check corrupt-state-silent "" "$(run run1 "$s")"
+check corrupt-state-recovered "" "$(run run1 "$s")"
+echo '[1,2]' > "$s/state.json"
+check list-state-silent "" "$(run run1 "$s")"
+# Weird per-kind entries and values never crash
+s=$(fresh); echo '{"input_drop": [1], "origin_direct": {"x": null, "y": "z"}}' > "$s/state.json"
+out=$(run run1 "$s"); rc=$?
+check weird-state-rc 0 "$rc"
+check weird-state-out "$P src=203.0.113.1 new=5 total=5 burst=no
+$P src=203.0.113.2 new=1 total=1 burst=no" "$out"
+s=$(fresh); echo '{"input_drop": {"203.0.113.1": null, "203.0.113.2": "7"}}' > "$s/state.json"
+check weird-values "$P src=203.0.113.1 new=5 total=5 burst=no
+$P src=203.0.113.2 new=1 total=1 burst=no" "$(run run1 "$s")"
+
+# Output cap + summary
+s=$(fresh); echo '{}' > "$s/state.json"
+out=$(run many "$s" BLACKWALL_FW_MAX_LINES=3)
+check cap "$P src=198.51.100.10 new=10 total=10 burst=no
+$P src=198.51.100.9 new=9 total=9 burst=no
+$P src=198.51.100.8 new=8 total=8 burst=no
+blackwall-fw: kind=summary suppressed=7 burst=no" "$out"
+echo "$out" | grep -q . && check cap-state-saved "" "$(run many "$s" BLACKWALL_FW_MAX_LINES=3)"
+
+# Fixture generator: gen <dir> <kind=table.set> <ip=packets>... (nft JSON shape)
+gen() {
+    local d=$1 ts=$2; shift 2; mkdir -p "$d"
+    python3 - "$d" "$ts" "$@" <<'PY'
+import json, sys
+d, ts, *els = sys.argv[1:]
+table, name = ts.split(".")
+elem = [{"elem": {"val": ip, "expires": 3000, "counter": {"packets": int(n), "bytes": 60 * int(n)}}}
+        for ip, n in (e.split("=") for e in els)]
+doc = {"nftables": [{"metainfo": {"version": "1.0.9"}},
+                    {"set": {"family": "inet", "name": name, "table": table, "elem": elem}}]}
+json.dump(doc, open("%s/%s.json" % (d, ts), "w"))
+PY
+}
+runat() { # <fixture dir (absolute)> <state dir> <now> [extra env]
+    local f=$1 s=$2 now=$3; shift 3
+    env BLACKWALL_FW_NFT_JSON_DIR="$f" BLACKWALL_FW_STATE_DIR="$s" BLACKWALL_FW_SCAN_THRESHOLD=20 \
+        BLACKWALL_FW_REPORT_COOLDOWN=3600 BLACKWALL_FW_NOW="$now" BLACKWALL_FW_CONF=/nonexistent "$@" \
+        python3 "$exp" 2>/dev/null
+}
+
+# Cooldown: growth inside the window is silent and accumulates; the next report
+# after the window carries everything since the last report
+A="203.0.113.50"; T=blackwall_base.dropped_input
+s=$(fresh); f="$tmp/cd"
+gen "$f" $T $A=10; check cd-baseline "" "$(runat "$f" "$s" 1000)"
+gen "$f" $T $A=15; check cd-first "$P src=$A new=5 total=15 burst=no" "$(runat "$f" "$s" 1010)"
+gen "$f" $T $A=40; check cd-second-silent "" "$(runat "$f" "$s" 1020)"
+gen "$f" $T $A=90; check cd-burst-silent "" "$(runat "$f" "$s" 1030)"
+check cd-no-growth "" "$(runat "$f" "$s" 5000)"
+gen "$f" $T $A=95; check cd-after "$P src=$A new=80 total=95 burst=no" "$(runat "$f" "$s" 5000)"
+gen "$f" $T $A=96; check cd-reset "" "$(runat "$f" "$s" 5010)"
+# burst after the window is judged on this run's growth, not the accumulated sum
+s=$(fresh); gen "$f" $T $A=10; runat "$f" "$s" 1000 >/dev/null
+gen "$f" $T $A=15; runat "$f" "$s" 1010 >/dev/null
+gen "$f" $T $A=45; runat "$f" "$s" 1020 >/dev/null
+gen "$f" $T $A=70; check cd-burst-after "$P src=$A new=55 total=70 burst=yes" "$(runat "$f" "$s" 5000)"
+# cooldown 0 reports every growth
+s=$(fresh); gen "$f" $T $A=10; runat "$f" "$s" 1000 BLACKWALL_FW_REPORT_COOLDOWN=0 >/dev/null
+gen "$f" $T $A=15; check cd0-1 "$P src=$A new=5 total=15 burst=no" "$(runat "$f" "$s" 1001 BLACKWALL_FW_REPORT_COOLDOWN=0)"
+gen "$f" $T $A=18; check cd0-2 "$P src=$A new=3 total=18 burst=no" "$(runat "$f" "$s" 1002 BLACKWALL_FW_REPORT_COOLDOWN=0)"
+# reload (counter decrease) during cooldown: silent, then accumulated = old growth + total
+s=$(fresh); gen "$f" $T $A=10; runat "$f" "$s" 1000 >/dev/null
+gen "$f" $T $A=15; runat "$f" "$s" 1010 >/dev/null
+gen "$f" $T $A=25; check cd-reload-pre "" "$(runat "$f" "$s" 1020)"
+gen "$f" $T $A=4; check cd-reload-silent "" "$(runat "$f" "$s" 1030)"
+gen "$f" $T $A=6; check cd-reload-after "$P src=$A new=16 total=6 burst=no" "$(runat "$f" "$s" 5000)"
+# a source that left the set and returns re-enters normally
+s=$(fresh); gen "$f" $T $A=10; runat "$f" "$s" 1000 >/dev/null
+gen "$f" $T $A=15; runat "$f" "$s" 1010 >/dev/null
+gen "$f" $T 203.0.113.99=1; check cd-left "$P src=203.0.113.99 new=1 total=1 burst=no" "$(runat "$f" "$s" 1020)"
+gen "$f" $T $A=3 203.0.113.99=1; check cd-return "$P src=$A new=3 total=3 burst=no" "$(runat "$f" "$s" 1030)"
+# cooldown is per kind and per source
+s=$(fresh); gen "$f" $T $A=10 203.0.113.51=10; runat "$f" "$s" 1000 >/dev/null
+gen "$f" $T $A=15 203.0.113.51=10; runat "$f" "$s" 1010 >/dev/null
+gen "$f" $T $A=16 203.0.113.51=12; check cd-per-source "$P src=203.0.113.51 new=2 total=12 burst=no" "$(runat "$f" "$s" 1020)"
+# old-format state (plain ints) still works
+s=$(fresh); echo '{"input_drop": {"203.0.113.50": 10}}' > "$s/state.json"
+gen "$f" $T $A=15; check old-state "$P src=$A new=5 total=15 burst=no" "$(runat "$f" "$s" 1000)"
+
+# origin_direct is never hidden by the output cap
+s=$(fresh); echo '{}' > "$s/state.json"; f="$tmp/cap"
+els=(); for i in $(seq 1 250); do els+=("10.1.$((i / 250)).$((i % 250))=$((i + 30))"); done
+gen "$f" $T "${els[@]}"; gen "$f" blackwall_wall.origin_direct 203.0.113.77=1
+out=$(runat "$f" "$s" 1000 BLACKWALL_FW_MAX_LINES=200 BLACKWALL_FW_REPORT_COOLDOWN=0)
+check cap-origin-first "blackwall-fw: kind=origin_direct src=203.0.113.77 new=1 total=1 burst=no" "$(echo "$out" | head -1)"
+check cap-lines 201 "$(echo "$out" | wc -l | tr -d ' ')"
+check cap-summary "blackwall-fw: kind=summary suppressed=51 burst=no" "$(echo "$out" | tail -1)"
+
+# State cannot be written => nothing printed
+s=$(fresh); echo '{}' > "$s/state.json"; chmod 500 "$s"
+if [ "$(id -u)" != 0 ]; then
+    check state-write-fail "" "$(run run1 "$s")"
+    chmod 700 "$s"
+else
+    echo "skip state-write-fail (root)"
+fi
+exit $fail

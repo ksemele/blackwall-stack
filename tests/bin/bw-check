@@ -93,6 +93,7 @@ Checks:
   brain      brain-analyst (Claude analysis delivered to Telegram)
   sentinel   Wazuh server stack on black-sentinel-03 (opt-in: SKIP when not deployed)
   sentinel-agents  throwaway agent enrolls in the sentinel (opt-in, internet, ~2-3 min; not in `all`)
+  fw-events  firewall drops become Wazuh alerts 100201/100202 (opt-in, ~1 min, up to ~3 min on failure; not in `all`)
 
 Exit code: 0 when nothing failed, 1 otherwise.
 USAGE
@@ -157,6 +158,14 @@ check_nft() {
   fi
 }
 
+# _probe_state <ansible stat output> — present | absent | error. Only an explicit
+# "exists" verdict counts; UNREACHABLE/FAILED/empty output is an error, never a SKIP.
+_probe_state() {
+  if grep -q '"exists": true' <<<"$1"; then echo present
+  elif grep -q '"exists": false' <<<"$1"; then echo absent
+  else echo error; fi
+}
+
 check_cf_wall() {
   bw_info "cf-wall"
   bw_require_ansible
@@ -165,10 +174,15 @@ check_cf_wall() {
   local installed
   installed="$(bw_ansible_adhoc blackwall-eye cf_wall -b \
                  -m stat -a 'path=/usr/local/sbin/blackwall-cf-refresh' 2>&1)"
-  if ! grep -q '"exists": true' <<<"$installed"; then
-    bw_skip "cf-wall is not deployed (run: bw-lab provision cf-wall)"
-    return
-  fi
+  case "$(_probe_state "$installed")" in
+    present) ;;
+    error)
+      bw_fail "cf-wall prerequisite probe failed (host unreachable?)"
+      printf '%s\n' "$installed" | tail -5 | sed 's/^/      /'
+      return ;;
+    *) bw_skip "cf-wall is not deployed (run: bw-lab provision cf-wall)"
+       return ;;
+  esac
 
   bw_run "Cloudflare filter loaded, refresh is safe" \
     bw_ansible blackwall-eye ansible/playbooks/verify-cf-wall.yml --limit "$BW_LIVE_HOSTS"
@@ -328,10 +342,15 @@ check_voice() {
   local installed
   installed="$(bw_ansible_adhoc blackwall-voice wazuh_managers -b \
                  -m stat -a 'path=/etc/systemd/system/voice-alerter.service' 2>&1)"
-  if ! grep -q '"exists": true' <<<"$installed"; then
-    bw_skip "telegram-alerter is not deployed (run: bw-lab provision voice)"
-    return
-  fi
+  case "$(_probe_state "$installed")" in
+    present) ;;
+    error)
+      bw_fail "voice prerequisite probe failed (host unreachable?)"
+      printf '%s\n' "$installed" | tail -5 | sed 's/^/      /'
+      return ;;
+    *) bw_skip "telegram-alerter is not deployed (run: bw-lab provision voice)"
+       return ;;
+  esac
 
   bw_run "telegram-alerter is running" \
     bw_ansible blackwall-voice ansible/playbooks/verify-voice.yml
@@ -345,16 +364,25 @@ check_brain() {
   local installed
   installed="$(bw_ansible_adhoc blackwall-brain wazuh_managers -b \
                  -m stat -a 'path=/etc/systemd/system/brain-analyst.service' 2>&1)"
-  if ! grep -q '"exists": true' <<<"$installed"; then
-    bw_skip "brain-analyst is not deployed (run: bw-lab provision brain)"
-    return
-  fi
+  case "$(_probe_state "$installed")" in
+    present) ;;
+    error)
+      bw_fail "brain prerequisite probe failed (host unreachable?)"
+      printf '%s\n' "$installed" | tail -5 | sed 's/^/      /'
+      return ;;
+    *) bw_skip "brain-analyst is not deployed (run: bw-lab provision brain)"
+       return ;;
+  esac
 
   # brain_enabled=false keeps the files but stops and disables the service.
   # `|| true` keeps rc 0, so ansible prints the bare state on its own line.
   local enabled
   enabled="$(bw_ansible_adhoc blackwall-brain wazuh_managers -b \
                -m shell -a 'systemctl is-enabled brain-analyst || true' 2>&1)"
+  if grep -qE 'UNREACHABLE|FAILED' <<<"$enabled"; then
+    bw_fail "brain prerequisite probe failed (host unreachable?)"
+    return
+  fi
   if ! grep -qx 'enabled' <<<"$enabled"; then
     bw_skip "brain-analyst is disabled (brain_enabled=false; enable: bw-lab provision brain)"
     return
@@ -380,15 +408,15 @@ check_sentinel() {
   local installed
   installed="$(bw_ansible_adhoc blackwall-eye sentinel -b \
                  -m stat -a 'path=/etc/wazuh-dashboard/opensearch_dashboards.yml' 2>&1)"
-  if grep -qE 'UNREACHABLE|FAILED' <<<"$installed"; then
-    bw_fail "sentinel node is unreachable"
-    printf '%s\n' "$installed" | tail -5 | sed 's/^/      /'
-    return
-  fi
-  if ! grep -q '"exists": true' <<<"$installed"; then
-    bw_skip "sentinel stack is not deployed (run: bw-lab provision sentinel)"
-    return
-  fi
+  case "$(_probe_state "$installed")" in
+    present) ;;
+    error)
+      bw_fail "sentinel node is unreachable or the probe failed"
+      printf '%s\n' "$installed" | tail -5 | sed 's/^/      /'
+      return ;;
+    *) bw_skip "sentinel stack is not deployed (run: bw-lab provision sentinel)"
+       return ;;
+  esac
 
   bw_run "sentinel: services, closed ports, agent 000, nginx, podman tables survive reload" \
     bw_ansible blackwall-eye ansible/playbooks/verify-sentinel.yml
@@ -534,15 +562,15 @@ check_sentinel_agents() {
   local installed
   installed="$(bw_ansible_adhoc blackwall-eye sentinel -b \
                  -m stat -a 'path=/etc/wazuh-dashboard/opensearch_dashboards.yml' 2>&1)"
-  if grep -qE 'UNREACHABLE|FAILED' <<<"$installed"; then
-    bw_fail "sentinel node is unreachable"
-    printf '%s\n' "$installed" | tail -5 | sed 's/^/      /'
-    return
-  fi
-  if ! grep -q '"exists": true' <<<"$installed"; then
-    bw_skip "sentinel stack is not deployed (run: bw-lab provision sentinel)"
-    return
-  fi
+  case "$(_probe_state "$installed")" in
+    present) ;;
+    error)
+      bw_fail "sentinel node is unreachable or the probe failed"
+      printf '%s\n' "$installed" | tail -5 | sed 's/^/      /'
+      return ;;
+    *) bw_skip "sentinel stack is not deployed (run: bw-lab provision sentinel)"
+       return ;;
+  esac
 
   # Probe constants. 172.28.0.10-.16, .98 and .99 belong to the inventory.
   SA_NAME="black-probe-90"
@@ -578,6 +606,166 @@ check_sentinel_agents() {
   fi
 }
 
+# --- fw-events ---------------------------------------------------------------
+
+_fe_ssh() {
+  local host="$1"; shift
+  if command -v sshpass >/dev/null 2>&1; then
+    sshpass -p "$BW_SSH_PASSWORD" ssh -F "$BW_SSH_CONFIG" -o ConnectTimeout=10 "$host" "$@"
+  else
+    ssh -F "$BW_SSH_CONFIG" -o ConnectTimeout=10 "$host" "$@"
+  fi
+}
+
+# _fe_probe <host> <test-expr> — prints present|absent|error (one retry on ssh error).
+_fe_probe() {
+  local host="$1" expr="$2" out i
+  for i in 1 2; do
+    out="$(_fe_ssh "$host" "if $expr; then echo present; else echo absent; fi" 2>/dev/null | tail -1)"
+    [[ "$out" == present || "$out" == absent ]] && { printf '%s' "$out"; return; }
+    sleep 2
+  done
+  printf 'error'
+}
+
+# _fe_count <main|sentinel> <rule> <agent> <srcip> <since-iso> — alerts newer than <since>.
+_fe_count() {
+  local where="$1" rule="$2" agent="$3" src="$4" since="$5" body
+  body='{"query":{"bool":{"filter":[{"term":{"rule.id":"'"$rule"'"}},{"term":{"agent.name":"'"$agent"'"}},{"term":{"data.srcip":"'"$src"'"}},{"range":{"@timestamp":{"gte":"'"$since"'"}}}]}}}'
+  if [[ "$where" == main ]]; then
+    curl -sk -m 10 -u "$BW_INDEXER_AUTH" -H 'Content-Type: application/json' \
+        -d "$body" "$BW_INDEXER_URL/wazuh-alerts-*/_count"
+  else
+    _fe_ssh black-sentinel-03 "curl -sk -m 10 -u '$BW_INDEXER_AUTH' -H 'Content-Type: application/json' \
+        -d '$body' 'https://127.0.0.1:9200/wazuh-alerts-*/_count'"
+  fi 2>/dev/null \
+    | python3 -c 'import json,sys; print(json.load(sys.stdin)["count"])' 2>/dev/null
+}
+
+# input_drop total recorded by the exporter on host-01 for 172.28.0.15 (0 when absent).
+_fe_input_total() {
+  _fe_ssh black-host-01 'cat /var/lib/blackwall-fw/state.json' 2>/dev/null \
+    | python3 -c 'import json,sys; v=json.load(sys.stdin).get("input_drop",{}).get("172.28.0.15",0); print(v.get("s",0) if isinstance(v,dict) else v)' 2>/dev/null
+}
+
+# _fe_wait <main|sentinel> <rule> <agent> <srcip> <since> — poll up to 150 s, print the count.
+_fe_wait() {
+  local i n=0
+  for ((i = 0; i < 30; i++)); do
+    n="$(_fe_count "$@")"
+    [[ "${n:-0}" -gt 0 ]] && break
+    sleep 5
+  done
+  printf '%s' "${n:-0}"
+}
+
+# Opt-in (~1 min): drops on the lab firewalls must become Wazuh alerts end to end.
+# rocky-02 (172.28.0.15, not in the sentinel's cfwall_admin_allow) generates the traffic.
+check_fw_events() {
+  bw_info "fw-events"
+
+  local h
+  for h in black-host-01 black-rocky-02 black-sentinel-03; do
+    if ! _fe_ssh "$h" true >/dev/null 2>&1; then
+      bw_fail "$h is unreachable"
+      return
+    fi
+  done
+  # Prerequisites: sentinel stack first (clearer hint), then the exporter on both hosts.
+  local st
+  st="$(_fe_probe black-sentinel-03 'test -f /etc/wazuh-dashboard/opensearch_dashboards.yml')"
+  if [[ "$st" == error ]]; then
+    bw_fail "ssh to black-sentinel-03 failed during prerequisite probe"
+    return
+  elif [[ "$st" == absent ]]; then
+    bw_skip "sentinel stack is not deployed (run: bw-lab provision sentinel)"
+    return
+  fi
+  for h in black-host-01 black-sentinel-03; do
+    st="$(_fe_probe "$h" 'test -x /usr/local/sbin/blackwall-fw-export')"
+    if [[ "$st" == error ]]; then
+      bw_fail "ssh to $h failed during prerequisite probe"
+      return
+    elif [[ "$st" == absent ]]; then
+      bw_skip "blackwall-fw-export is not deployed on $h (run: bw-lab provision nftables)"
+      return
+    fi
+  done
+  if [[ -z "$(_fe_count main 100202 black-host-01 172.28.0.15 2000-01-01T00:00:00Z)" ]]; then
+    bw_fail "main indexer does not answer at $BW_INDEXER_URL"
+    return
+  fi
+  if [[ -z "$(_fe_count sentinel 100201 black-sentinel-03 172.28.0.15 2000-01-01T00:00:00Z)" ]]; then
+    bw_fail "sentinel indexer does not answer"
+    return
+  fi
+
+  # The exporter needs a baseline run before it reports growth: wait for the
+  # state file on both hosts (the agent runs it every wazuh_fw_events_interval).
+  local i ok
+  for h in black-host-01 black-sentinel-03; do
+    ok=0
+    for ((i = 0; i < 12; i++)); do
+      if _fe_ssh "$h" 'test -s /var/lib/blackwall-fw/state.json' >/dev/null 2>&1; then ok=1; break; fi
+      sleep 5
+    done
+    if ((!ok)); then
+      bw_fail "$h: exporter has no state file after 60 s (is the localfile command running?)"
+      return
+    fi
+  done
+  bw_pass "exporter baseline exists on black-host-01 and black-sentinel-03"
+
+  # Test start from the lab clock (containers share it), minus a little slack.
+  local start
+  start="$(_fe_ssh black-sentinel-03 'date -u -d "-3 seconds" +%Y-%m-%dT%H:%M:%SZ' 2>/dev/null)"
+  if [[ -z "$start" ]]; then
+    bw_fail "cannot read the lab clock"
+    return
+  fi
+
+  # 1. Below threshold: 3 dropped ports must stay at level 0 (no 100202). Level-0
+  # rows are not indexed, so the exporter's state file proves it saw the drops.
+  local before
+  before="$(_fe_input_total)"
+  _fe_ssh black-rocky-02 'for p in 20101 20102 20103; do
+      (timeout 0.5 bash -c "echo > /dev/tcp/172.28.0.11/$p" >/dev/null 2>&1 &) ; done; sleep 1' >/dev/null 2>&1
+  sleep 30    # >= 2 exporter intervals (lab: 10 s): these drops are exported before the scan
+  local below after
+  after="$(_fe_input_total)"
+  if [[ "${after:-0}" -gt "${before:-0}" ]]; then
+    bw_pass "exporter state on black-host-01 counted the 3 drops (input_drop total $before -> $after)"
+  else
+    bw_fail "exporter state on black-host-01 did not grow after 3 drops ($before -> ${after:-?})"
+  fi
+  below="$(_fe_count main 100202 black-host-01 172.28.0.15 "$start")"
+  if [[ "${below:-x}" == 0 ]]; then
+    bw_pass "3 dropped ports from 172.28.0.15: no scan alert (100202)"
+  else
+    bw_fail "3 dropped ports produced ${below:-?} alert(s) of rule 100202"
+  fi
+
+  # 2. Scan + origin-direct, concurrently.
+  _fe_ssh black-rocky-02 'for p in $(seq 20200 20259); do
+      (timeout 0.5 bash -c "echo > /dev/tcp/172.28.0.11/$p" >/dev/null 2>&1 &) ; done
+      for n in 1 2 3; do
+        (timeout 0.5 bash -c "echo > /dev/tcp/172.28.0.16/443" >/dev/null 2>&1 &) ; done; sleep 1' >/dev/null 2>&1
+
+  local scan origin
+  scan="$(_fe_wait main 100202 black-host-01 172.28.0.15 "$start")"
+  if [[ "$scan" -gt 0 ]]; then
+    bw_pass "60 dropped ports -> rule 100202 for black-host-01, srcip 172.28.0.15 (main indexer)"
+  else
+    bw_fail "no rule 100202 alert for black-host-01 / 172.28.0.15 within 150 s"
+  fi
+  origin="$(_fe_wait sentinel 100201 black-sentinel-03 172.28.0.15 "$start")"
+  if [[ "$origin" -gt 0 ]]; then
+    bw_pass "origin-direct to 172.28.0.16:443 -> rule 100201, srcip 172.28.0.15 (sentinel indexer)"
+  else
+    bw_fail "no rule 100201 alert for black-sentinel-03 / 172.28.0.15 within 150 s"
+  fi
+}
+
 main() {
   case "${1:-all}" in
     all)
@@ -596,6 +784,7 @@ main() {
     brain)    check_brain ;;
     sentinel) check_sentinel ;;
     sentinel-agents) check_sentinel_agents ;;
+    fw-events) check_fw_events ;;
     -h|--help|help) usage; exit 0 ;;
     *) printf 'unknown check: %s\n\n' "$1" >&2; usage >&2; exit 2 ;;
   esac

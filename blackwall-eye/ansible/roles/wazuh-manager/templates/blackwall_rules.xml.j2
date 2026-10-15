@@ -13,4 +13,57 @@
     <group>blackwall_sessions,</group>
   </rule>
 
+  <!-- Firewall drops: the agent runs blackwall-fw-export (alias blackwall-fw,
+       see the wazuh-agent role); decoder blackwall-fw. burst=yes means the
+       source sent >= nft_track_scan_threshold new dropped packets since the
+       previous run, so no numeric comparison is needed here.
+       100200 base (level 0)      100201 origin_direct      100202 input_drop burst
+       100203 forward_drop burst  100204 output capped (summary)
+       100205 exporter error (stderr line, decoder blackwall-fw-error) -->
+  <rule id="100200" level="0">
+    <if_sid>530</if_sid>
+    <match>^ossec: output: 'blackwall-fw': blackwall-fw: kind=</match>
+    <field name="fw_kind">\w+</field>
+    <description>Blackwall: firewall event.</description>
+    <group>blackwall_fw,</group>
+  </rule>
+
+  <rule id="100201" level="10">
+    <if_sid>100200</if_sid>
+    <field name="fw_kind">^origin_direct$</field>
+    <description>Blackwall: direct access to origin bypassing Cloudflare (src $(srcip)).</description>
+    <group>blackwall_fw,</group>
+  </rule>
+
+  <rule id="100202" level="8">
+    <if_sid>100200</if_sid>
+    <field name="fw_kind">^input_drop$</field>
+    <field name="fw_burst">^yes$</field>
+    <description>Blackwall: possible scan, many dropped packets from one source (src $(srcip)).</description>
+    <group>blackwall_fw,</group>
+  </rule>
+
+  <rule id="100203" level="6">
+    <if_sid>100200</if_sid>
+    <field name="fw_kind">^forward_drop$</field>
+    <field name="fw_burst">^yes$</field>
+    <description>Blackwall: burst of dropped forwarded packets (src $(srcip)).</description>
+    <group>blackwall_fw,</group>
+  </rule>
+
+  <rule id="100204" level="3">
+    <if_sid>100200</if_sid>
+    <field name="fw_kind">^summary$</field>
+    <description>Blackwall: firewall event output capped ($(fw_suppressed) sources suppressed).</description>
+    <group>blackwall_fw,</group>
+  </rule>
+
+  <rule id="100205" level="3">
+    <if_sid>530</if_sid>
+    <match>^ossec: output: 'blackwall-fw': blackwall-fw-export: </match>
+    <field name="fw_error">\.+</field>
+    <description>Blackwall: firewall event exporter error ($(fw_error)).</description>
+    <group>blackwall_fw,</group>
+  </rule>
+
 </group>

@@ -4,7 +4,7 @@ status: in_progress
 stage: 2
 last_updated: 2026-10-14
 last_task: "End-to-end Telegram delivery verified in the lab (real bot, threshold 10); alerter logs Telegram error bodies and retries failed sends"
-next_task: "ansible-vault for prod Telegram secrets; rotation/TTL for sent_ids.txt"
+next_task: "Rotation/TTL for sent_ids.txt; skip brain verify alerts; one message per alert when Brain is on"
 blockers: []
 ---
 
@@ -83,7 +83,7 @@ blockers: []
 
 ## Open questions
 
-- `telegram_bot_token` and `telegram_chat_id`: in the lab they come from env (`BW_TELEGRAM_*` in `.envrc`, direnv); scrubbed from git history on 2026-10-12. For prod — ansible-vault.
+- `telegram_bot_token` and `telegram_chat_id`: in the lab they come from env (`BW_TELEGRAM_*` in `.envrc`, direnv); scrubbed from git history on 2026-10-12. For prod — supplied from the owner's secret management (no ansible-vault).
 - The state file (`sent_ids.txt`) grows without bound — needs rotation/TTL eventually.
 
 ## Decisions

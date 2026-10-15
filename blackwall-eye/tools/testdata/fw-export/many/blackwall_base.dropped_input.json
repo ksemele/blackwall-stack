@@ -1,0 +1,126 @@
+{
+ "nftables": [
+  {
+   "metainfo": {
+    "version": "1.0.9"
+   }
+  },
+  {
+   "set": {
+    "family": "inet",
+    "name": "dropped_input",
+    "table": "blackwall_base",
+    "type": "ipv4_addr",
+    "handle": 5,
+    "size": 65536,
+    "flags": [
+     "timeout",
+     "dynamic"
+    ],
+    "timeout": 3600,
+    "elem": [
+     {
+      "elem": {
+       "val": "198.51.100.1",
+       "expires": 3500,
+       "counter": {
+        "packets": 1,
+        "bytes": 60
+       }
+      }
+     },
+     {
+      "elem": {
+       "val": "198.51.100.2",
+       "expires": 3500,
+       "counter": {
+        "packets": 2,
+        "bytes": 120
+       }
+      }
+     },
+     {
+      "elem": {
+       "val": "198.51.100.3",
+       "expires": 3500,
+       "counter": {
+        "packets": 3,
+        "bytes": 180
+       }
+      }
+     },
+     {
+      "elem": {
+       "val": "198.51.100.4",
+       "expires": 3500,
+       "counter": {
+        "packets": 4,
+        "bytes": 240
+       }
+      }
+     },
+     {
+      "elem": {
+       "val": "198.51.100.5",
+       "expires": 3500,
+       "counter": {
+        "packets": 5,
+        "bytes": 300
+       }
+      }
+     },
+     {
+      "elem": {
+       "val": "198.51.100.6",
+       "expires": 3500,
+       "counter": {
+        "packets": 6,
+        "bytes": 360
+       }
+      }
+     },
+     {
+      "elem": {
+       "val": "198.51.100.7",
+       "expires": 3500,
+       "counter": {
+        "packets": 7,
+        "bytes": 420
+       }
+      }
+     },
+     {
+      "elem": {
+       "val": "198.51.100.8",
+       "expires": 3500,
+       "counter": {
+        "packets": 8,
+        "bytes": 480
+       }
+      }
+     },
+     {
+      "elem": {
+       "val": "198.51.100.9",
+       "expires": 3500,
+       "counter": {
+        "packets": 9,
+        "bytes": 540
+       }
+      }
+     },
+     {
+      "elem": {
+       "val": "198.51.100.10",
+       "expires": 3500,
+       "counter": {
+        "packets": 10,
+        "bytes": 600
+       }
+      }
+     }
+    ]
+   }
+  }
+ ]
+}

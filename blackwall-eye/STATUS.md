@@ -3,12 +3,21 @@ module: blackwall-eye
 status: in_progress
 stage: 1
 last_updated: 2026-10-15
-last_task: "Wazuh server stack on RHEL (lab sentinel next to podman, loopback-only, per-host certs); version pinning; footprint measured"
+last_task: "Firewall drop events as Wazuh alerts (exporter, rules 100200-100205, bw-check fw-events)"
 next_task: "Before the prod host becomes the manager: backlog item (auditd on real RHEL), then a prod inventory for the stack (loopback binds, heap) — owner decides when"
 blockers: []
 ---
 
 ## Done
+
+- 2026-10-15: firewall drop events (spec
+  `docs/superpowers/specs/2026-10-15-firewall-events-design.md`).
+  - Per-source drop sets (`dropped_input`, `dropped_forward`, cf-wall
+    `origin_direct`); `blackwall-fw-export` prints growth-only lines as a Wazuh
+    `command` localfile; rules 100200-100205 (origin-direct level 10, scan burst
+    level 8, forward burst 6).
+  - `bw-check fw-events` (opt-in): origin-direct -> 100201 in the sentinel
+    indexer, 60-port scan -> 100202 in the main indexer, 3 ports -> no alert.
 
 - 2026-10-15: Wazuh server stack on the RHEL family (spec
   `docs/superpowers/specs/2026-10-15-wazuh-server-rhel-design.md`).

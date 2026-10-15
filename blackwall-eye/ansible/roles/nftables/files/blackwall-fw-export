@@ -1,0 +1,230 @@
+#!/usr/bin/python3 -I
+"""blackwall-fw-export: print growth of per-source drop counters.
+
+Managed by the Ansible role blackwall-eye/nftables. Do not edit by hand.
+
+Reads the nft sets with per-element counters (dropped_input, dropped_forward,
+origin_direct), compares with the previous run and prints one line per source
+whose packet count grew:
+
+  blackwall-fw: kind=<kind> src=<ip> new=<n> total=<n> burst=<yes|no>
+
+A counter that went down (reload, cf-wall refresh, timeout re-add) counts as
+new = current. Missing tables/sets print nothing; the exit code is always 0.
+
+Per-source cooldown: every (kind, src) is reported at most once per
+report_cooldown seconds (default 3600). While in cooldown the growth keeps
+accumulating silently; the next report carries new = packets since the last
+report. burst is still decided per run (growth in this run >= threshold) and is
+suppressed in cooldown too. report_cooldown=0 reports every growth. A source
+that left the set (timeout) and returns starts fresh.
+
+The first run (state missing or corrupt) only records a baseline and prints
+nothing. State is saved before anything is printed; if it cannot be saved,
+nothing is printed. At most max_lines lines are printed per run (origin_direct
+first, then input_drop bursts, forward_drop bursts, the rest; highest new first
+within a class), the rest is summarised as:
+  blackwall-fw: kind=summary suppressed=<n> burst=no
+
+Environment overrides (tests):
+  BLACKWALL_FW_NFT_JSON_DIR   read <table>.<set>.json from this dir, no nft
+  BLACKWALL_FW_STATE_DIR      state directory (default /var/lib/blackwall-fw)
+  BLACKWALL_FW_SCAN_THRESHOLD burst threshold (default: config file, then 20)
+  BLACKWALL_FW_MAX_LINES      max lines per run (default: config file, then 200)
+  BLACKWALL_FW_REPORT_COOLDOWN seconds between reports of one source (default: config file, then 3600)
+  BLACKWALL_FW_NOW            current time, epoch seconds (default: time.time())
+  BLACKWALL_FW_DEBUG          print "baseline recorded" to stderr (silent otherwise)
+  BLACKWALL_FW_CONF           config file (default /etc/blackwall/fw-export.conf)
+"""
+import json
+import os
+import subprocess
+import sys
+import time
+
+SETS = [
+    ("input_drop", "blackwall_base", "dropped_input"),
+    ("forward_drop", "blackwall_base", "dropped_forward"),
+    ("origin_direct", "blackwall_wall", "origin_direct"),
+]
+DEFAULT_THRESHOLD = 20
+DEFAULT_MAX_LINES = 200
+DEFAULT_COOLDOWN = 3600
+NFT = "/usr/sbin/nft"
+
+
+def err(msg):
+    try:
+        sys.stderr.write("blackwall-fw-export: %s\n" % msg)
+    except Exception:
+        pass
+
+
+def setting(env, key, default):
+    val = os.environ.get(env)
+    if val is None:
+        conf = os.environ.get("BLACKWALL_FW_CONF", "/etc/blackwall/fw-export.conf")
+        try:
+            with open(conf) as f:
+                for line in f:
+                    k, sep, v = line.strip().partition("=")
+                    if sep and k.strip() == key:
+                        val = v.strip()
+        except OSError:
+            pass
+    try:
+        return int(val)
+    except (TypeError, ValueError):
+        return default
+
+
+def load_set(table, name):
+    """Return the parsed nft JSON, or None when the set is not available."""
+    jdir = os.environ.get("BLACKWALL_FW_NFT_JSON_DIR")
+    try:
+        if jdir:
+            with open(os.path.join(jdir, "%s.%s.json" % (table, name))) as f:
+                return json.load(f)
+        out = subprocess.run(
+            [NFT, "-j", "list", "set", "inet", table, name],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=20,
+        )
+        if out.returncode != 0:
+            msg = out.stderr.decode(errors="replace")
+            if "No such file or directory" not in msg:
+                err("nft failed for %s %s: %s" % (table, name, msg.strip().replace("\n", " ")[:200]))
+            return None
+        return json.loads(out.stdout.decode())
+    except (OSError, ValueError, subprocess.SubprocessError) as e:
+        if not jdir or not isinstance(e, OSError):
+            err("cannot read %s %s: %s" % (table, name, e))
+        return None
+
+
+def to_int(v):
+    if isinstance(v, bool) or not isinstance(v, int):
+        return None
+    return v
+
+
+def counters(doc):
+    """{ip: packets} for elements that carry a counter (nft 1.0.2 and 1.0.9)."""
+    res = {}
+    if not isinstance(doc, dict):
+        return res
+    for item in doc.get("nftables", []) or []:
+        s = item.get("set") if isinstance(item, dict) else None
+        if not isinstance(s, dict):
+            continue
+        for e in s.get("elem", []) or []:
+            e = e.get("elem", e) if isinstance(e, dict) else None
+            if not isinstance(e, dict) or not isinstance(e.get("val"), str):
+                continue
+            c = e.get("counter")
+            n = to_int(c.get("packets")) if isinstance(c, dict) else None
+            if n is not None:
+                res[e["val"]] = n
+    return res
+
+
+def ipkey(a):
+    return tuple(int(p) if p.isdigit() else 0 for p in a.split("."))
+
+
+def entry(v):
+    """(seen, pending, last_report) from a state entry (old format: int)."""
+    if isinstance(v, dict):
+        return tuple(max(to_int(v.get(k)) or 0, 0) for k in ("s", "p", "t"))
+    return (max(to_int(v) or 0, 0), 0, 0)
+
+
+def load_state(state_file):
+    """Return (state, have_baseline)."""
+    try:
+        with open(state_file) as f:
+            state = json.load(f)
+    except (OSError, ValueError):
+        return {}, False
+    if not isinstance(state, dict):
+        return {}, False
+    return state, True
+
+
+def run():
+    state_dir = os.environ.get("BLACKWALL_FW_STATE_DIR", "/var/lib/blackwall-fw")
+    state_file = os.path.join(state_dir, "state.json")
+    state, have_baseline = load_state(state_file)
+    thr = setting("BLACKWALL_FW_SCAN_THRESHOLD", "scan_threshold", DEFAULT_THRESHOLD)
+    max_lines = setting("BLACKWALL_FW_MAX_LINES", "max_lines", DEFAULT_MAX_LINES)
+
+    cooldown = max(setting("BLACKWALL_FW_REPORT_COOLDOWN", "report_cooldown", DEFAULT_COOLDOWN), 0)
+    try:
+        now = int(float(os.environ["BLACKWALL_FW_NOW"]))
+    except (KeyError, ValueError):
+        now = int(time.time())
+
+    events = []  # (new, kind, ip, total, burst)
+    for kind, table, name in SETS:
+        doc = load_set(table, name)
+        if doc is None:
+            continue  # keep the old state: the set may come back
+        cur = counters(doc)
+        prev = state.get(kind)
+        prev = prev if isinstance(prev, dict) else {}
+        out = {}
+        for ip, total in cur.items():
+            seen, pend, last = entry(prev.get(ip))
+            delta = total - seen if total >= seen else total
+            if not have_baseline:
+                delta = 0
+            pend += delta
+            if delta > 0 and (last == 0 or now - last >= cooldown or now < last):
+                events.append((pend, kind, ip, total, delta >= thr))
+                pend, last = 0, now
+            out[ip] = {"s": total, "p": pend, "t": last}
+        state[kind] = out
+
+    try:
+        os.makedirs(state_dir, mode=0o700, exist_ok=True)
+        tmp = state_file + ".tmp"
+        with open(tmp, "w") as f:
+            json.dump(state, f)
+        os.replace(tmp, state_file)
+    except OSError as e:
+        err("cannot save state, printing nothing: %s" % e)
+        return
+    if not have_baseline:
+        if os.environ.get("BLACKWALL_FW_DEBUG"):
+            err("baseline recorded")
+        return
+
+    def prio(ev):
+        n, k, ip, t, burst = ev
+        if k == "origin_direct":
+            cls = 0
+        elif burst and k == "input_drop":
+            cls = 1
+        elif burst and k == "forward_drop":
+            cls = 2
+        else:
+            cls = 3
+        return (cls, -n, k, ipkey(ip))
+    events.sort(key=prio)
+    lines = ["blackwall-fw: kind=%s src=%s new=%d total=%d burst=%s"
+             % (k, ip, n, t, "yes" if b else "no") for n, k, ip, t, b in events[:max(max_lines, 0)]]
+    if len(events) > len(lines):
+        lines.append("blackwall-fw: kind=summary suppressed=%d burst=no" % (len(events) - len(lines)))
+    if lines:
+        print("\n".join(lines))
+
+
+def main():
+    try:
+        run()
+    except Exception as e:  # the agent must never see a crash
+        err("unexpected error: %r" % (e,))
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
