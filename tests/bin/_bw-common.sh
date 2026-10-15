@@ -6,7 +6,7 @@
 BW_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 BW_PROFILE="${BW_PROFILE:-ubuntu2204}"
 BW_COMPOSE="$BW_ROOT/tests/docker/docker-compose.yml"
-BW_SSH_CONFIG="$BW_ROOT/tests/docker/ssh_config"
+BW_SSH_CONFIG="${BW_SSH_CONFIG:-$BW_ROOT/tests/docker/ssh_config}"
 BW_INVENTORY="$BW_ROOT/tests/inventory/hosts.yml"
 
 # Root password inside the test containers. localhost only — see tests/README.md.
