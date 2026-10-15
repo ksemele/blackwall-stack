@@ -19,6 +19,8 @@ BW_PROM_URL="http://localhost:9090"
 BW_DASHBOARD_URL="https://localhost:5601"
 BW_INDEXER_URL="https://127.0.0.1:9200"
 BW_INDEXER_AUTH="admin:Blackwall1!"
+# Wazuh manager REST API (wazuh_manager_api_password in tests/inventory/group_vars).
+BW_API_AUTH="wazuh:wazuh"
 
 if [[ -t 1 ]]; then
   BW_RED=$'\033[31m'; BW_GREEN=$'\033[32m'; BW_YELLOW=$'\033[33m'

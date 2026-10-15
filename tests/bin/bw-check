@@ -216,7 +216,7 @@ check_wazuh() {
   fi
 
   local token rules
-  token="$(curl -sk -m 5 -u wazuh:wazuh -X POST \
+  token="$(curl -sk -m 5 -u "$BW_API_AUTH" -X POST \
              'https://127.0.0.1:55000/security/user/authenticate?raw=true' 2>/dev/null)"
   rules="$(curl -sk -m 5 -H "Authorization: Bearer $token" \
              'https://127.0.0.1:55000/rules?rule_ids=100100' 2>/dev/null)"
@@ -403,11 +403,23 @@ _sa_ssh() {
   fi
 }
 
-# Remove the probe container and its agent entry on the sentinel. Idempotent.
+# Remove the probe container and every agent entry with the probe name.
+# Idempotent. manage_agents output is kept in SA_CLEAN_ERR for the failure message.
 _sa_cleanup() {
   docker rm -f "$SA_NAME" >/dev/null 2>&1
-  _sa_ssh "id=\$(/var/ossec/bin/agent_control -l | sed -n 's/.*ID: \([0-9]*\), Name: $SA_NAME,.*/\1/p'); \
-           [ -z \"\$id\" ] || /var/ossec/bin/manage_agents -r \"\$id\"" >/dev/null 2>&1
+  SA_CLEAN_ERR="$(_sa_ssh "for id in \$(/var/ossec/bin/agent_control -l \
+      | sed -n 's/.*ID: \([0-9]*\), Name: $SA_NAME,.*/\1/p'); do \
+      /var/ossec/bin/manage_agents -r \"\$id\"; done" 2>&1)"
+}
+
+# agent_control -l output of the sentinel; non-zero when unreachable.
+_sa_agents() { _sa_ssh '/var/ossec/bin/agent_control -l' 2>&1; }
+
+# Number of indexed alerts for the probe agent name.
+_sa_alert_count() {
+  _sa_ssh "curl -sk -m 10 -u '$BW_INDEXER_AUTH' \
+      'https://127.0.0.1:9200/wazuh-alerts-*/_count?q=agent.name:$SA_NAME'" 2>/dev/null \
+    | python3 -c 'import json,sys; print(json.load(sys.stdin)["count"])' 2>/dev/null
 }
 
 # input-chain packet counters of the 1514 and 1515 rules, "events enroll".
@@ -427,13 +439,18 @@ _sa_run() {
     return
   fi
 
-  local before
+  local before base
   before="$(_sa_counters)"
+  # Earlier runs leave their alerts in the indexer: require growth over this baseline.
+  base="$(_sa_alert_count)"
+  base="${base:-0}"
 
-  if ! docker run -d --name "$SA_NAME" --hostname "$SA_NAME" --privileged --cgroupns=host \
+  local runerr
+  if ! runerr="$(docker run -d --name "$SA_NAME" --hostname "$SA_NAME" --privileged --cgroupns=host \
          --tmpfs /run --tmpfs /run/lock --network "$SA_NETWORK" --ip "$SA_IP" \
-         "$SA_IMAGE" >/dev/null 2>&1; then
+         "$SA_IMAGE" 2>&1)"; then
     bw_fail "probe container $SA_NAME did not start"
+    printf '%s\n' "$runerr" | tail -5 | sed 's/^/      /'
     return
   fi
 
@@ -452,10 +469,10 @@ _sa_run() {
   fi
   bw_pass "probe $SA_NAME ($SA_IP) installed wazuh-agent $version"
 
-  local i active=0
+  local i active=0 agents
   for ((i = 0; i < 40; i++)); do
-    if _sa_ssh '/var/ossec/bin/agent_control -l' 2>/dev/null \
-         | grep -qE "Name: $SA_NAME,.*Active"; then
+    agents="$(_sa_agents)"
+    if grep -qE "Name: $SA_NAME,.*Active" <<<"$agents"; then
       active=1; break
     fi
     sleep 5
@@ -478,21 +495,19 @@ _sa_run() {
 
   local hits=0
   for ((i = 0; i < 24; i++)); do
-    hits="$(_sa_ssh "curl -sk -m 10 -u '$BW_INDEXER_AUTH' \
-        'https://127.0.0.1:9200/wazuh-alerts-*/_count?q=agent.name:$SA_NAME'" 2>/dev/null \
-      | python3 -c 'import json,sys; print(json.load(sys.stdin)["count"])' 2>/dev/null)"
-    [[ "${hits:-0}" -gt 0 ]] && break
+    hits="$(_sa_alert_count)"
+    [[ "${hits:-0}" -gt "$base" ]] && break
     sleep 5
   done
-  if [[ "${hits:-0}" -gt 0 ]]; then
-    bw_pass "indexer holds $hits alerts for agent.name:$SA_NAME"
+  if [[ "${hits:-0}" -gt "$base" ]]; then
+    bw_pass "indexer alerts for agent.name:$SA_NAME grew ($base -> $hits)"
   else
-    bw_fail "no alerts for agent.name:$SA_NAME in the sentinel indexer"
+    bw_fail "no new alerts for agent.name:$SA_NAME in the sentinel indexer (baseline $base, now ${hits:-0})"
   fi
 
   local os=0
   for ((i = 0; i < 24; i++)); do
-    os="$(_sa_ssh "t=\$(curl -sk -m 10 -u wazuh:wazuh -X POST \
+    os="$(_sa_ssh "t=\$(curl -sk -m 10 -u $BW_API_AUTH -X POST \
           'https://127.0.0.1:55000/security/user/authenticate?raw=true'); \
         id=\$(/var/ossec/bin/agent_control -l | sed -n 's/.*ID: \([0-9]*\), Name: $SA_NAME,.*/\1/p'); \
         curl -sk -m 10 -H \"Authorization: Bearer \$t\" \
@@ -534,17 +549,32 @@ check_sentinel_agents() {
   SA_IP="172.28.0.90"
   SA_NETWORK="blackwall-test_blackwall-test"
   SA_IMAGE="blackwall-test-black-rocky-02"
-  SA_MANAGER="${BW_PROBE_MANAGER:-172.28.0.16}"   # override only to simulate a failure
+  # BW_PROBE_MANAGER is a test hook: point the probe at a wrong manager IP to
+  # exercise the failure and cleanup path.
+  SA_MANAGER="${BW_PROBE_MANAGER:-172.28.0.16}"
 
-  trap '_sa_cleanup; trap - INT TERM; exit 130' INT TERM
+  # Cleanup on any exit; signals become exits so the EXIT trap runs.
+  trap _sa_cleanup EXIT
+  trap 'exit 130' INT
+  trap 'exit 143' TERM
+  trap 'exit 129' HUP
   _sa_cleanup            # leftover from an interrupted earlier run
   _sa_run
   _sa_cleanup
-  trap - INT TERM
-  if docker inspect "$SA_NAME" >/dev/null 2>&1; then
-    bw_fail "probe cleanup left container $SA_NAME behind"
+  trap - EXIT INT TERM HUP
+
+  local left="" agents
+  docker inspect "$SA_NAME" >/dev/null 2>&1 && left="container"
+  if agents="$(_sa_agents)"; then
+    grep -q "Name: $SA_NAME," <<<"$agents" && left="$left agent-entry"
   else
+    left="$left sentinel-unreachable"
+  fi
+  if [[ -z "$left" ]]; then
     bw_pass "probe container and agent entry removed"
+  else
+    bw_fail "probe cleanup incomplete:$left"
+    printf '%s\n' "$SA_CLEAN_ERR" | tail -5 | sed 's/^/      /'
   fi
 }
 
