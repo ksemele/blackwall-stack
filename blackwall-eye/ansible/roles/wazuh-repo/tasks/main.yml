@@ -57,3 +57,4 @@
     gpgkey: "{{ wazuh_gpg_key_url }}"
     gpgcheck: true
     enabled: true
+    exclude: "{{ wazuh_pinned_packages }}"

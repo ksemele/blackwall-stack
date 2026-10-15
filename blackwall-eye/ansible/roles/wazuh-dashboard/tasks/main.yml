@@ -6,8 +6,14 @@
 - name: Install wazuh-dashboard package
   apt:
     name: "wazuh-dashboard{{ wazuh_pkg_suffix }}"
+    allow_change_held_packages: true
     state: present
     update_cache: true
+
+- name: Hold wazuh-dashboard
+  ansible.builtin.dpkg_selections:
+    name: wazuh-dashboard
+    selection: hold
 
 - name: Ensure /etc/wazuh-dashboard/certs dir exists
   file:

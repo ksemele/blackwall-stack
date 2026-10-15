@@ -56,7 +56,7 @@
 
     - name: Assert every expected package is installed
       ansible.builtin.assert:
-        that: "'install ok installed' in item.stdout"
+        that: "' ok installed' in item.stdout"
         fail_msg: "package {{ item.item }} is not installed on {{ inventory_hostname }}"
       loop: "{{ pkg_query.results }}"
       loop_control:

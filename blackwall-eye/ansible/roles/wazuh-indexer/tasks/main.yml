@@ -15,8 +15,14 @@
 - name: Install wazuh-indexer package
   apt:
     name: "wazuh-indexer{{ wazuh_pkg_suffix }}"
+    allow_change_held_packages: true
     state: present
     update_cache: true
+
+- name: Hold wazuh-indexer
+  ansible.builtin.dpkg_selections:
+    name: wazuh-indexer
+    selection: hold
 
 - name: Unpack cert bundle on master
   unarchive:

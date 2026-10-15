@@ -2,6 +2,14 @@
 # Single source of the Wazuh package version and repositories for every
 # Wazuh role (meta dependency). An agent newer than the manager is unsupported.
 wazuh_version: "4.14.7"
+# Packages that change version only through this role (wazuh_version), never
+# through dnf/apt upgrades: yum repo `exclude`, apt `hold`.
+wazuh_pinned_packages:
+  - wazuh-agent
+  - wazuh-manager
+  - wazuh-indexer
+  - wazuh-dashboard
+  - filebeat
 wazuh_gpg_key_url: "https://packages.wazuh.com/key/GPG-KEY-WAZUH"
 wazuh_apt_repo_url: "https://packages.wazuh.com/4.x/apt/"
 wazuh_yum_repo_url: "https://packages.wazuh.com/4.x/yum/"

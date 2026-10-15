@@ -13,8 +13,14 @@
 - name: Install wazuh-manager package
   apt:
     name: "wazuh-manager{{ wazuh_pkg_suffix }}"
+    allow_change_held_packages: true
     state: present
     update_cache: true
+
+- name: Hold wazuh-manager
+  ansible.builtin.dpkg_selections:
+    name: wazuh-manager
+    selection: hold
 
 - name: Deploy ossec.conf from template
   template:
@@ -56,8 +62,14 @@
 - name: Install filebeat (Wazuh-shipped variant)
   apt:
     name: "filebeat={{ wazuh_filebeat_version | default('7.10.2-2') }}"
+    allow_change_held_packages: true
     state: present
     update_cache: true
+
+- name: Hold filebeat
+  ansible.builtin.dpkg_selections:
+    name: filebeat
+    selection: hold
 
 - name: Download Wazuh filebeat module for v4.x
   get_url:

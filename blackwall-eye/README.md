@@ -73,6 +73,16 @@ remotes, or apt-cacher-ng for a plain cache) gives:
 The Docker lab already runs a small version of this: see
 [tests/README.md — apt cache](../tests/README.md#apt-cache).
 
+### Version pinning
+
+Wazuh packages (`wazuh-agent`, `-manager`, `-indexer`, `-dashboard`, `filebeat`;
+list in `wazuh_pinned_packages`) change version only through Ansible: apt hosts
+hold them (`apt-mark hold`), the RedHat yum repo `exclude`s them, so
+`apt upgrade`, unattended-upgrades, `dnf upgrade` and dnf-automatic skip them
+(an agent newer than the manager is unsupported). To change the version, edit
+`wazuh_version` in the `wazuh-repo` role defaults and re-run the playbooks; the
+roles install with `allow_change_held_packages` / `disable_excludes`.
+
 ### Login sessions snapshot
 
 The `wazuh-agent` role makes every agent run `last --time-format iso -w -n 50`
