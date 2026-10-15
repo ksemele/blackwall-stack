@@ -2,6 +2,8 @@
 
 > *"The Blackwall is a military-grade AI construct — an autonomous guardian that adapts,
 > learns, and strikes back."*
+>
+> — after the Blackwall of *Cyberpunk 2077*
 
 Blackwall is an open-source modular security platform for Linux infrastructure.
 It combines battle-tested open-source components into a layered defensive system,
