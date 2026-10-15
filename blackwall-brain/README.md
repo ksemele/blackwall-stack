@@ -45,6 +45,27 @@ claude_effort:      "low"
 max_tokens:         2048   # thinking counts against it
 ```
 
+| Variable | Default | Purpose |
+|---|---|---|
+| `brain_ignore_rule_ids` | `["99999"]` | `rule.id`s never analyzed (Voice's verify rule) |
+| `brain_state_max_ids` | `10000` | processed IDs kept in the state file |
+
+The state file keeps only the newest `brain_state_max_ids` IDs: compacted at
+startup and at most once an hour (atomic rewrite), the in-memory set follows.
+Older IDs are useless, the analyst seeks to the end of the alert log on start.
+
+## One message per alert
+
+Brain's Telegram message replaces Voice's for alerts at or above
+`analysis_threshold`: Voice is capped with `voice_max_level = analysis_threshold - 1`
+(see [blackwall-voice/README.md](../blackwall-voice/README.md#one-message-per-alert-with-brain);
+the lab inventory derives it from `brain_enabled`). The roles stay independent.
+
+If Claude fails for an alert after 3 attempts, Brain does not drop it: it sends
+the raw alert to Telegram with the marker `AI analysis unavailable: <reason>`
+(e.g. `Claude API HTTP 401`) and marks it processed. If Telegram itself fails,
+the send is retried 3 times and then logged as dropped.
+
 ## Deploy
 
 ```bash
@@ -59,14 +80,16 @@ ansible-playbook ansible/playbooks/brain.yml \
 
 `brain_enabled` (default `true`) switches the analyst without uninstalling it:
 `false` stops and disables the service, the script, config and state stay in
-place. Voice keeps forwarding raw alerts either way.
+place. With Brain off Voice must forward everything again: re-deploy Voice
+with the same `-e brain_enabled=false` so its `voice_max_level` empties.
 
 ```bash
 ansible-playbook ansible/playbooks/brain.yml -e brain_enabled=false   # off
 ansible-playbook ansible/playbooks/brain.yml                          # on again
 ```
 
-In the lab: `tests/bin/bw-lab provision brain -e brain_enabled=false`; while it
+In the lab: `tests/bin/bw-lab provision brain -e brain_enabled=false` and
+`tests/bin/bw-lab provision voice -e brain_enabled=false`; while it
 is off, `bw-check brain` reports SKIP. Set it in the inventory to make it stick.
 Enabling requires `claude_api_key`, `telegram_bot_token` and `telegram_chat_id`
 (the role fails up front otherwise — in the lab run through `direnv exec .`);
@@ -78,7 +101,7 @@ disabling works without them.
 ansible-playbook ansible/playbooks/verify-brain.yml
 ```
 
-Injects a synthetic level-9 alert and confirms brain-analyst picks it up.
+Injects a synthetic level-10 alert (rule 99998, ignored by Voice) and confirms brain-analyst picks it up.
 With placeholder credentials: Claude API failure is logged gracefully (expected behavior).
 With real credentials: full pipeline executes and Telegram message is received.
 

@@ -3,12 +3,21 @@ module: blackwall-brain
 status: in_progress
 stage: 3
 last_updated: 2026-10-15
-last_task: "Lab deploy with a real key: text-block parsing for thinking models, low effort, real retries, optional workspace id header, strict verify-brain, bw-lab/bw-check brain targets"
-next_task: "Noise: one message per alert when Brain is on; voice skips brain verify alerts (secrets are managed outside the repo)"
+last_task: "Noise: bounded state, ignored Voice verify rule, raw-alert fallback when Claude fails"
+next_task: "Trap integration (Stage 4) or workload identity federation (see Plans)"
 blockers: []
 ---
 
 ## Done
+
+- 2026-10-15: less noise. State file capped at `brain_state_max_ids` (10000,
+  compacted at startup and hourly, atomic). `brain_ignore_rule_ids`
+  (`["99999"]`, Voice's verify rule) are skipped. When Claude fails after 3
+  attempts the raw alert goes to Telegram marked `AI analysis unavailable:
+  <reason>` and is marked processed (Telegram failure: retry, then dropped).
+  Voice stops below `analysis_threshold` via `voice_max_level`, so there is one
+  message per alert. Verified in the lab with an invalid key (fallback) and a
+  real one (single Brain message).
 
 - 2026-10-15: `brain_enabled` toggle (default `true`): `false` stops and
   disables the service, files stay; `bw-lab provision brain -e
