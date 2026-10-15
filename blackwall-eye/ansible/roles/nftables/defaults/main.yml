@@ -32,6 +32,9 @@ nft_log_drops: true
 nft_track_drops: true
 nft_track_timeout: 1h
 nft_track_size: 65536
+# Packets from one source between two exporter runs that make it a "burst"
+# (scan); rendered into /etc/blackwall/fw-export.conf for blackwall-fw-export.
+nft_track_scan_threshold: 20
 
 # Main nftables config loaded by nftables.service (differs per OS family)
 nft_conf_path: "{{ '/etc/sysconfig/nftables.conf' if ansible_facts['os_family'] == 'RedHat' else '/etc/nftables.conf' }}"

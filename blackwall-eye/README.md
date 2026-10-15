@@ -163,6 +163,7 @@ container-DNS part runs only in the lab (`bw_lab: true`).
 | `nft_track_drops` | `true` | per-source accounting of dropped IPv4 packets: dynamic sets `dropped_input` (and `dropped_forward` when `nft_forward_policy: drop`) with per-element counters, updated just before the final counter. Inspect: `nft list set inet blackwall_base dropped_input`; reset on every reload |
 | `nft_track_timeout` | `1h` | idle timeout of an entry in those sets |
 | `nft_track_size` | `65536` | maximum number of tracked sources per set |
+| `nft_track_scan_threshold` | `20` | packets from one source between two `blackwall-fw-export` runs that set `burst=yes`; rendered to `/etc/blackwall/fw-export.conf` |
 | `nft_podman` | `{}` | `{net, if}` of a podman host: anti-spoofing on the WAN, container DNS to the host, `ct status dnat accept` and container egress in `forward` |
 | `nft_conf_path` | per OS family | `/etc/nftables.conf` (Debian) or `/etc/sysconfig/nftables.conf` (RedHat) |
 
@@ -213,6 +214,24 @@ tools/nft-equiv hosts/prod.yml <host> hosts/<host>/nftables/blackwall-base.nft
 
 It renders the role template for that host, loads both files into a throwaway
 container and diffs nft's own listing (exit 0 = equal). Needs Docker.
+
+### Firewall event exporter
+
+The role installs `/usr/local/sbin/blackwall-fw-export` (python3, stdlib only;
+state in `/var/lib/blackwall-fw/state.json`). It reads the per-source sets
+`dropped_input`, `dropped_forward` and the cf-wall `origin_direct` and prints
+one line per source whose packet count grew since the previous run (a counter
+that went down after a reload counts as `new = total`); nothing is printed when
+nothing changed or a table/set is absent:
+
+```
+blackwall-fw: kind=<input_drop|forward_drop|origin_direct> src=<ip> new=<n> total=<n> burst=<yes|no>
+```
+
+`burst=yes` when `new >= nft_track_scan_threshold`. Overrides for tests:
+`BLACKWALL_FW_NFT_JSON_DIR`, `BLACKWALL_FW_STATE_DIR`,
+`BLACKWALL_FW_SCAN_THRESHOLD`, `BLACKWALL_FW_CONF`. Unit test (no nft needed):
+`tools/test-fw-export`.
 
 ## Verification playbooks
 

@@ -1,0 +1,47 @@
+{
+ "nftables": [
+  {
+   "metainfo": {
+    "version": "1.0.9",
+    "json_schema_version": 1
+   }
+  },
+  {
+   "set": {
+    "family": "inet",
+    "name": "dropped_input",
+    "table": "blackwall_base",
+    "type": "ipv4_addr",
+    "handle": 5,
+    "size": 65536,
+    "flags": [
+     "timeout",
+     "dynamic"
+    ],
+    "timeout": 3600,
+    "elem": [
+     {
+      "elem": {
+       "val": "203.0.113.1",
+       "expires": 3500,
+       "counter": {
+        "packets": 5,
+        "bytes": 300
+       }
+      }
+     },
+     {
+      "elem": {
+       "val": "203.0.113.2",
+       "expires": 3500,
+       "counter": {
+        "packets": 1,
+        "bytes": 60
+       }
+      }
+     }
+    ]
+   }
+  }
+ ]
+}

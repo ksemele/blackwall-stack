@@ -90,3 +90,30 @@
     name: nftables
     enabled: true
     state: started
+
+- name: Create blackwall config and exporter state directories
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "{{ item.mode }}"
+  loop:
+    - { path: /etc/blackwall, mode: "0755" }
+    - { path: /var/lib/blackwall-fw, mode: "0700" }
+
+- name: Install firewall event exporter config
+  ansible.builtin.template:
+    src: fw-export.conf.j2
+    dest: /etc/blackwall/fw-export.conf
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Install blackwall-fw-export
+  ansible.builtin.copy:
+    src: blackwall-fw-export
+    dest: /usr/local/sbin/blackwall-fw-export
+    owner: root
+    group: root
+    mode: "0755"
