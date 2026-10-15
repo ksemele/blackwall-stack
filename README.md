@@ -100,6 +100,11 @@ See each module's `README.md` for module-specific deploy and verify commands.
 This project is developed using Claude Code with a skill orchestrator.
 Run `/blackwall` (Claude Code slash command) in Claude Code to see module status and continue development.
 
+## Contributing
+
+See [CONTRIBUTING.md](./CONTRIBUTING.md) for the dev setup and PR process, and
+[SECURITY.md](./SECURITY.md) to report a vulnerability privately.
+
 ## License
 
 See [LICENSE](./LICENSE).
