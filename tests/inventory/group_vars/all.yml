@@ -13,3 +13,6 @@ wazuh_apt_repo_url: "http://packages.wazuh.com/4.x/apt/"
 # Agents that are broken on purpose (bw-lab provision fixtures); agent checks
 # skip them.
 wazuh_fixture_agents: [black-dead-98]
+
+# Firewall drop events: poll fast so lab tests do not wait a minute.
+wazuh_fw_events_interval: 10

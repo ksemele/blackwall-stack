@@ -31,3 +31,9 @@ wazuh_sca_interval: "12h"
 # stores the output whenever it changes.
 wazuh_sessions_enabled: true
 wazuh_sessions_frequency: 60
+
+# Firewall drop events: the agent runs /usr/local/sbin/blackwall-fw-export
+# (nftables role) every wazuh_fw_events_interval seconds; manager rules
+# 100200-100204 turn its lines into alerts.
+wazuh_fw_events_enabled: true
+wazuh_fw_events_interval: 60

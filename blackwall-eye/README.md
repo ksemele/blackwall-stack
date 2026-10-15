@@ -127,6 +127,29 @@ Sessions tab.
 The manager config now also declares the standard `<ruleset>` explicitly;
 before, `GET /rules` failed with error 1106.
 
+### Firewall drop events
+
+Agents (and the manager host, agent 000) run `/usr/local/sbin/blackwall-fw-export`
+(from the `nftables` role) as a Wazuh `command` localfile with alias
+`blackwall-fw`, every `wazuh_fw_events_interval` seconds (default 60, lab 10;
+disable with `wazuh_fw_events_enabled: false`). The `wazuh-manager` role deploys
+decoders (`etc/decoders/blackwall_decoders.xml`, children of the stock `ossec`
+decoder, fields `fw_kind`, `srcip`, `fw_new`, `fw_total`, `fw_burst`,
+`fw_suppressed`) and rules in group `blackwall_fw`:
+
+| Rule | Level | Fires on |
+|---|---|---|
+| 100200 | 0 | base, any `blackwall-fw` line (below-threshold input/forward drops stop here) |
+| 100201 | 10 | `kind=origin_direct`: direct access to origin bypassing Cloudflare |
+| 100202 | 8 | `kind=input_drop` with `burst=yes`: possible scan |
+| 100203 | 6 | `kind=forward_drop` with `burst=yes` |
+| 100204 | 3 | `kind=summary`: exporter output was capped, `fw_suppressed` sources dropped |
+
+`burst=yes` is decided by the exporter from `nft_track_scan_threshold`, so rules
+need no numeric comparison. The first run after deploy or state loss is silent
+(baseline). Set `BLACKWALL_FW_DEBUG=1` to see the "baseline recorded" message on
+stderr when running the exporter by hand.
+
 ## Verify
 
 ```bash

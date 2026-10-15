@@ -1,0 +1,28 @@
+<!-- Managed by blackwall-eye (ansible role wazuh-manager). Do not edit on the host. -->
+
+<!-- Firewall drop events: one line per source printed by
+     /usr/local/sbin/blackwall-fw-export (agent command localfile, alias
+     blackwall-fw). Full event:
+       ossec: output: 'blackwall-fw': blackwall-fw: kind=...
+     Both decoders anchor on that whole prefix (children of the stock `ossec`
+     decoder), so stray lines never match. The summary line has its own
+     decoder (no src); rule 100200 keys on the
+     decoded fw_kind field plus the prefix (type ossec keeps stock rule 500/530 matching). -->
+
+<!-- kind=<input_drop|forward_drop|origin_direct> src=<ip> new=<n> total=<n> burst=<yes|no> -->
+<decoder name="blackwall-fw">
+  <parent>ossec</parent>
+  <type>ossec</type>
+  <prematch offset="after_parent">^output: 'blackwall-fw': blackwall-fw: kind=\w+ src=</prematch>
+  <regex type="pcre2" offset="after_parent">^output: 'blackwall-fw': blackwall-fw: kind=(\w+) src=(\S+) new=(\d+) total=(\d+) burst=(yes|no)$</regex>
+  <order>fw_kind, srcip, fw_new, fw_total, fw_burst</order>
+</decoder>
+
+<!-- kind=summary suppressed=<n> burst=no (no src) -->
+<decoder name="blackwall-fw-summary">
+  <parent>ossec</parent>
+  <type>ossec</type>
+  <prematch offset="after_parent">^output: 'blackwall-fw': blackwall-fw: kind=summary </prematch>
+  <regex type="pcre2" offset="after_parent">^output: 'blackwall-fw': blackwall-fw: kind=(summary) suppressed=(\d+) burst=(no)$</regex>
+  <order>fw_kind, fw_suppressed, fw_burst</order>
+</decoder>

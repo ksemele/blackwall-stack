@@ -38,3 +38,9 @@ wazuh_syscheck_frequency: 43200
 wazuh_syscollector_interval: "5m"
 wazuh_rootcheck_frequency: 43200
 wazuh_sca_interval: "12h"
+
+# Firewall drop events: the agent runs /usr/local/sbin/blackwall-fw-export
+# (nftables role) every wazuh_fw_events_interval seconds; manager rules
+# 100200-100204 turn its lines into alerts.
+wazuh_fw_events_enabled: true
+wazuh_fw_events_interval: 60

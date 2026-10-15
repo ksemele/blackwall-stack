@@ -55,6 +55,15 @@
     <frequency>{{ wazuh_sessions_frequency }}</frequency>
   </localfile>
 {% endif %}
+{% if wazuh_fw_events_enabled %}
+  <!-- Firewall drop events (rules 100200-100204, alias blackwall-fw) -->
+  <localfile>
+    <log_format>command</log_format>
+    <command>/usr/local/sbin/blackwall-fw-export</command>
+    <alias>blackwall-fw</alias>
+    <frequency>{{ wazuh_fw_events_interval }}</frequency>
+  </localfile>
+{% endif %}
 
   <!-- File Integrity Monitoring -->
   <syscheck>
