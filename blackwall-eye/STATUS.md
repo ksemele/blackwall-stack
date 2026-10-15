@@ -2,7 +2,7 @@
 module: blackwall-eye
 status: in_progress
 stage: 1
-last_updated: 2026-10-15
+last_updated: 2026-10-16
 last_task: "Firewall drop events as Wazuh alerts (exporter, rules 100200-100205, bw-check fw-events)"
 next_task: "Before the prod host becomes the manager: backlog item (auditd on real RHEL), then a prod inventory for the stack (loopback binds, heap) — owner decides when"
 blockers: []
@@ -145,11 +145,23 @@ blockers: []
   - `tests/inventory/hosts.single.yml` — isolated host for role testing
   - `tests/README.md` — up/down docs and the multi-distro strategy
 
-## Open questions
+## Plans
 
-- Wazuh version: pin to 4.x (current stable) or a specific minor?
+- **Wazuh 5.x research (separate branch, later).** 5.0 changes the agent
+  transport (HTTPS on 1517), replaces filebeat with a built-in indexer
+  connector, normalizes events to the Wazuh Common Schema and has no in-place
+  upgrade from 4.x. To find out: what our roles, rules 100100+ and the
+  `blackwall` TUI (indexer field names) need, and whether a manager-only setup
+  still writes `alerts.json`.
+- **Lite profile (manager only, no indexer or dashboard).** The indexer is
+  ~1.75 GiB of the 2.2 GiB footprint. Alerts come from `alerts.json` (TUI over
+  SSH, optionally a light store). Check first: vulnerability detection likely
+  needs the indexer, so lite may ship without it.
 
 ## Decisions
+
+- **Wazuh 4.x (2026-10-16).** The stack stays on 4.x (lab: 4.14.7); 5.x only
+  after the research above.
 
 - **nftables: no global `flush ruleset`.** The role recreates only its own
   table (create/delete/define idiom). A global flush inside Docker wipes the NAT

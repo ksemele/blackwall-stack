@@ -1,11 +1,19 @@
-# Blackwall
+# Blackwall Stack
 
 > *"The Blackwall is a military-grade AI construct — an autonomous guardian that adapts,
 > learns, and strikes back."*
+>
+> — after the Blackwall of *Cyberpunk 2077*
 
-Blackwall is an open-source modular security platform for Linux infrastructure.
-It combines battle-tested open-source components into a layered defensive system,
-deployable via Infrastructure-as-Code with no vendor lock-in.
+Blackwall Stack is an opinionated, Wazuh-based security stack for small Linux
+fleets. It combines battle-tested open-source components (Wazuh, auditd,
+nftables, reputation blocklists) into a layered defensive system, deployable
+via Ansible with no vendor lock-in. A manager-only lite profile (no indexer or
+dashboard) is planned.
+
+Its companion is [`blackwall`](https://github.com/ksemele/blackwall), a
+k9s-style terminal UI for Wazuh that replaces the dashboard for day-to-day
+work. The TUI works with any Wazuh 4.x; the stack is not required.
 
 ## Modules
 
@@ -61,17 +69,18 @@ Certificates are self-signed; accept the browser warning. Tear down with
 
 ### 2. Watch it in the TUI
 
-[`tools/blackwall`](./tools/blackwall/) is a k9s-style terminal UI: agents,
-the `:alerts` feed and per-agent Sessions.
+[`blackwall`](https://github.com/ksemele/blackwall) is a k9s-style terminal UI:
+agents, the `:alerts` feed and per-agent Sessions. It lives in its own repo.
 
 ```bash
-cd tools/blackwall && go install ./cmd/blackwall   # binary lands in ~/go/bin
+go install github.com/ksemele/blackwall/cmd/blackwall@latest   # binary lands in ~/go/bin
 blackwall                          # first run writes ~/.config/blackwall/config.yaml (with a lab context) and exits
 blackwall --context lab --once     # agents table, then exit
 blackwall --context lab            # interactive TUI
 ```
 
-See [tools/blackwall/README.md](./tools/blackwall/README.md) for config and keys.
+See the [blackwall README](https://github.com/ksemele/blackwall#readme) for
+config, keys and the short alias `b`.
 
 ### 3. Point agents at a real Wazuh master
 

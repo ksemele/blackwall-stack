@@ -105,7 +105,7 @@ podman nginx on 443, with `nftables` (`nft_podman`, forward policy drop) and
 `cf-wall`. Dashboard access: `ssh -L 5601:127.0.0.1:5601 <host>` then
 https://localhost:5601. The `blackwall` TUI opens its own tunnel to the API and
 indexer: add an `ssh:` block to the context
-([tools/blackwall](../tools/blackwall/README.md#via-ssh-tunnel-loopback-only-managers)).
+([blackwall](https://github.com/ksemele/blackwall#via-ssh-tunnel-loopback-only-managers)).
 
 Measured footprint (lab sentinel, idle ~10 min, indexer heap 1g): container
 2.2 GiB total; indexer (java) 1.75 GiB RSS, manager processes ~460 MiB,
@@ -328,7 +328,7 @@ Fang uses this for `kind=blocklist_would_drop` / `blocklist_dropped` (rules 1002
 ### Agent status
 
 The Python `bw-status` script is gone; use the `blackwall` TUI
-([tools/blackwall](../tools/blackwall/README.md)):
+([github.com/ksemele/blackwall](https://github.com/ksemele/blackwall)):
 
 ```bash
 blackwall --context lab           # interactive, k9s-style

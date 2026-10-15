@@ -1,7 +1,12 @@
-# Blackwall
+# Blackwall Stack
 
-Blackwall is a modular security platform — a suite of "combat AIs" providing layered,
-autonomous defense of systems. Inspired by the Blackwall AI from Cyberpunk 2077.
+Blackwall Stack is a modular, Wazuh-based security platform — a suite of "combat AIs"
+providing layered, autonomous defense of systems. Inspired by the Blackwall AI from
+Cyberpunk 2077. Target: small Linux fleets, built from well-known open-source tools.
+
+The `blackwall` TUI lives in its own repo, github.com/ksemele/blackwall (local
+checkout `../blackwall-tui`). It reads the Wazuh API and indexer; changes to rule
+IDs or fields it consumes (e.g. 100100) must be mirrored there.
 
 ## Vision
 

@@ -1,6 +1,0 @@
-/bin/
-/blackwall
-/blackwall-linux-amd64
-*.test
-*.out
-coverage.txt
