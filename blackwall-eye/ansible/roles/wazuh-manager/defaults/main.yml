@@ -11,6 +11,16 @@ wazuh_authd_enabled: "yes"
 # API settings
 wazuh_api_port: 55000
 wazuh_api_enabled: "yes"
+# API bind address; 0.0.0.0 keeps the packaged default (all interfaces)
+wazuh_api_host: "0.0.0.0"
+
+# Wazuh-shipped filebeat release (same string for deb and rpm)
+wazuh_filebeat_version: "7.10.2-2"
+
+# Indexer filebeat ships alerts to
+wazuh_indexer_network_host: "172.28.0.10"
+wazuh_indexer_admin_user: "admin"
+wazuh_indexer_admin_password: "Blackwall1!"
 
 # Agent groups created on the manager so agents can enroll into them.
 # "docker" is assigned by the wazuh-agent role to containerised hosts.
