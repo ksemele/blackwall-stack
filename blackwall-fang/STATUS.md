@@ -4,7 +4,7 @@ status: in_progress
 stage: 5
 last_updated: 2026-10-15
 last_task: "Layer 1 (reputation blocklists) done: role fang-reputation, Wazuh event 100206, bw-check fang (observe + enforce + junk list) green; real-source observe run on the lab sentinel (4619 entries, exit 0)"
-next_task: "Layer 2 observe: in-kernel detection of SSH/scan/rate attempts (spec 2026-10-16-fang-attempts-observe-design.md)"
+next_task: "Layer 2 observe: bw-check coverage and tuning (spec 2026-10-16-fang-attempts-observe-design.md), then enforce"
 blockers: []
 ---
 
@@ -20,12 +20,14 @@ research-only topic for later.
 Each layer is opt-in and starts in observe-only mode (sets fill and alert,
 nothing is dropped) before enforcement is switched on.
 
-**Layer 1 is done** (role `fang-reputation`, see README; `bw-check fang`).
+**Layers 1 and 2 (observe) are done** (role `fang-reputation`, see README; `bw-check fang`).
 
 1. **Reputation** (done) — Spamhaus DROP/EDROP and FireHOL level1 loaded into a
    `blocklist_static` nftables set by a refresh script + timer (same pattern
    as `cf-wall`: sanity floor, `nft -c`, load before persist).
-2. **In-kernel ban on attempts** (next) — nftables rate rules move a source into
+2. **In-kernel attempt detectors** (observe done, role `fang-reputation`: ssh/scan/rate
+   meters + `*_flagged` sets, Eye rules 100210-100212; enforcement still to come) — the original plan:
+   **In-kernel ban on attempts** — nftables rate rules move a source into
    `blocklist_dynamic` (with timeout) when it makes too many new connection
    attempts within a window: to closed ports (scans) and to open services such
    as SSH (brute force / floods). Thresholds and timeouts are variables; short

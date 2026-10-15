@@ -120,13 +120,26 @@ dropped**; enforcement is a separate future spec.
 | Rate | any new TCP | 120/minute, burst 60 | `rate_flagged` | `rate_attempts` / 100212 (level 5) |
 
 Variables: `fang_attempts_enabled` (default `true`), `fang_ssh_ports`, `fang_open_tcp`,
-`fang_{ssh,scan,conn}_rate` (`N/second|minute|hour|day`), `fang_{ssh,scan,conn}_burst`,
+`fang_{ssh,scan,conn}_rate` (`N/second|minute`), `fang_{ssh,scan,conn}_burst`,
 `fang_meter_size`, `fang_flagged_size`. List **every** listening and published port (and agent or
 monitoring ports) in `fang_open_tcp`, or legitimate clients of an unlisted port look like
 scanners; leave it empty to run without the scan detector. The role renders the exporter drop-ins
 `fang-ssh.conf`, `fang-scan.conf`, `fang-rate.conf` in `/etc/blackwall/fw-export.d/` for the
 enabled detectors only (and removes the others). Inspect: `nft list set inet blackwall_fang
 ssh_flagged` (also `scan_flagged`, `rate_flagged`).
+
+Limits and tuning:
+
+- Legitimate high-rate sources belong in `fang_allowlist`: uptime and monitoring probes, NAT'd
+  offices, and blackwall-scan's own perimeter recon (it looks like a scanner by design).
+- Blind spot: a spoofed-source SYN flood can fill the meter sets (65536 sources); the rule then
+  silently stops tracking new sources until entries time out (5m). Observe has nothing to
+  protect; enforcement must account for it.
+- SYN retransmits to filtered ports count as separate attempts, so one slow client can
+  exceed a low rate.
+- If the Cloudflare list is not available on a fail-open refresh (exit 2/4) and not cached,
+  layer 2 is skipped (WARNING `layer 2 skipped: no Cloudflare list`), otherwise Cloudflare
+  edges would be counted.
 
 ### Rollback
 

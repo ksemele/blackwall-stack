@@ -7,8 +7,8 @@ SOURCES="{{ fang_sources | join(' ') }}"
 CF_URL={{ fang_cloudflare_url }}
 MIN_ENTRIES={{ fang_min_entries }}
 MAX_CACHE_AGE_DAYS={{ fang_max_cache_age_days }}
-ATTEMPTS={{ 1 if fang_attempts_enabled else 0 }}
-{% if fang_attempts_enabled %}
+ATTEMPTS={{ 1 if fang_attempts_enabled | bool else 0 }}
+{% if fang_attempts_enabled | bool %}
 SSH_PORTS="{{ fang_ssh_ports | join(' ') }}"
 OPEN_TCP="{{ fang_open_tcp | join(' ') }}"
 SSH_RATE={{ fang_ssh_rate }}

@@ -7,19 +7,34 @@
       - fang_sources | length > 0
       - fang_mode != 'enforce' or (fang_allowlist | length > 0)
       - fang_max_cache_age_days | int > 0
-      - fang_ssh_ports | length > 0
-      - fang_ssh_rate is match('^[1-9][0-9]*/(second|minute|hour|day)$')
-      - fang_scan_rate is match('^[1-9][0-9]*/(second|minute|hour|day)$')
-      - fang_conn_rate is match('^[1-9][0-9]*/(second|minute|hour|day)$')
-      - fang_test_mode or (fang_test_blockable | length == 0 and fang_test_files | length == 0)
-      - not fang_test_mode or (fang_sources | reject('match', '^file://') | list | length == 0)
-      - fang_test_mode or (fang_sources | select('match', '^file://') | list | length == 0)
     fail_msg: >-
       fang_wan_if is required, fang_mode must be observe|enforce, test lists
       need fang_test_mode, fang_test_mode requires file:// sources only
       (and file:// sources require fang_test_mode), and enforce mode needs a
       non-empty fang_allowlist (Fang filters all WAN ports including SSH: list the
       admin, monitoring and agent source addresses)
+
+- name: Layer 2 settings are valid (same bounds as the refresh script)
+  ansible.builtin.assert:
+    that:
+      - fang_ssh_ports | length > 0
+      - (fang_ssh_ports + fang_open_tcp) | select('integer') | list | length == (fang_ssh_ports + fang_open_tcp) | length
+      - (fang_ssh_ports + fang_open_tcp) | min | int >= 1
+      - (fang_ssh_ports + fang_open_tcp) | max | int <= 65535
+      - fang_open_tcp | length == 0 or (fang_ssh_ports | difference(fang_open_tcp) | length == 0)
+      - fang_ssh_rate is match('^[1-9][0-9]{0,6}/(second|minute)$')
+      - fang_scan_rate is match('^[1-9][0-9]{0,6}/(second|minute)$')
+      - fang_conn_rate is match('^[1-9][0-9]{0,6}/(second|minute)$')
+      - fang_ssh_burst | int >= 1 and fang_ssh_burst | int <= 100000
+      - fang_scan_burst | int >= 1 and fang_scan_burst | int <= 100000
+      - fang_conn_burst | int >= 1 and fang_conn_burst | int <= 100000
+      - fang_meter_size | int >= 16 and fang_meter_size | int <= 4194304
+      - fang_flagged_size | int >= 16 and fang_flagged_size | int <= 4194304
+    fail_msg: >-
+      layer 2: fang_ssh_ports and fang_open_tcp must be integers 1-65535, every SSH port must
+      also be in fang_open_tcp when that is set, rates look like 6/minute (second|minute only),
+      bursts 1-100000, meter and flagged sizes 16-4194304
+  when: fang_attempts_enabled | bool
 
 - name: Require the Eye nftables setup first
   ansible.builtin.stat:

@@ -31,6 +31,7 @@ import hashlib
 import ipaddress
 import json
 import os
+import re
 import subprocess
 import sys
 import syslog
@@ -205,8 +206,7 @@ def set_block(name, nets):
 
 def _rate(key, val):
     """'6/minute' -> same string; anything else is rejected (it lands in nft syntax)."""
-    import re
-    if not re.fullmatch(r"[1-9][0-9]{0,6}/(second|minute|hour|day)", val or ""):
+    if not re.fullmatch(r"[1-9][0-9]{0,6}/(second|minute)", val or ""):
         raise Abort("%s must look like 6/minute, got %r" % (key, val))
     return val
 
@@ -497,8 +497,20 @@ def main(argv):
         return raw, cf, max(cache_age(k) or 0 for k in sources + [cf_key])
 
     def fail_open_empty():
-        _, allow, _ = compute([], None, allowlist, hosts, 0, blockable)
-        apply(render(wan_if, mode, allow, [], stamp, attempts), rules_out, dry_run)
+        # The cached Cloudflare list is used whatever its age (it only allows). Without
+        # it Cloudflare edges would be counted by layer 2, so layer 2 is skipped then.
+        att = attempts
+        cf = cache_load(cf_key)
+        try:
+            _, allow, _ = compute([], cf, allowlist, hosts, 0, blockable)
+        except Abort as e:
+            log("WARNING: cached Cloudflare list unusable (%s)" % e)
+            cf = None
+            _, allow, _ = compute([], None, allowlist, hosts, 0, blockable)
+        if cf is None and att:
+            log("WARNING: layer 2 skipped: no Cloudflare list")
+            att = None
+        apply(render(wan_if, mode, allow, [], stamp, att), rules_out, dry_run)
 
     def age_text(age):
         return "%dh%02dm" % divmod(age // 60, 60)

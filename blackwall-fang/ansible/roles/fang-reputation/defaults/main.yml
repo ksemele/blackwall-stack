@@ -50,7 +50,8 @@ fang_ssh_ports: [22]
 # rendered only when this is non-empty: list every listening and published port
 # (and the agent/monitoring ports), or legitimate clients are flagged as scanners.
 fang_open_tcp: []
-# Rates are "N/second|minute|hour|day"; burst is in packets.
+# Rates are "N/second" or "N/minute" (the meters expire after 5m, longer units would
+# silently degrade); burst is in packets.
 fang_ssh_rate: 6/minute
 fang_ssh_burst: 4
 fang_scan_rate: 10/minute

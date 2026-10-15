@@ -198,7 +198,7 @@ for t in (m.render("eth0", "observe", allow, block), m.render("eth0", "observe",
 # custom ports/rates, and bad values never reach nft syntax
 C = m.attempts_from_conf({"ATTEMPTS": "1", "SSH_PORTS": "2222 22", "SSH_RATE": "3/second", "SSH_BURST": "2"})
 assert "tcp dport { 22, 2222 } add @ssh_meter { ip saddr limit rate over 3/second burst 2 packets }" in m.render("eth0", "observe", allow, block, "", C)
-for bad in ({"SSH_RATE": "6/min; flush ruleset"}, {"SSH_PORTS": "22 x"}, {"OPEN_TCP": "70000"},
+for bad in ({"SSH_RATE": "6/min; flush ruleset"}, {"SSH_RATE": "6/hour"}, {"CONN_RATE": "5/day"}, {"SSH_PORTS": "22 x"}, {"OPEN_TCP": "70000"},
             {"SSH_BURST": "0"}, {"METER_SIZE": "abc"}):
     try:
         m.attempts_from_conf(dict(bad, ATTEMPTS="1")); raise SystemExit("accepted %r" % bad)
@@ -211,4 +211,16 @@ assert run({"u1": None, "u2": None, "cfu": None}) == 3 and "update @scan_flagged
 for k in ("u1", "u2", "cf:cfu"):
     os.utime(m._cache_name(k), (old, old))
 assert run({"u1": None, "u2": None, "cfu": None}) == 4 and "update @rate_flagged" in applied[0], logs
+assert "173.245.48.0/20" in applied[0], "exit 4: cached Cloudflare list must be in allow_v4"
+# exit 2 (first run) with no Cloudflare list anywhere: no layer 2 at all, WARNING logged
+m.STATE_DIR = tempfile.mkdtemp() + "/st3"
+m.table_loaded = lambda: False
+m.os.path.exists = lambda p: True if p.startswith("/sys/class/net/") else False
+assert run({"u1": None, "u2": None, "cfu": None}) == 2, logs
+assert "_flagged" not in applied[0] and "Layer 2" not in applied[0], applied[0]
+assert any(l.startswith("WARNING") and "layer 2 skipped" in l for l in logs), logs
+# exit 2 with a cached Cloudflare list only: CF in allow_v4 and layer 2 present
+m.cache_save("cf:cfu", CF)
+assert run({"u1": None, "u2": None, "cfu": None}) == 2, logs
+assert "173.245.48.0/20" in applied[0] and "update @ssh_flagged" in applied[0], logs
 print("FANG REFRESH OK")

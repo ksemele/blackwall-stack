@@ -17,6 +17,14 @@ Read `STATUS.md` before any work; its "Rules for any automatic block" apply to e
   blocklist, runs `nft -c`, loads, then persists `/etc/nftables.d/blackwall-fang.nft`.
 - `observe` (default) counts hits and drops nothing; `enforce` drops.
 
+## Layer 2: attempt detectors (observe only, same role)
+
+- Same table and chain, after the reputation rules; new TCP SYNs only, IPv4, never a drop.
+- Sets: `open_tcp` (only with `fang_open_tcp`), `{ssh,scan,rate}_meter` (5m, per-source
+  `limit rate over`), `{ssh,scan,rate}_flagged` (1h, counters; `scan_*` only with `open_tcp`).
+- Exporter drop-ins `fang-{ssh,scan,rate}.conf` -> kinds `ssh|scan|rate_attempts` -> Eye rules
+  100210-100212. Skipped on fail-open refreshes without a Cloudflare list.
+
 ## Layout
 
 ```
