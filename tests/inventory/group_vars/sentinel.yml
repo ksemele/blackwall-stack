@@ -8,3 +8,7 @@ wazuh_certs_local_dir: "{{ playbook_dir }}/../../../tests/.wazuh-certs/{{ invent
 wazuh_indexer_network_host: "127.0.0.1"
 wazuh_indexer_heap: "1g"
 wazuh_api_host: "127.0.0.1"
+wazuh_dashboard_listen_host: "127.0.0.1"
+wazuh_dashboard_listen_port: 5601
+wazuh_indexer_url: "https://127.0.0.1:9200"
+wazuh_manager_api_url: "https://127.0.0.1:55000"

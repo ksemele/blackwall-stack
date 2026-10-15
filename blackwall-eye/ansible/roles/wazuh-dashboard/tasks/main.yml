@@ -1,19 +1,25 @@
 ---
-- name: Wait for dpkg lock to be released
-  shell: while fuser /var/lib/dpkg/lock-frontend /var/lib/dpkg/lock >/dev/null 2>&1; do sleep 2; done
-  changed_when: false
+- name: Debian — install dashboard
+  when: ansible_facts['os_family'] == 'Debian'
+  block:
+    - name: Install wazuh-dashboard package
+      apt:
+        name: "wazuh-dashboard{{ wazuh_pkg_suffix }}"
+        allow_change_held_packages: true
+        state: present
+        update_cache: true
 
-- name: Install wazuh-dashboard package
-  apt:
+    - name: Hold wazuh-dashboard
+      ansible.builtin.dpkg_selections:
+        name: wazuh-dashboard
+        selection: hold
+
+- name: RedHat — install dashboard
+  when: ansible_facts['os_family'] == 'RedHat'
+  ansible.builtin.dnf:
     name: "wazuh-dashboard{{ wazuh_pkg_suffix }}"
-    allow_change_held_packages: true
+    disable_excludes: wazuh
     state: present
-    update_cache: true
-
-- name: Hold wazuh-dashboard
-  ansible.builtin.dpkg_selections:
-    name: wazuh-dashboard
-    selection: hold
 
 - name: Ensure /etc/wazuh-dashboard/certs dir exists
   file:
@@ -125,7 +131,7 @@
 
 - name: Wait for dashboard HTTPS to return 302 (full init)
   uri:
-    url: "https://127.0.0.1:443/"
+    url: "https://127.0.0.1:{{ wazuh_dashboard_listen_port }}/"
     method: GET
     status_code: 302
     validate_certs: false

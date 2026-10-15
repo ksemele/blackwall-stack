@@ -2,7 +2,7 @@
 # sentinel.yml — Wazuh server stack on the RHEL-family lab node (black-sentinel-03).
 # Not part of all.yml / bw-lab provision eye; run directly:
 #   cd blackwall-eye && ansible-playbook ansible/playbooks/sentinel.yml
-# Currently: per-host certificates + indexer + manager/filebeat (more roles are added later).
+# Currently: per-host certificates + indexer + manager/filebeat + dashboard (more roles are added later).
 
 - import_playbook: wazuh-certificates.yml
   vars:
@@ -19,3 +19,9 @@
   become: true
   roles:
     - wazuh-manager
+
+- name: Wazuh dashboard on the sentinel node
+  hosts: sentinel
+  become: true
+  roles:
+    - wazuh-dashboard
