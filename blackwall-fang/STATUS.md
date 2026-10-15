@@ -3,8 +3,8 @@ module: blackwall-fang
 status: in_progress
 stage: 5
 last_updated: 2026-10-15
-last_task: "Layer 1 role fang-reputation (table, refresh script, daily timer, observe/enforce) deployed on the lab sentinel; Wazuh event 100206 via exporter drop-in; bw-check pending"
-next_task: "Layer 1: bw-check fang; then layer 2: in-kernel ban on connection attempts"
+last_task: "Layer 1 (reputation blocklists) done: role fang-reputation, Wazuh event 100206, bw-check fang (observe + enforce + junk list) green; real-source observe run on the lab sentinel (4619 entries, exit 0)"
+next_task: "Layer 2: in-kernel ban on connection attempts (blocklist_dynamic with timeout, observe first)"
 blockers: []
 ---
 
@@ -20,12 +20,12 @@ research-only topic for later.
 Each layer is opt-in and starts in observe-only mode (sets fill and alert,
 nothing is dropped) before enforcement is switched on.
 
-**In work:**
+**Layer 1 is done** (role `fang-reputation`, see README; `bw-check fang`).
 
-1. **Reputation** — Spamhaus DROP/EDROP and FireHOL level1 loaded into a
+1. **Reputation** (done) — Spamhaus DROP/EDROP and FireHOL level1 loaded into a
    `blocklist_static` nftables set by a refresh script + timer (same pattern
    as `cf-wall`: sanity floor, `nft -c`, load before persist).
-2. **In-kernel ban on attempts** — nftables rate rules move a source into
+2. **In-kernel ban on attempts** (next) — nftables rate rules move a source into
    `blocklist_dynamic` (with timeout) when it makes too many new connection
    attempts within a window: to closed ports (scans) and to open services such
    as SSH (brute force / floods). Thresholds and timeouts are variables; short

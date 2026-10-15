@@ -15,7 +15,7 @@ deployable via Infrastructure-as-Code with no vendor lock-in.
 | [blackwall-voice](./blackwall-voice/) | Alerts & dashboards | 2 — Active |
 | blackwall-brain | AI analysis agents | 3 — In progress |
 | blackwall-trap | Honeypots | 4 — Planned |
-| blackwall-fang | Active countermeasures: automatic blocking; counter-attack research | 5 — Planned |
+| blackwall-fang | Active countermeasures: automatic blocking; counter-attack research | 5 — In progress (layer 1: reputation blocklists) |
 | [blackwall-scan](./blackwall-scan/) | External attack surface scanning (CESM)¹ | 1 — Active |
 
 ¹ Separate track from the defense chain (eye→voice→brain→trap→fang); see [blackwall-scan/STATUS.md](./blackwall-scan/STATUS.md).

@@ -94,6 +94,7 @@ Checks:
   sentinel   Wazuh server stack on black-sentinel-03 (opt-in: SKIP when not deployed)
   sentinel-agents  throwaway agent enrolls in the sentinel (opt-in, internet, ~2-3 min; not in `all`)
   fw-events  firewall drops become Wazuh alerts 100201/100202 (opt-in, ~1 min, up to ~3 min on failure; not in `all`)
+  fang       reputation blocklists on the sentinel: observe, enforce, junk list, restore (opt-in, ~1-2 min, re-provisions fang; not in `all`)
 
 Exit code: 0 when nothing failed, 1 otherwise.
 USAGE
@@ -766,6 +767,243 @@ check_fw_events() {
   fi
 }
 
+# --- fang --------------------------------------------------------------------
+
+# _fg_counter <table> <set> <ip> — packets counted for <ip> in an nft set on the
+# sentinel; 0 when the element is absent; empty when the sentinel cannot be read.
+_fg_counter() {
+  _fe_ssh black-sentinel-03 "nft -j list set inet $1 $2" 2>/dev/null \
+    | python3 -c '
+import json, sys
+try:
+    d = json.load(sys.stdin)
+except ValueError:
+    sys.exit(1)
+n = 0
+for item in d.get("nftables", []):
+    for e in (item.get("set") or {}).get("elem", []) or []:
+        e = e.get("elem", e) if isinstance(e, dict) else None
+        if isinstance(e, dict) and e.get("val") == sys.argv[1]:
+            n = (e.get("counter") or {}).get("packets", 0)
+print(n)
+' "$3" 2>/dev/null
+}
+
+# Sentinel connection attempts from rocky-02 (the listed lab source): 5 x :443.
+_fg_poke() {
+  _fe_ssh black-rocky-02 'for n in 1 2 3 4 5; do
+      (timeout 0.5 bash -c "echo > /dev/tcp/172.28.0.16/443" >/dev/null 2>&1 &) ; done; sleep 1' >/dev/null 2>&1
+}
+
+# blocklist_static must hold no private/reserved space (the lab exempts rocky's /32 only).
+_fg_reserved_check() {
+  _fe_ssh black-sentinel-03 'nft -j list set inet blackwall_fang blocklist_static' 2>/dev/null \
+    | python3 -c '
+import ipaddress as ip, json, sys
+d = json.load(sys.stdin)
+res = [ip.ip_network(x) for x in ("0.0.0.0/8", "10.0.0.0/8", "100.64.0.0/10", "127.0.0.0/8",
+       "169.254.0.0/16", "172.16.0.0/12", "192.0.0.0/24", "192.0.2.0/24", "192.168.0.0/16",
+       "198.18.0.0/15", "198.51.100.0/24", "203.0.113.0/24", "224.0.0.0/3")]
+nets = []
+for item in d["nftables"]:
+    for e in (item.get("set") or {}).get("elem", []) or []:
+        if isinstance(e, dict) and "prefix" in e:
+            nets.append(ip.ip_network("%s/%s" % (e["prefix"]["addr"], e["prefix"]["len"])))
+        elif isinstance(e, dict) and "range" in e:
+            nets.extend(ip.summarize_address_range(ip.ip_address(e["range"][0]), ip.ip_address(e["range"][1])))
+        elif isinstance(e, str):
+            nets.append(ip.ip_network(e))
+ok = ip.ip_network("172.28.0.15/32")   # lab exemption (fang_test_blockable)
+bad = [str(n) for n in nets if n != ok and any(n.overlaps(r) for r in res)]
+master = [str(n) for n in nets if ip.ip_address("172.28.0.10") in n]
+print("entries=%d" % len(nets))
+if bad or master:
+    print("reserved/allowlisted entries present: %s" % (bad + master))
+    sys.exit(1)
+'
+}
+
+# Fingerprint of everything the refresh must not touch on failure (hits excluded).
+_fg_fingerprint() {
+  _fe_ssh black-sentinel-03 'nft list set inet blackwall_fang allow_v4; nft list set inet blackwall_fang blocklist_static;
+      nft list chain inet blackwall_fang prerouting; cat /etc/nftables.d/blackwall-fang.nft' 2>/dev/null | md5sum
+}
+
+_fg_provision() { # <observe|enforce>
+  bw_ansible blackwall-fang ansible/playbooks/fang.yml -e "fang_mode=$1" 2>&1
+}
+
+# Always leave Fang in observe mode, whatever happened above.
+_fg_restore() {
+  local out
+  if out="$(_fg_provision observe)"; then
+    bw_pass "restored: fang provisioned back to observe"
+  else
+    bw_fail "could not restore observe mode (run: bw-lab provision fang)"
+    printf '%s\n' "$out" | tail -15 | sed 's/^/      /'
+  fi
+}
+
+# Opt-in (~3-5 min): observe -> enforce -> junk list -> back to observe, on the sentinel.
+# rocky-02 (172.28.0.15) is on the lab test list; master (172.28.0.10) is allowlisted.
+check_fang() {
+  bw_info "fang"
+  bw_require_ansible
+
+  local h
+  for h in black-master-00 black-rocky-02 black-sentinel-03; do
+    if ! _fe_ssh "$h" true >/dev/null 2>&1; then
+      bw_fail "$h is unreachable"
+      return
+    fi
+  done
+  local st
+  st="$(_fe_probe black-sentinel-03 'nft list table inet blackwall_fang >/dev/null 2>&1')"
+  if [[ "$st" == error ]]; then
+    bw_fail "ssh to black-sentinel-03 failed during prerequisite probe"
+    return
+  elif [[ "$st" == absent ]]; then
+    bw_skip "fang is not deployed on black-sentinel-03 (run: bw-lab provision fang)"
+    return
+  fi
+  st="$(_fe_probe black-sentinel-03 'test -x /usr/local/sbin/blackwall-fw-export')"
+  if [[ "$st" != present ]]; then
+    bw_fail "blackwall-fw-export is not usable on black-sentinel-03 (run: bw-lab provision sentinel)"
+    return
+  fi
+  st="$(_fe_probe black-sentinel-03 'test -f /etc/wazuh-dashboard/opensearch_dashboards.yml')"
+  if [[ "$st" == absent ]]; then
+    bw_skip "sentinel stack is not deployed (run: bw-lab provision sentinel)"
+    return
+  elif [[ "$st" == error ]]; then
+    bw_fail "ssh to black-sentinel-03 failed during prerequisite probe"
+    return
+  fi
+  st="$(_fe_probe black-sentinel-03 'grep -q "^TEST_MODE=1" /etc/blackwall/fang.conf')"
+  if [[ "$st" != present ]]; then
+    bw_skip "fang lab test configuration is not active (host_vars/black-sentinel-03.yml, run: bw-lab provision fang)"
+    return
+  fi
+  if [[ -z "$(_fe_count sentinel 100206 black-sentinel-03 172.28.0.15 2000-01-01T00:00:00Z)" ]]; then
+    bw_fail "sentinel indexer does not answer"
+    return
+  fi
+
+  # Known starting point: observe, test lists loaded.
+  local out
+  if ! out="$(_fg_provision observe)"; then
+    bw_fail "provision fang (observe) failed"
+    printf '%s\n' "$out" | tail -15 | sed 's/^/      /'
+    return
+  fi
+
+  # 1. no private/reserved space in blocklist_static; master carved out.
+  local res
+  if res="$(_fg_reserved_check)"; then
+    bw_pass "blocklist_static holds no private/reserved ranges, master is carved out ($res)"
+  else
+    bw_fail "blocklist_static: $res"
+  fi
+
+  # 2. observe: rocky hits are counted and alerted, not dropped.
+  local start o0 o1 h0 h1 alerts
+  start="$(_fe_ssh black-sentinel-03 'date -u -d "-3 seconds" +%Y-%m-%dT%H:%M:%SZ' 2>/dev/null)"
+  if [[ -z "$start" ]]; then
+    bw_fail "cannot read the lab clock"
+    _fg_restore
+    return
+  fi
+  sleep 15   # the exporter records the fresh table as a baseline first
+  o0="$(_fg_counter blackwall_wall origin_direct 172.28.0.15)"
+  _fg_poke
+  sleep 2
+  h1="$(_fg_counter blackwall_fang fang_hits 172.28.0.15)"
+  o1="$(_fg_counter blackwall_wall origin_direct 172.28.0.15)"
+  if [[ "${h1:-0}" -gt 0 ]]; then
+    bw_pass "observe: rocky counted in fang_hits ($h1 packets)"
+  else
+    bw_fail "observe: rocky not in fang_hits after 5 connection attempts"
+  fi
+  if [[ "${o1:-0}" -gt "${o0:-0}" ]]; then
+    bw_pass "observe: nothing dropped by fang, cf-wall still sees rocky (origin_direct $o0 -> $o1)"
+  else
+    bw_fail "observe: cf-wall origin_direct did not grow for rocky ($o0 -> ${o1:-?}); fang may be dropping in observe mode"
+  fi
+  _fg_poke    # a second burst so the exporter sees growth after its baseline
+  alerts="$(_fe_wait sentinel 100206 black-sentinel-03 172.28.0.15 "$start")"
+  if [[ "$alerts" -gt 0 ]]; then
+    bw_pass "observe: rule 100206 for srcip 172.28.0.15 (sentinel indexer)"
+  else
+    bw_fail "observe: no rule 100206 alert for 172.28.0.15 within 150 s"
+  fi
+
+  # 3. enforce: rocky dropped in prerouting; master, podman egress and DNS unaffected.
+  if ! out="$(_fg_provision enforce)"; then
+    bw_fail "provision fang (enforce) failed"
+    printf '%s\n' "$out" | tail -15 | sed 's/^/      /'
+    _fg_restore
+    return
+  fi
+  sleep 3
+  o0="$(_fg_counter blackwall_wall origin_direct 172.28.0.15)"
+  h0="$(_fg_counter blackwall_fang fang_hits 172.28.0.15)"
+  _fg_poke
+  sleep 2
+  h1="$(_fg_counter blackwall_fang fang_hits 172.28.0.15)"
+  o1="$(_fg_counter blackwall_wall origin_direct 172.28.0.15)"
+  if [[ "${h1:-0}" -gt "${h0:-0}" ]]; then
+    bw_pass "enforce: fang counter for rocky grows ($h0 -> $h1)"
+  else
+    bw_fail "enforce: fang counter for rocky did not grow ($h0 -> ${h1:-?})"
+  fi
+  if [[ -n "$o1" && "$o1" == "$o0" ]]; then
+    bw_pass "enforce: rocky is dropped before cf-wall (origin_direct unchanged at $o1)"
+  else
+    bw_fail "enforce: cf-wall origin_direct changed for rocky ($o0 -> ${o1:-?}): packets get past fang"
+  fi
+  local code
+  code="$(_fe_ssh black-master-00 "curl -s -m 8 -o /dev/null -w '%{http_code}' http://172.28.0.16:443/" 2>/dev/null)"
+  if [[ "$code" == 200 ]]; then
+    bw_pass "enforce: master (allowlisted) still gets 200 on 443"
+  else
+    bw_fail "enforce: master got '${code:-no answer}' on 443"
+  fi
+  if _fe_ssh black-sentinel-03 'podman exec web wget -q --spider -T 8 http://example.com' >/dev/null 2>&1; then
+    bw_pass "enforce: podman egress works"
+  else
+    bw_fail "enforce: podman egress (wget from the web container) failed"
+  fi
+  if _fe_ssh black-sentinel-03 'podman exec web getent hosts example.com' >/dev/null 2>&1; then
+    bw_pass "enforce: container DNS works"
+  else
+    bw_fail "enforce: container DNS failed"
+  fi
+
+  # 4. a junk list must abort the refresh and leave the live table and file as they were.
+  local fp0 fp1 rc
+  fp0="$(_fg_fingerprint)"
+  rc="$(_fe_ssh black-sentinel-03 'set -e; d=$(mktemp -d)
+      printf "garbage\nnot an ip\n" > "$d/junk.netset"
+      sed "s#^SOURCES=.*#SOURCES=\"file://$d/junk.netset\"#" /etc/blackwall/fang.conf > "$d/fang.conf"
+      set +e
+      BLACKWALL_FANG_CONF="$d/fang.conf" /usr/local/sbin/blackwall-fang-refresh >/dev/null 2>&1
+      echo $?; rm -rf "$d"' 2>/dev/null | tail -1)"
+  fp1="$(_fg_fingerprint)"
+  if [[ "$rc" == 1 && "$fp0" == "$fp1" ]]; then
+    bw_pass "junk list: refresh aborted (exit 1), live table and persisted file unchanged"
+  else
+    bw_fail "junk list: exit '${rc:-?}', table/file unchanged: $([[ "$fp0" == "$fp1" ]] && echo yes || echo NO)"
+  fi
+
+  # 5. back to observe.
+  _fg_restore
+  if _fe_ssh black-sentinel-03 'grep -q "^MODE=observe" /etc/blackwall/fang.conf && ! nft list table inet blackwall_fang | grep -q " drop"' >/dev/null 2>&1; then
+    bw_pass "fang is in observe mode again (no drop rule)"
+  else
+    bw_fail "fang is not back in observe mode"
+  fi
+}
+
 main() {
   case "${1:-all}" in
     all)
@@ -785,6 +1023,7 @@ main() {
     sentinel) check_sentinel ;;
     sentinel-agents) check_sentinel_agents ;;
     fw-events) check_fw_events ;;
+    fang) check_fang ;;
     -h|--help|help) usage; exit 0 ;;
     *) printf 'unknown check: %s\n\n' "$1" >&2; usage >&2; exit 2 ;;
   esac

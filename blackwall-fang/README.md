@@ -67,7 +67,20 @@ Inspect: `nft list table inet blackwall_fang`, `nft list set inet blackwall_fang
 ### Observe vs enforce
 
 Start in `observe`: hits are counted in `fang_hits` but nothing is dropped, so the first
-days show who would have been blocked. Switch with `fang_mode: enforce` and re-run the playbook.
+days show who would have been blocked. Switch with `fang_mode: enforce` and re-run the playbook
+(lab: `tests/bin/bw-lab provision fang -e fang_mode=enforce`). Review the 100206 alerts first:
+every source that appears there will be dropped in enforce mode, so add legitimate ones to
+`fang_allowlist`.
+
+### What 100206 means
+
+Wazuh rule 100206 (level 5, group blocklist) fires when a source on `blocklist_static` sent
+packets that reached the WAN hook; `srcip` is the listed source. In observe it means "would be
+dropped", in enforce "was dropped" (the line carries no mode, check `MODE` in
+`/etc/blackwall/fang.conf`). Because each refresh rebuilds the table, counters restart and the
+exporter reports the new total once per cooldown. Needs the Eye exporter
+(`blackwall-fw-export`) and its `/etc/blackwall/fw-export.d/` directory, which must stay
+root-owned (the exporter skips drop-ins that are not).
 
 ### Rollback
 
@@ -86,4 +99,10 @@ ansible-playbook ansible/playbooks/verify-fang.yml
 ```
 
 Lab (black-sentinel-03, group `fang`, test lists in `tests/fang/`): `tests/bin/bw-lab provision fang`
-(extra args pass through, e.g. `-e fang_mode=enforce`). Unit test: `python3 tests/unit/fang_refresh_test.py`.
+(extra args pass through, e.g. `-e fang_mode=enforce`). End-to-end: `tests/bin/bw-check fang`
+(opt-in; observe, enforce, junk list, back to observe). Unit test: `python3 tests/unit/fang_refresh_test.py`.
+
+Real-source run (checked on the lab sentinel, observe mode, test mode off): Spamhaus DROP v4
+JSON 1680 entries, FireHOL level1 4631 raw / 4618 after the reserved-range filter, 4619 merged
+in `blocklist_static` (shortest prefix /12, no private/reserved range, no overlap with
+`allow_v4`); `allow_v4` 19 entries (Cloudflare ranges, 172.28.0.10, host addresses); exit 0.
