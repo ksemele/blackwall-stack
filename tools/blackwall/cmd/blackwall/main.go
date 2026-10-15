@@ -43,6 +43,11 @@ func main() {
 }
 
 func run() error {
+	// Ctrl+C / SIGTERM / SIGHUP cancel sigCtx instead of killing the process,
+	// so the deferred tunnel Close always runs (tunnel start, --once, TUI).
+	sigCtx, stopSignals := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM, syscall.SIGHUP)
+	defer stopSignals()
+
 	var (
 		flagContext              string
 		flagConfig               string
@@ -134,10 +139,6 @@ func run() error {
 		return fmt.Errorf("context %q has no wazuh: subsystem", cfg.Current)
 	}
 
-	// Ctrl+C / SIGTERM / SIGHUP before the TUI owns the terminal (tunnel start,
-	// --once) cancel sigCtx, so the deferred Close still kills ssh.
-	sigCtx, stopSignals := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM, syscall.SIGHUP)
-	defer stopSignals()
 	live := newLiveTunnel()
 	defer live.Close() // also runs after a panic in this goroutine
 
