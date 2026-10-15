@@ -294,6 +294,11 @@ set=<set>                   # dynamic set with per-element counters
 and is treated like a built-in set (silent baseline, per-source cooldown, cap;
 ordered after origin_direct and the scan bursts). A malformed or duplicate file
 is skipped with a `blackwall-fw-export: ignoring ...` stderr line (rule 100205).
+Files that are not owned by root or are group/other-writable are skipped the same
+way, so `/etc/blackwall/fw-export.d` must stay root-owned (0755, files 0644): anyone
+who can write there can make the exporter read arbitrary nft sets. A malformed
+drop-in raises rule 100205 on every run (every 10 s to a few minutes, depending on
+the interval) until it is fixed or removed.
 Fang uses this for `kind=blocklist_hit` (rule 100206); the decoder accepts any
 `\w+` kind, a new kind needs only its own rule.
 

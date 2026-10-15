@@ -7,6 +7,8 @@ here=$(cd "$(dirname "$0")" && pwd)
 exp="$here/../ansible/roles/nftables/files/blackwall-fw-export"
 fx="$here/testdata/fw-export"
 fail=0
+# drop-in files must be owned by root in production; the test owns them itself
+export BLACKWALL_FW_DROPIN_UID=$(id -u)
 tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT
 fresh() { mktemp -d "$tmp/s.XXXXXX"; }
 
@@ -179,6 +181,21 @@ check dropin-hit "$B src=172.28.0.15 new=3 total=4 burst=no" "$(runat "$f" "$s" 
 errs=$(env BLACKWALL_FW_NFT_JSON_DIR="$f" BLACKWALL_FW_STATE_DIR="$(fresh)" BLACKWALL_FW_DROPIN_DIR="$D" \
     BLACKWALL_FW_CONF=/nonexistent python3 "$exp" 2>&1 >/dev/null)
 check dropin-errors 5 "$(echo "$errs" | grep -c '^blackwall-fw-export: ignoring')"
+# unsafe drop-ins are skipped: group/other-writable, foreign owner; names are quoted
+D2="$tmp/dropin-unsafe"; mkdir -p "$D2"
+printf 'kind=gw\ntable=t\nset=s\n' > "$D2/gw.conf"; chmod 664 "$D2/gw.conf"
+printf 'kind=ow\ntable=t\nset=s\n' > "$D2/ow.conf"; chmod 646 "$D2/ow.conf"
+printf 'kind=okk\ntable=t\nset=s\n' > "$D2/ok.conf"; chmod 644 "$D2/ok.conf"
+printf 'kind=nl\ntable=t\nset=s\n' > "$D2/$(printf 'a\nb').conf"; chmod 666 "$D2/$(printf 'a\nb').conf"
+errs=$(env BLACKWALL_FW_NFT_JSON_DIR="$f" BLACKWALL_FW_STATE_DIR="$(fresh)" BLACKWALL_FW_DROPIN_DIR="$D2" \
+    BLACKWALL_FW_CONF=/nonexistent python3 "$exp" 2>&1 >/dev/null)
+check dropin-unsafe-skipped 3 "$(echo "$errs" | grep -c '^blackwall-fw-export: ignoring')"
+check dropin-unsafe-quoted 0 "$(echo "$errs" | grep -vc '^blackwall-fw-export: ignoring')"
+errs=$(env BLACKWALL_FW_NFT_JSON_DIR="$f" BLACKWALL_FW_STATE_DIR="$(fresh)" BLACKWALL_FW_DROPIN_DIR="$D2" \
+    BLACKWALL_FW_DROPIN_UID=0 BLACKWALL_FW_CONF=/nonexistent python3 "$exp" 2>&1 >/dev/null)
+if [ "$(id -u)" != 0 ]; then
+    check dropin-foreign-owner 4 "$(echo "$errs" | grep -c '^blackwall-fw-export: ignoring')"
+fi
 # silent baseline, per-source cooldown and a missing drop-in dir
 s=$(fresh)
 check dropin-baseline "" "$(runat "$f" "$s" 1000 BLACKWALL_FW_DROPIN_DIR="$D")"
