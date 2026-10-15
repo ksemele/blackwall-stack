@@ -65,6 +65,7 @@ func (p *process) kill() {
 			return
 		}
 		pid := p.cmd.Process.Pid
+		kids := children(pid) // before SIGTERM: afterwards they are reparented
 		signalGroup(pid, false)
 		select {
 		case <-p.done:
@@ -72,8 +73,23 @@ func (p *process) kill() {
 			signalGroup(pid, true)
 			<-p.done
 		}
+		// A well-behaved wrapper forwards SIGTERM; give its child a moment,
+		// then make sure it is gone.
+		for i := 0; i < 20 && anyAlive(kids); i++ {
+			time.Sleep(50 * time.Millisecond)
+		}
+		killStray(kids)
 	})
 	<-p.done
+}
+
+func anyAlive(pids []int) bool {
+	for _, p := range pids {
+		if alive(p) {
+			return true
+		}
+	}
+	return false
 }
 
 // exitError describes why the process ended, with the stderr tail.

@@ -134,9 +134,9 @@ func run() error {
 		return fmt.Errorf("context %q has no wazuh: subsystem", cfg.Current)
 	}
 
-	// Ctrl+C / SIGTERM before the TUI owns the terminal (tunnel start,
+	// Ctrl+C / SIGTERM / SIGHUP before the TUI owns the terminal (tunnel start,
 	// --once) cancel sigCtx, so the deferred Close still kills ssh.
-	sigCtx, stopSignals := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	sigCtx, stopSignals := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM, syscall.SIGHUP)
 	defer stopSignals()
 	live := newLiveTunnel()
 	defer live.Close() // also runs after a panic in this goroutine
@@ -270,6 +270,15 @@ func run() error {
 	})
 
 	prog := tea.NewProgram(root, tea.WithAltScreen())
+	// bubbletea handles SIGINT/SIGTERM; a closed terminal (SIGHUP) would
+	// otherwise kill the process without running the deferred tunnel Close.
+	hup := make(chan os.Signal, 1)
+	signal.Notify(hup, syscall.SIGHUP)
+	defer signal.Stop(hup)
+	go func() {
+		<-hup
+		prog.Kill()
+	}()
 	if _, err := prog.Run(); err != nil {
 		return err
 	}

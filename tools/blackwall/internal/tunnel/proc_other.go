@@ -15,3 +15,9 @@ func signalGroup(pid int, _ bool) {
 		_ = p.Kill()
 	}
 }
+
+func children(int) []int { return nil }
+
+func killStray([]int) {}
+
+func alive(int) bool { return false }

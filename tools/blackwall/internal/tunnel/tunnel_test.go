@@ -135,26 +135,31 @@ func TestOpen_ContextCancelAborts(t *testing.T) {
 	}
 }
 
-// sshpass-style wrappers fork the real ssh; Close must kill it too.
+// sshpass-style wrappers fork the real ssh; Close must kill it too, also
+// when it runs in its own session (outside the process group).
 func TestClose_KillsGrandchild(t *testing.T) {
-	s := fakeSpec(t, "fork", 1)
-	pidFile := filepath.Join(t.TempDir(), "pid")
-	t.Setenv("BW_FAKE_PIDFILE", pidFile)
-	tn, err := Open(context.Background(), s)
-	if err != nil {
-		t.Fatal(err)
-	}
-	b, err := os.ReadFile(pidFile)
-	if err != nil {
-		t.Fatal(err)
-	}
-	child, _ := strconv.Atoi(string(b))
-	tn.Close()
-	eventually(t, "grandchild to exit", func() bool {
-		return errors.Is(syscall.Kill(child, 0), syscall.ESRCH)
-	})
-	if accepts(s.Forwards[0].LocalPort) {
-		t.Error("forward still open after Close")
+	for _, mode := range []string{"fork", "fork-setsid"} {
+		t.Run(mode, func(t *testing.T) {
+			s := fakeSpec(t, mode, 1)
+			pidFile := filepath.Join(t.TempDir(), "pid")
+			t.Setenv("BW_FAKE_PIDFILE", pidFile)
+			tn, err := Open(context.Background(), s)
+			if err != nil {
+				t.Fatal(err)
+			}
+			b, err := os.ReadFile(pidFile)
+			if err != nil {
+				t.Fatal(err)
+			}
+			child, _ := strconv.Atoi(string(b))
+			tn.Close()
+			eventually(t, "grandchild to exit", func() bool {
+				return errors.Is(syscall.Kill(child, 0), syscall.ESRCH)
+			})
+			if accepts(s.Forwards[0].LocalPort) {
+				t.Error("forward still open after Close")
+			}
+		})
 	}
 }
 

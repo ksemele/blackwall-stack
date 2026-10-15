@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 )
@@ -22,6 +23,8 @@ import (
 //	hang    never listen
 //	fork    start a child in listen mode (like sshpass -> ssh), write its
 //	        pid to BW_FAKE_PIDFILE, then wait
+//	fork-setsid  as fork, but the child runs in a new session (outside the
+//	        process group) and SIGTERM is not forwarded to it
 func TestMain(m *testing.M) {
 	if mode := os.Getenv("BW_FAKE_SSH"); mode != "" {
 		fakeSSH(mode)
@@ -43,9 +46,12 @@ func fakeSSH(mode string) {
 		for {
 			time.Sleep(time.Hour)
 		}
-	case "fork":
+	case "fork", "fork-setsid":
 		child := exec.Command(os.Args[0], os.Args[1:]...)
 		child.Env = append(os.Environ(), "BW_FAKE_SSH=listen", "BW_FAKE_MODE_FILE=")
+		if mode == "fork-setsid" { // like sshpass: ssh leaves our process group
+			child.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
+		}
 		if err := child.Start(); err != nil {
 			os.Exit(1)
 		}
