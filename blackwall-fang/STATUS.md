@@ -2,9 +2,9 @@
 module: blackwall-fang
 status: in_progress
 stage: 5
-last_updated: 2026-10-15
-last_task: "Layer 1 (reputation blocklists) done: role fang-reputation, Wazuh event 100206, bw-check fang (observe + enforce + junk list) green; real-source observe run on the lab sentinel (4619 entries, exit 0)"
-next_task: "Layer 2 observe: bw-check coverage and tuning (spec 2026-10-16-fang-attempts-observe-design.md), then enforce"
+last_updated: 2026-10-16
+last_task: "Layer 2 (attempt detectors, observe) done: ssh/scan/rate meters + flagged sets, Eye rules 100210-100212, bw-check fang covers them (rocky flagged, host-01 and master not, handshake still completes)"
+next_task: "Tune layer 2 thresholds from real alerts on the target host, then implement the enforce spec docs/superpowers/specs/2026-10-16-fang-attempts-enforce-design.md"
 blockers: []
 ---
 

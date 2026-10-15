@@ -128,6 +128,14 @@ scanners; leave it empty to run without the scan detector. The role renders the 
 enabled detectors only (and removes the others). Inspect: `nft list set inet blackwall_fang
 ssh_flagged` (also `scan_flagged`, `rate_flagged`).
 
+Reading the alerts: rule 100210/100211 (level 6) and 100212 (level 5) carry `srcip` = the flagged
+source; the exporter reports growth of that source's flagged-set counter, so repeated alerts mean
+the source keeps connecting. Triage with `nft list set inet blackwall_fang ssh_flagged` (entries
+live 1h). Tune from real alerts on the target host: a legitimate source -> `fang_allowlist`; a
+real service flagged as scan -> add its port to `fang_open_tcp`; chronic noise -> raise
+`fang_*_rate` / `fang_*_burst`. Lab check: `bw-check fang` (rocky, host-01 and master against the
+sentinel; asserts growth over a baseline taken at the start, since flagged entries persist).
+
 Limits and tuning:
 
 - Legitimate high-rate sources belong in `fang_allowlist`: uptime and monitoring probes, NAT'd
