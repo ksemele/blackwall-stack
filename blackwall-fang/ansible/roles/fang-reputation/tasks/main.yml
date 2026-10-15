@@ -7,6 +7,9 @@
       - fang_sources | length > 0
       - fang_mode != 'enforce' or (fang_allowlist | length > 0)
       - fang_max_cache_age_days | int > 0
+      - fang_test_mode or (fang_test_blockable | length == 0 and fang_test_files | length == 0)
+      - not fang_test_mode or (fang_sources | reject('match', '^file://') | list | length == 0)
+      - fang_test_mode or (fang_sources | select('match', '^file://') | list | length == 0)
     fail_msg: >-
       fang_wan_if is required, fang_mode must be observe|enforce, test lists
       need fang_test_mode, fang_test_mode requires file:// sources only
@@ -18,7 +21,7 @@
   ansible.builtin.assert:
     that:
       - fang_ssh_ports | length > 0
-      - (fang_ssh_ports + fang_open_tcp) | select('integer') | list | length == (fang_ssh_ports + fang_open_tcp) | length
+      - (fang_ssh_ports + fang_open_tcp) | map('int') | list == (fang_ssh_ports + fang_open_tcp)
       - (fang_ssh_ports + fang_open_tcp) | min | int >= 1
       - (fang_ssh_ports + fang_open_tcp) | max | int <= 65535
       - fang_open_tcp | length == 0 or (fang_ssh_ports | difference(fang_open_tcp) | length == 0)
