@@ -40,6 +40,20 @@
         disable_excludes: wazuh
         state: present
 
+- name: Detect container environment (/.dockerenv)
+  ansible.builtin.stat:
+    path: /.dockerenv
+  register: _dockerenv
+
+# In containers the kernel value belongs to the Docker host; tolerate failure there only.
+- name: Set vm.max_map_count for the indexer
+  ansible.posix.sysctl:
+    name: vm.max_map_count
+    value: "262144"
+    sysctl_set: true
+    state: present
+  ignore_errors: "{{ _dockerenv.stat.exists }}"
+
 - name: Unpack cert bundle on master
   unarchive:
     src: "{{ wazuh_certs_local_dir }}/wazuh-certificates.tar"

@@ -90,6 +90,11 @@
         url: http://127.0.0.1:443/
         status_code: 200
 
+    - name: Snapshot forward chain before the allowed request
+      ansible.builtin.command: nft -j list chain inet blackwall_base forward
+      register: fwd_before
+      changed_when: false
+
     # Prod 443 path: cf-wall allow (admin source) -> netavark DNAT -> forward
     # `ct status dnat accept`. 443 is not in public_tcp and forward policy is drop.
     - name: 443 answers 200 from an allowed source (black-master-00)
@@ -114,10 +119,12 @@
     - name: Forward `ct status dnat` rule counted the allowed request
       ansible.builtin.assert:
         that: >-
-          (fwd_json.stdout | from_json).nftables | selectattr('rule', 'defined') | map(attribute='rule')
+          ((fwd_json.stdout | from_json).nftables | selectattr('rule', 'defined') | map(attribute='rule')
           | selectattr('expr', 'search', 'dnat') | map(attribute='expr') | flatten
-          | selectattr('counter', 'defined') | map(attribute='counter.packets') | first | default(0) > 0
-        fail_msg: "ct status dnat counter is 0 - 443 did not take the cf-wall -> DNAT -> forward path"
+          | selectattr('counter', 'defined') | map(attribute='counter.packets') | first | default(0)) > ((fwd_before.stdout | from_json).nftables | selectattr('rule', 'defined') | map(attribute='rule')
+          | selectattr('expr', 'search', 'dnat') | map(attribute='expr') | flatten
+          | selectattr('counter', 'defined') | map(attribute='counter.packets') | first | default(0))
+        fail_msg: "ct status dnat counter did not increase - 443 did not take the cf-wall -> DNAT -> forward path"
 
     - name: Container egress and DNS work under forward policy drop
       ansible.builtin.command: podman exec web wget -q -T8 --spider http://example.com

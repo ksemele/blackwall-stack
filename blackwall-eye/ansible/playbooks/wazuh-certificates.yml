@@ -36,7 +36,7 @@
       become: false
 
     - name: Stop here if bundle exists (idempotency)
-      meta: end_play
+      meta: end_host
       when: _bundle_local.stat.exists
 
     - name: Ensure remote work dir exists
@@ -98,3 +98,8 @@
         src: "{{ wazuh_certs_remote_dir }}/wazuh-certificates.tar"
         dest: "{{ _certs_dir }}/wazuh-certificates.tar"
         flat: true
+
+    - name: Remove remote work dir (CA key and node keys)
+      file:
+        path: "{{ wazuh_certs_remote_dir }}"
+        state: absent
