@@ -166,14 +166,14 @@ check cap-summary "blackwall-fw: kind=summary suppressed=51 burst=no" "$(echo "$
 
 # Drop-in sets (/etc/blackwall/fw-export.d/*.conf)
 D="$tmp/dropin"; mkdir -p "$D"
-printf 'kind=blocklist_hit\ntable=inet blackwall_fang\nset=fang_hits\n' > "$D/fang.conf"
+printf 'kind=blocklist_would_drop\ntable=inet blackwall_fang\nset=fang_hits\n' > "$D/fang.conf"
 printf 'kind=bad kind\ntable=x\nset=y\n' > "$D/malformed.conf"
 printf 'table=x\n' > "$D/missing.conf"
 printf 'kind=input_drop\ntable=t\nset=s\n' > "$D/dup-builtin.conf"
 printf 'kind=summary\ntable=t\nset=s\n' > "$D/dup-summary.conf"
-printf 'kind=blocklist_hit\ntable=t\nset=s\n' > "$D/zz-dup.conf"
+printf 'kind=blocklist_would_drop\ntable=t\nset=s\n' > "$D/zz-dup.conf"
 printf 'kind=x\ntable=t\nset=s\n' > "$D/ignored.txt"
-H=blackwall_fang.fang_hits; B="blackwall-fw: kind=blocklist_hit"
+H=blackwall_fang.fang_hits; B="blackwall-fw: kind=blocklist_would_drop"
 s=$(fresh); f="$tmp/di"
 gen "$f" $H 172.28.0.15=1; runat "$f" "$s" 1000 BLACKWALL_FW_DROPIN_DIR="$D" >/dev/null
 gen "$f" $H 172.28.0.15=4
@@ -196,6 +196,11 @@ errs=$(env BLACKWALL_FW_NFT_JSON_DIR="$f" BLACKWALL_FW_STATE_DIR="$(fresh)" BLAC
 if [ "$(id -u)" != 0 ]; then
     check dropin-foreign-owner 4 "$(echo "$errs" | grep -c '^blackwall-fw-export: ignoring')"
 fi
+# a FIFO named *.conf must be skipped, not hang the exporter
+D3="$tmp/dropin-fifo"; mkdir -p "$D3"; mkfifo "$D3/pipe.conf"
+errs=$(env BLACKWALL_FW_NFT_JSON_DIR="$f" BLACKWALL_FW_STATE_DIR="$(fresh)" BLACKWALL_FW_DROPIN_DIR="$D3" \
+    BLACKWALL_FW_CONF=/nonexistent perl -e 'alarm 10; exec @ARGV' python3 "$exp" 2>&1 >/dev/null)
+check dropin-fifo-skipped 1 "$(echo "$errs" | grep -c '^blackwall-fw-export: ignoring')"
 # silent baseline, per-source cooldown and a missing drop-in dir
 s=$(fresh)
 check dropin-baseline "" "$(runat "$f" "$s" 1000 BLACKWALL_FW_DROPIN_DIR="$D")"
