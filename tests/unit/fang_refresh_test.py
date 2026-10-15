@@ -15,7 +15,7 @@ S = lambda nets: sorted(str(n) for n in nets)
 PUBLIC = "".join("%d.%d.%d.0/24\n" % (a, a + 1, a + 2) for a in range(20, 30))
 FIREHOL = "# firehol\n0.0.0.0/8\n10.0.0.0/8\n127.0.0.0/8\n172.16.0.0/12\n192.168.0.0/16\n224.0.0.0/3\n100.64.0.0/10\n" + PUBLIC
 DROP = '{"cidr":"5.5.5.0/24","sblid":"SBL1"}\n{"cidr":"6.6.6.0/24"}\n{"type":"metadata","copyright":"x"}\nnot json\n'
-CF = "173.245.48.0/20\n103.21.244.0/22\n"
+CF = "173.245.48.0/20\n103.21.244.0/22\n" + "".join("%d.0.0.0/20\n" % i for i in range(100, 108))
 
 # 1. private/reserved removed (incl. 224.0.0.0/3 despite being /3), parsers for both formats
 block, allow, _ = m.compute([FIREHOL, DROP], CF, [], [], 1)
@@ -28,7 +28,7 @@ assert all(not n.overlaps(r) for n in block for r in m.RESERVED), "reserved spac
 
 # 2. allowlist, Cloudflare and host addresses are carved out
 big = "5.0.0.0/16\n7.7.7.0/24\n9.9.9.0/24\n" + PUBLIC
-block, allow, _ = m.compute([big], "7.7.7.0/24\n", ["5.0.1.0/24"], ["9.9.9.9"], 1)
+block, allow, _ = m.compute([big], "7.7.7.0/24\n" + CF, ["5.0.1.0/24"], ["9.9.9.9"], 1)
 assert not any(n.overlaps(N("5.0.1.0/24")) for n in block)
 assert not any(n.overlaps(N("7.7.7.0/24")) for n in block)
 assert not any(n.overlaps(N("9.9.9.9/32")) for n in block)
@@ -60,8 +60,10 @@ block, allow, _ = m.compute([DROP + PUBLIC], CF, ["203.0.113.7"], [], 1)
 obs = m.render("eth0", "observe", allow, block)
 enf = m.render("eth0", "enforce", allow, block)
 assert "priority -160" in obs and 'iifname != "eth0" accept' in obs
-assert "update @fang_hits { ip saddr counter } counter\n" in obs and " counter drop" not in obs
-assert "update @fang_hits { ip saddr counter } counter drop\n" in enf
+UPD = "ip saddr @blocklist_static update @fang_hits { ip saddr counter }\n"
+DROP = "ip saddr @blocklist_static counter drop\n"
+assert UPD in obs and "drop" not in obs.split("chain prerouting")[1]
+assert UPD in enf and DROP in enf and enf.index(UPD) < enf.index(DROP)  # drop is its own rule
 assert obs.index("@allow_v4 accept") < obs.index("established,related") < obs.index("@blocklist_static")
 assert "5.5.5.0/24" in obs and "173.245.48.0/20" in obs
 try:
@@ -75,4 +77,23 @@ for u in ("file:///etc/passwd", "http://example.com/x"):
         m.fetch(u, False); raise SystemExit("fetched " + u)
     except m.Abort:
         pass
+# 8. Cloudflare floor, per-source floor, extra reserved blocks, IPv6 allowlist skipped
+try:
+    m.compute([PUBLIC], "173.245.48.0/20\n", [], [], 1); raise SystemExit("CF floor not enforced")
+except m.Abort as e:
+    assert "Cloudflare" in str(e), e
+try:
+    m.compute([PUBLIC, "garbage\n"], CF, [], [], 4); raise SystemExit("junk source accepted")
+except m.Abort as e:
+    assert "source #2" in str(e), e
+block, _, _ = m.compute([PUBLIC + "192.31.196.0/24\n192.52.193.0/24\n192.175.48.0/24\n"], CF,
+                        ["2001:db8::/32"], [], 1)
+assert not any(n.overlaps(N(x)) for n in block for x in ("192.31.196.0/24", "192.52.193.0/24", "192.175.48.0/24"))
+
+# 9. cache roundtrip (0700 dir, atomic)
+import tempfile
+m.STATE_DIR = tempfile.mkdtemp() + "/st"
+assert m.cache_load("k") is None
+m.cache_save("k", "abc"); assert m.cache_load("k") == "abc"
+assert oct(os.stat(m.STATE_DIR).st_mode & 0o777) == "0o700"
 print("FANG REFRESH OK")

@@ -6,9 +6,12 @@
       - fang_mode in ['observe', 'enforce']
       - fang_sources | length > 0
       - fang_test_mode or (fang_test_blockable | length == 0 and fang_test_files | length == 0)
+      - not fang_test_mode or (fang_sources | reject('match', '^file://') | list | length == 0)
+      - fang_test_mode or (fang_sources | select('match', '^file://') | list | length == 0)
     fail_msg: >-
-      fang_wan_if is required, fang_mode must be observe|enforce, and test
-      lists need fang_test_mode
+      fang_wan_if is required, fang_mode must be observe|enforce, test lists
+      need fang_test_mode, and fang_test_mode requires file:// sources only
+      (and file:// sources require fang_test_mode)
 
 - name: Require the Eye nftables setup first
   ansible.builtin.stat:
@@ -108,7 +111,16 @@
   args:
     creates: /etc/nftables.d/blackwall-fang.nft
   register: fang_first
-  failed_when: fang_first.rc not in [0, 2]
+  failed_when: fang_first.rc not in [0, 2, 3]
+
+- name: WARNING - degraded refresh (fail-open empty blocklist, or applied from cache)
+  ansible.builtin.debug:
+    msg: >-
+      WARNING on {{ inventory_hostname }}: the refresh could not download the lists.
+      rc=2 loaded an EMPTY blocklist (nothing is blocked); rc=3 rebuilt the table from
+      cached data with the current mode and allowlist. Check journalctl -u
+      blackwall-fang-refresh and the sources.
+  when: (fang_refresh.rc | default(0)) in [2, 3] or (fang_first.rc | default(0)) in [2, 3]
 
 - name: Enable the refresh timer
   ansible.builtin.systemd:

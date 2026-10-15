@@ -4,17 +4,3 @@ fang_wan_if: eth0
 fang_mode: observe
 # black-master-00 plays the owner/admin source.
 fang_allowlist: [172.28.0.10]
-fang_min_entries: 5
-
-# The lab hosts are private addresses, so the sources are local test lists and
-# the test-only exemption lets black-rocky-02 and black-master-00 through the
-# reserved-range filter (the lists also carry private/reserved junk and an
-# entry for master, which the allowlist must carve out).
-fang_test_mode: true
-fang_test_blockable: [172.28.0.10/32, 172.28.0.15/32]
-fang_test_files:
-  - "{{ playbook_dir }}/../../../tests/fang/reputation-test.netset"
-  - "{{ playbook_dir }}/../../../tests/fang/reputation-test-drop.json"
-fang_sources:
-  - file:///etc/blackwall/fang-test/reputation-test.netset
-  - file:///etc/blackwall/fang-test/reputation-test-drop.json

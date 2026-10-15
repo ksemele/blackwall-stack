@@ -27,10 +27,10 @@ Fang adds `zz-blackwall-fang.conf` so `systemctl stop nftables` removes its tabl
 | `fang_allowlist` | `[]` | IPv4 CIDRs never blocked (owner, admin, monitoring); Cloudflare ranges and the host's own addresses are always added |
 | `fang_sources` | Spamhaus DROP v4 JSON, FireHOL level1 | https URLs |
 | `fang_cloudflare_url` | `https://www.cloudflare.com/ips-v4` | allowlist source |
-| `fang_min_entries` | `500` | abort when fewer entries survive filtering |
+| `fang_min_entries` | `500` | abort when fewer entries survive filtering; each source must also yield at least `min_entries / number of sources` |
 | `fang_refresh_calendar` / `fang_refresh_jitter` | `daily` / `1h` | timer schedule |
-| `fang_test_mode` | `false` | lab only: allows `file://` sources and `fang_test_blockable` |
-| `fang_test_blockable` | `[]` | lab only: private CIDRs exempt from the reserved filter |
+| `fang_test_mode` | `false` | lab only: allows `file://` sources (and then only `file://`) and `fang_test_blockable`; set it in host_vars, never in a shared group |
+| `fang_test_blockable` | `[]` | lab only: single private hosts (/32) exempt from the reserved filter |
 | `fang_test_files` | `[]` | lab only: controller files copied to `/etc/blackwall/fang-test/` |
 
 ### How it runs
@@ -45,11 +45,16 @@ Fang adds `zz-blackwall-fang.conf` so `systemctl stop nftables` removes its tabl
 4. renders the table for the mode, checks it with `nft -c`, loads it, and only then writes
    `/etc/nftables.d/blackwall-fang.nft` (loaded at boot by the Eye nftables config).
 
-Any failure leaves the live table and the persisted file as they were. The one exception is
-the first run (no table, no persisted file) with no successful fetch: an empty blocklist is
-loaded (fail open) and the script exits 2. `blackwall-fang-refresh.timer` repeats the refresh
+Any failure leaves the live table and the persisted file as they were (also: Cloudflare list
+under 10 prefixes, or one source junk/empty next to a good one). Validated source data and the
+Cloudflare list are cached in `/var/lib/blackwall-fang/` (0700). If a download fails, the table
+is rebuilt from that cache with the **current** mode and allowlist (exit 3, the playbook prints a
+warning), so allowlist/mode changes never wait for the internet. Without a cache, the first run
+(no table, no persisted file) loads an empty blocklist (fail open, exit 2, warning). Exit codes:
+0 ok, 1 aborted, 2 fail-open, 3 from cache. `blackwall-fang-refresh.timer` repeats the refresh
 daily (`Persistent`, randomized delay); the role also runs it on install and whenever the script
-or config change. Each refresh replaces the table, so `fang_hits` counters restart.
+or config change. Each refresh replaces the table, so `fang_hits` counters restart. In enforce
+mode the drop is its own rule, so a full `fang_hits` set cannot let a listed source through.
 
 Inspect: `nft list table inet blackwall_fang`, `nft list set inet blackwall_fang fang_hits`,
 `journalctl -u blackwall-fang-refresh`.
