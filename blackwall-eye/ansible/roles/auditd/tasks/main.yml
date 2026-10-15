@@ -1,15 +1,13 @@
 ---
 - name: Wait for dpkg lock to be released
+  when: ansible_facts['os_family'] == 'Debian'
   shell: while fuser /var/lib/dpkg/lock-frontend /var/lib/dpkg/lock >/dev/null 2>&1; do sleep 2; done
   changed_when: false
 
-- name: Install auditd and audispd-plugins
-  apt:
-    name:
-      - auditd
-      - audispd-plugins
+- name: Install auditd packages
+  ansible.builtin.package:
+    name: "{{ auditd_packages[ansible_facts['os_family']] }}"
     state: present
-    update_cache: true
 
 - name: Set log_format to ENRICHED in auditd.conf
   lineinfile:
@@ -26,7 +24,7 @@
     owner: root
     group: root
     mode: "0640"
-  notify: Restart auditd
+  notify: Reload audit rules
 
 - name: Detect container environment (/.dockerenv)
   stat:
