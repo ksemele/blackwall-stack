@@ -1,0 +1,53 @@
+name: Feature request
+description: A new role, detection, check or improvement.
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Blackwall Stack favours **signal over noise**: a few high-confidence
+        detections before broad coverage. Open ideas and design questions fit
+        better in Discussions; use this form for a concrete proposal.
+  - type: dropdown
+    id: module
+    attributes:
+      label: Module
+      options:
+        - blackwall-eye (Wazuh, auditd, nftables, rules)
+        - blackwall-voice (alerts, metrics)
+        - blackwall-brain (AI analysis)
+        - blackwall-trap (honeypots, canaries)
+        - blackwall-fang (blocklists)
+        - blackwall-scan (perimeter scan)
+        - tests (lab, bw-lab, bw-check)
+        - new module / not sure
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What threat, gap or pain does this address? For detections, what attack would it catch?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposal
+      description: What should the stack do? Roles, variables, rules, alert levels.
+    validations:
+      required: true
+  - type: textarea
+    id: noise
+    attributes:
+      label: Noise and false positives
+      description: How often would this fire on a normal host? How would an operator tune it?
+  - type: textarea
+    id: verify
+    attributes:
+      label: How to verify
+      description: How the lab or a `bw-check` assertion could prove it works.
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered

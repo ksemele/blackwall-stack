@@ -10,10 +10,11 @@ blockers: []
 
 ## Scope
 
-Fang is the active-countermeasures module. Its first, defensive part is
-production code: automatic blocking of hostile sources on hosts protected by
-blackwall-eye's `nftables` / `cf-wall` roles. Counter-attack tooling remains a
-research-only topic for later.
+Fang is the active-response module: automated blocking of hostile sources on
+hosts protected by blackwall-eye's `nftables` / `cf-wall` roles. That is the
+whole production scope.
+
+Counter-attack is research only: out of scope for production, not shipped.
 
 ## Plan (agreed 2026-10-15)
 
