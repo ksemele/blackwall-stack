@@ -1,6 +1,5 @@
 ---
 # Rocky 9 server node (Wazuh server stack, podman nginx fixture).
-nft_public_tcp: [22]
 
 # Wazuh server stack bound to loopback (certs generated per host).
 wazuh_cert_ip: "127.0.0.1"
@@ -12,3 +11,14 @@ wazuh_dashboard_listen_host: "127.0.0.1"
 wazuh_dashboard_listen_port: 5601
 wazuh_indexer_url: "https://127.0.0.1:9200"
 wazuh_manager_api_url: "https://127.0.0.1:55000"
+
+# Firewall: podman's default network (bridge podman0) coexists with the base table.
+nft_podman:
+  net: 10.88.0.0/16
+  if: podman0
+nft_public_tcp: [22, 443]
+wazuh_agent_sources: [172.28.0.0/24]
+nft_restricted:
+  - {port: 1514, name: agents_events, sources: "{{ wazuh_agent_sources }}"}
+  - {port: 1515, name: agents_enroll, sources: "{{ wazuh_agent_sources }}"}
+cfwall_wan_if: eth0

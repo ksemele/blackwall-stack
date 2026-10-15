@@ -91,6 +91,7 @@ Checks:
   metrics    node_exporter, Prometheus targets, Grafana health and datasource
   voice      telegram-alerter
   brain      brain-analyst (Claude analysis delivered to Telegram)
+  sentinel   Wazuh server stack on black-sentinel-03 (opt-in: SKIP when not deployed)
 
 Exit code: 0 when nothing failed, 1 otherwise.
 USAGE
@@ -370,11 +371,29 @@ bw_summary() {
   (( BW_FAIL == 0 ))
 }
 
+check_sentinel() {
+  bw_info "sentinel"
+  bw_require_ansible
+
+  # Opt-in: not part of `bw-lab provision all`. Not deployed is a SKIP.
+  local installed
+  installed="$(bw_ansible_adhoc blackwall-eye sentinel -b \
+                 -m stat -a 'path=/etc/wazuh-dashboard/opensearch_dashboards.yml' 2>&1)"
+  if ! grep -q '"exists": true' <<<"$installed"; then
+    bw_skip "sentinel stack is not deployed (run: bw-lab provision sentinel)"
+    return
+  fi
+
+  bw_run "sentinel: services, closed ports, agent 000, nginx, podman tables survive reload" \
+    bw_ansible blackwall-eye ansible/playbooks/verify-sentinel.yml
+}
+
 main() {
   case "${1:-all}" in
     all)
       check_hosts; check_versions; check_nft; check_cf_wall; check_ports
       check_wazuh; check_metrics; check_voice; check_brain
+      check_sentinel
       ;;
     hosts)    check_hosts ;;
     versions) check_versions ;;
@@ -385,6 +404,7 @@ main() {
     metrics)  check_metrics ;;
     voice)    check_voice ;;
     brain)    check_brain ;;
+    sentinel) check_sentinel ;;
     -h|--help|help) usage; exit 0 ;;
     *) printf 'unknown check: %s\n\n' "$1" >&2; usage >&2; exit 2 ;;
   esac

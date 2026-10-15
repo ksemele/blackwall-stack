@@ -76,7 +76,7 @@ tests/bin/bw-lab reset
 | `bw-lab down [--keep-data]` | stop the environment; volumes are removed unless `--keep-data` |
 | `bw-lab reset` | `down -v` + wipe Wazuh certificates + `up` |
 | `bw-lab status` | containers, published ports, health of Prometheus/Grafana/dashboard |
-| `bw-lab provision <target> [ansible args]` | ansible only: `eye`, `nftables`, `metrics`, `voice`, `cf-wall`, `brain`, `sentinel` (podman nginx fixture on black-sentinel-03; not part of `all`), `fixtures`, `all`; `brain` passes extra args through, e.g. `-e brain_enabled=false` |
+| `bw-lab provision <target> [ansible args]` | ansible only: `eye`, `nftables`, `metrics`, `voice`, `cf-wall`, `brain`, `sentinel` (podman nginx fixture, then the full Wazuh server stack + firewall + cf-wall on black-sentinel-03; not part of `all`), `fixtures`, `all`; `brain` passes extra args through, e.g. `-e brain_enabled=false` |
 | `bw-lab ssh <host> [cmd...]` | shell into a container (root password `blackwall`) |
 | `bw-lab logs <service> [-f]` | compose logs for one service |
 | `bw-lab open <target>` | open `dashboard`, `grafana` or `prometheus` in a browser |
@@ -128,6 +128,7 @@ tests/bin/bw-check metrics    # just one group
 | `metrics` | node_exporter serves metrics, Prometheus targets are `up`, `node_load1` returns data, Grafana is healthy with its datasource and dashboard |
 | `voice` | `telegram-alerter` is running and Telegram accepted a synthetic alert |
 | `brain` | `brain-analyst` is running; a synthetic level-10 alert was analysed by Claude and delivered to Telegram |
+| `sentinel` | Wazuh stack on `black-sentinel-03`: services active, indexer/API/dashboard answer on 127.0.0.1 but not on 172.28.0.16 (probed from master), agent 000 active, packages excluded, podman nginx on 443, `inet netavark` and container DNS survive `systemctl reload nftables` (opt-in: SKIP until `bw-lab provision sentinel`) |
 
 Every line is `PASS`, `FAIL` or `SKIP`; the exit code is 0 only when there is no
 `FAIL`, so this is usable straight from CI. Output of a failing step is printed

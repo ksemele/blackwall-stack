@@ -131,7 +131,7 @@
 
 - name: Wait for dashboard HTTPS to return 302 (full init)
   uri:
-    url: "https://127.0.0.1:{{ wazuh_dashboard_listen_port }}/"
+    url: "https://{{ '127.0.0.1' if wazuh_dashboard_listen_host == '0.0.0.0' else wazuh_dashboard_listen_host }}:{{ wazuh_dashboard_listen_port }}/"
     method: GET
     status_code: 302
     validate_certs: false

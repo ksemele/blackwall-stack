@@ -72,8 +72,9 @@ cmd_provision() {
       bw_ansible blackwall-voice ansible/playbooks/metrics.yml --limit "$(bw_live_limit)"
       ;;
     sentinel)
-      bw_info "provision: sentinel (podman nginx fixture)"
+      bw_info "provision: sentinel (podman nginx fixture, then Wazuh server stack + firewall)"
       bw_ansible blackwall-eye ../tests/triggers/sentinel-podman.yml
+      bw_ansible blackwall-eye ansible/playbooks/sentinel.yml
       ;;
     fixtures)
       bw_info "provision: broken-agent fixtures (ghost-99 never_connected, dead-98 stopped)"
