@@ -16,7 +16,11 @@ wazuh_manager_api_url: "https://127.0.0.1:55000"
 nft_podman:
   net: 10.88.0.0/16
   if: podman0
-nft_public_tcp: [22, 443]
+# Prod model: 443 is not public; it reaches nginx only via cf-wall allow -> netavark DNAT -> forward.
+nft_public_tcp: [22]
+nft_forward_policy: drop
+# black-master-00 plays the admin/allowed source.
+cfwall_admin_allow: [172.28.0.10]
 wazuh_agent_sources: [172.28.0.0/24]
 nft_restricted:
   - {port: 1514, name: agents_events, sources: "{{ wazuh_agent_sources }}"}

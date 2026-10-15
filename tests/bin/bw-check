@@ -379,6 +379,11 @@ check_sentinel() {
   local installed
   installed="$(bw_ansible_adhoc blackwall-eye sentinel -b \
                  -m stat -a 'path=/etc/wazuh-dashboard/opensearch_dashboards.yml' 2>&1)"
+  if grep -qE 'UNREACHABLE|FAILED' <<<"$installed"; then
+    bw_fail "sentinel node is unreachable"
+    printf '%s\n' "$installed" | tail -5 | sed 's/^/      /'
+    return
+  fi
   if ! grep -q '"exists": true' <<<"$installed"; then
     bw_skip "sentinel stack is not deployed (run: bw-lab provision sentinel)"
     return

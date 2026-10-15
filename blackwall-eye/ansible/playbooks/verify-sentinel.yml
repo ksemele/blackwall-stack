@@ -50,13 +50,35 @@
       register: exposed
       failed_when: exposed.rc == 0
       changed_when: false
-      loop: [9200, 55000, 5601]
+      loop: [9200, 9300, 55000, 5601]
+
+    # The firewall probe above would hide a 0.0.0.0 bind behind input policy
+    # drop, so assert the bind address itself.
+    - name: Read listening sockets
+      ansible.builtin.command: ss -ltnH
+      register: listeners
+      changed_when: false
+
+    - name: Wazuh services listen on loopback only
+      ansible.builtin.assert:
+        that: >-
+          listeners.stdout_lines
+          | select('search', ':' ~ item ~ ' ')
+          | map('split') | map(attribute=3)
+          | reject('match', '^(127\\.0\\.0\\.1|\\[::ffff:127\\.0\\.0\\.1\\]|\\[::1\\]):' ~ item ~ '$')
+          | list | length == 0
+          and (listeners.stdout_lines | select('search', ':' ~ item ~ ' ') | list | length) > 0
+        fail_msg: >-
+          port {{ item }} is not bound to loopback only:
+          {{ listeners.stdout_lines | select('search', ':' ~ item ~ ' ') | list }}
+      loop: [9200, 9300, 55000, 5601]
 
     - name: Agent 000 (the manager itself) is active
       ansible.builtin.command: /var/ossec/bin/agent_control -l
       register: agents
       changed_when: false
-      failed_when: "'ID: 000' not in agents.stdout or 'Active/Local' not in agents.stdout"
+      failed_when: >-
+        agents.stdout_lines | select('search', 'ID: 000,') | select('search', 'Active/Local') | list | length != 1
 
     - name: Wazuh packages are excluded from dnf updates
       ansible.builtin.command: grep -E '^exclude *=.*{{ item }}' /etc/yum.repos.d/wazuh.repo
@@ -67,6 +89,39 @@
       ansible.builtin.uri:
         url: http://127.0.0.1:443/
         status_code: 200
+
+    # Prod 443 path: cf-wall allow (admin source) -> netavark DNAT -> forward
+    # `ct status dnat accept`. 443 is not in public_tcp and forward policy is drop.
+    - name: 443 answers 200 from an allowed source (black-master-00)
+      ansible.builtin.shell: curl -s -m 8 -o /dev/null -w '%{http_code}' http://{{ sentinel_ip }}:443/
+      delegate_to: black-master-00
+      register: allowed_443
+      changed_when: false
+      failed_when: allowed_443.stdout != '200'
+
+    - name: 443 is dropped for a non-allowed source (black-rocky-02)
+      ansible.builtin.shell: "timeout 4 bash -c '</dev/tcp/{{ sentinel_ip }}/443'"
+      delegate_to: black-rocky-02
+      register: denied_443
+      failed_when: denied_443.rc == 0
+      changed_when: false
+
+    - name: Read the DNAT forward rule counter
+      ansible.builtin.command: nft -j list chain inet blackwall_base forward
+      register: fwd_json
+      changed_when: false
+
+    - name: Forward `ct status dnat` rule counted the allowed request
+      ansible.builtin.assert:
+        that: >-
+          (fwd_json.stdout | from_json).nftables | selectattr('rule', 'defined') | map(attribute='rule')
+          | selectattr('expr', 'search', 'dnat') | map(attribute='expr') | flatten
+          | selectattr('counter', 'defined') | map(attribute='counter.packets') | first | default(0) > 0
+        fail_msg: "ct status dnat counter is 0 - 443 did not take the cf-wall -> DNAT -> forward path"
+
+    - name: Container egress and DNS work under forward policy drop
+      ansible.builtin.command: podman exec web wget -q -T8 --spider http://example.com
+      changed_when: false
 
     - name: Netavark table exists before reload
       ansible.builtin.command: nft list table inet netavark
@@ -79,6 +134,11 @@
 
     - name: Netavark table survived the reload
       ansible.builtin.command: nft list table inet netavark
+      changed_when: false
+
+    - name: Base and wall tables survived the reload
+      ansible.builtin.command: "nft list table inet {{ item }}"
+      loop: [blackwall_base, blackwall_wall]
       changed_when: false
 
     - name: Docker embedded-DNS NAT survived the reload
