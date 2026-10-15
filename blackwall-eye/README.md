@@ -7,7 +7,7 @@ Host monitoring core for the Blackwall security platform. Stage 1: Wazuh manager
 - Wazuh Manager + Agent (HIDS, FIM, log collection)
 - auditd (kernel-level syscall audit)
 - Ansible IaC — no manual steps
-- Target OS: Ubuntu 22.04 LTS / Debian 12 (primary), Rocky Linux 9 (secondary; the agent reads system logs from journald)
+- Target OS: Ubuntu 22.04 LTS / Debian 12 (primary), Rocky Linux 9 (secondary): agent, auditd and the whole server stack (indexer, manager + filebeat, dashboard); on RHEL the agent reads system logs from journald
 
 ## Test Environment
 
@@ -82,6 +82,33 @@ hold them (`apt-mark hold`), the RedHat yum repo `exclude`s them, so
 (an agent newer than the manager is unsupported). To change the version, edit
 `wazuh_version` in the `wazuh-repo` role defaults and re-run the playbooks; the
 roles install with `allow_change_held_packages` / `disable_excludes`.
+
+### Server stack on RHEL, loopback-only (sentinel)
+
+The server roles bind through variables, so a host can keep every management
+endpoint on loopback and be reached over an SSH tunnel:
+
+| Variable | Main lab stack | Loopback-only host |
+|---|---|---|
+| `wazuh_indexer_network_host` | `172.28.0.10` | `127.0.0.1` |
+| `wazuh_api_host` | `0.0.0.0` | `127.0.0.1` |
+| `wazuh_dashboard_listen_host` / `_port` | `0.0.0.0` / `443` | `127.0.0.1` / `5601` |
+| `wazuh_indexer_url`, `wazuh_manager_api_url` | `https://172.28.0.10:…` | `https://127.0.0.1:…` |
+| `wazuh_cert_ip` (certificate SAN) | `172.28.0.10` | `127.0.0.1` |
+| `wazuh_indexer_heap` | package default | e.g. `1g` |
+
+Certificates are generated per server host (`wazuh-certificates.yml`, node name =
+inventory hostname, bundle in `wazuh_certs_local_dir`). The lab node
+`black-sentinel-03` (`ansible/playbooks/sentinel.yml`, group vars in
+`tests/inventory/group_vars/sentinel.yml`) runs this layout on Rocky 9 next to a
+podman nginx on 443, with `nftables` (`nft_podman`, forward policy drop) and
+`cf-wall`. Dashboard access: `ssh -L 5601:127.0.0.1:5601 <host>` then
+https://localhost:5601.
+
+Measured footprint (lab sentinel, idle ~10 min, indexer heap 1g): container
+2.2 GiB total; indexer (java) 1.75 GiB RSS, manager processes ~460 MiB,
+dashboard ~170 MiB, filebeat ~15 MiB; CPU ~4 %. Plan ~2.5 GiB of RAM for the
+stack on top of whatever else the host runs.
 
 ### Login sessions snapshot
 
