@@ -21,7 +21,7 @@ Each module is an independent, deployable unit with a single security responsibi
 | `blackwall-voice/` | Voice | Alerts, dashboards, notification layer | 2 |
 | `blackwall-brain/` | Brain | AI agents for automated log/event analysis | 3 |
 | `blackwall-trap/` | Trap | Honeypots and canary infrastructure | 4 |
-| `blackwall-fang/` | Fang | Active countermeasures: automatic blocking (production); counter-attack (research only) | 5 |
+| `blackwall-fang/` | Fang | Active response: automated blocking (counter-attack: research only, not shipped) | 5 |
 | `blackwall-scan/` | Scan | External attack surface self-assessment (CESM) — outside-in recon of own perimeter | 1* |
 
 \* separate track (perimeter recon), not part of the defense chain.
@@ -34,7 +34,7 @@ Each module is an independent, deployable unit with a single security responsibi
 | 2 | Voice | Standardized alerts, dashboards, Telegram/Slack/webhook |
 | 3 | Brain | AI agents for anomaly explanation and threat classification |
 | 4 | Trap | Decoy services, fake credentials, canary tokens |
-| 5 | Fang | Counterattack research tooling |
+| 5 | Fang | Automated blocking: reputation lists, attempt detectors, Wazuh active response |
 
 ## Agent Rules
 

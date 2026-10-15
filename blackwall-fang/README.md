@@ -1,7 +1,10 @@
 # blackwall-fang — Fang
 
-Active countermeasures for the Blackwall platform. Layer 1 (reputation blocklists) is
-implemented; see [STATUS.md](STATUS.md) for the plan and the rules every automatic block must follow.
+Active response for the Blackwall platform: automated blocking of hostile sources on
+your own hosts. Layer 1 (reputation blocklists) is implemented, layer 2 (attempt
+detectors) runs in observe mode; see [STATUS.md](STATUS.md) for the plan and the rules every automatic block must follow.
+
+Counter-attack is research only: out of scope for production, not shipped.
 
 ## Reputation blocklists (`fang-reputation`)
 
