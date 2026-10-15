@@ -20,6 +20,10 @@ blockers: []
     groups; `verify-agents.yml` checks every agent by name;
     `verify-agent-events.yml` proves a failed SSH login on the RHEL agent
     reaches the indexer.
+  - Carried into sub-project B (before the prod host is provisioned): pin the
+    Wazuh packages against `dnf upgrade` / dnf-automatic (yum repo `exclude` +
+    `disable_excludes` on install, or versionlock; apt hold on Debian); smoke
+    test auditd handlers on a real RHEL host, incl. immutable rules (`-e 2`).
 - 2026-10-15: prod firewall as code (spec `docs/superpowers/specs/2026-10-14-nftables-prod-port-design.md`).
   - `nftables` role: Debian + RedHat (`nft_conf_path`), `nftables.service`
     drop-in without `flush ruleset`, optional `nft_podman` (anti-spoof,
