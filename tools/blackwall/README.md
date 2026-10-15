@@ -183,23 +183,56 @@ until the forwarded ports answer, and points the clients at them.
 - `server` / `port` are as seen from the ssh host (usually `127.0.0.1`), not
   from your machine.
 - The system `ssh` is used, so keys, `ssh-agent`, `~/.ssh/config`, `ProxyJump`
-  and known_hosts work as in your shell.
+  and known_hosts work as in your shell. Connection sharing is always off
+  (`-o ControlPath=none`): with `ControlMaster`/`ControlPersist` the forwards
+  would live in a background master that blackwall could not stop.
 - Plain `ssh` runs with `BatchMode=yes`: it never prompts, so a missing key fails
   fast with ssh's message (e.g. `Permission denied (publickey)`) instead of
-  hanging. A custom `command` prefix drops BatchMode so password helpers work;
-  the lab uses `command: [sshpass, -p, blackwall, ssh, -F, <repo>/tests/docker/ssh_config]`
-  (lab-only password; `-F` needs an absolute path unless you start `blackwall`
-  from the repo root). The ssh command line is never shown; ssh's stderr is.
-- TLS still verifies the configured `server`: the client dials
-  `127.0.0.1:<local port>` but checks the certificate against `server` (an IP is
-  matched against the certificate's IP SANs), so `ca_file` keeps working.
-  `insecure_skip_verify` works as for direct contexts.
+  hanging. A custom `command` prefix drops BatchMode so password helpers work.
+  The ssh command line is never shown; ssh's stderr is.
+- Passwords for `sshpass`: use `sshpass -e`, which reads `SSHPASS` from the
+  environment (`blackwall` passes its environment to ssh). `sshpass -p <pw>`
+  puts the password on the command line, where other local users can see it in
+  `ps`. The lab:
+
+  ```bash
+  export SSHPASS=blackwall          # lab-only password (tests/README.md)
+  blackwall --context sentinel
+  ```
+
+  with `command: [sshpass, -e, ssh, -F, <repo>/tests/docker/ssh_config]` (`-F`
+  needs an absolute path unless you start `blackwall` from the repo root).
+  Without `SSHPASS` the tunnel fails with sshpass's message.
+- TLS: the client dials `127.0.0.1:<local port>` but verifies the certificate
+  against the configured `server` (an IP is matched against the certificate's
+  IP SANs). So `ca_file` works through the tunnel only if the certificate has a
+  SAN for that `server` — with `server: 127.0.0.1` it needs an IP SAN
+  `127.0.0.1` (blackwall-eye's loopback layout issues it via
+  `wazuh_cert_ip: 127.0.0.1`). Otherwise set `tls.server_name` to a name or IP
+  that is in the certificate:
+
+  ```yaml
+      tls:
+        ca_file: ${HOME}/.config/blackwall/prod-root-ca.pem
+        server_name: wazuh-manager   # checked instead of `server`
+  ```
+
+  `server_name` also works for direct contexts.
+- Do not combine `insecure_skip_verify` with a tunnel on a shared machine: the
+  forward listens on a local port, and another local user who grabs that port
+  (e.g. while the tunnel is reconnecting) would receive your API and indexer
+  credentials. With `ca_file` such a server fails verification.
 - Lifecycle: the tunnel stops on context switch and on exit (`q`, Ctrl+C,
   SIGTERM, a closed terminal); `blackwall --once` opens, queries and closes it.
+  Ctrl+C while the tunnel is opening exits. One context switch runs at a time
+  (`switching to <name>…`); a failed switch keeps the current context.
   The status bar shows `ssh: <host> up`. If ssh dies, it shows `reconnecting n/3`
-  and restarts ssh on the same ports (backoff 1s, 3s, 10s); after that it shows
-  `down: <reason>` and `Ctrl+R` retries. If the tunnel cannot start at TUI
-  startup, the TUI opens anyway with the error in the status bar.
+  and restarts ssh on the same local ports (backoff 1s, 3s, 10s); after that it
+  shows `down: <reason>` and `r` / `Ctrl+R` retries. If another process took a
+  local port in the meantime, ssh fails with a bind error (`Address already in
+  use`); switch the context again (`:ctx <name>`) to pick fresh ports. If the
+  tunnel cannot start at TUI startup, the TUI opens anyway with the error in the
+  status bar.
 - The `:contexts` picker does not probe ssh contexts (a hollow `○`): that would
   need an ssh connection per context.
 
@@ -229,7 +262,7 @@ contexts:
     description: "Lab sentinel (via ssh)"
     ssh:
       host: black-sentinel-03
-      command: [sshpass, -p, blackwall, ssh, -F, /path/to/blackwall/tests/docker/ssh_config]
+      command: [sshpass, -e, ssh, -F, /path/to/blackwall/tests/docker/ssh_config]   # export SSHPASS=blackwall
     wazuh:
       server: 127.0.0.1
       port: 55000
@@ -282,6 +315,7 @@ blackwall --once                       # print agents and exit (script-friendly)
 | `e` | agent card: open the Sessions tab |
 | `p` | pause / resume auto-refresh |
 | `Ctrl+R` | force refresh now (also retries a down ssh tunnel) |
+| `r` | agent card: refresh (also retries a down ssh tunnel) |
 | `?` | toggle help (planned) |
 
 ## Alerts
@@ -327,7 +361,8 @@ Sessions come from `last` (wtmp), which only records sessions with a PTY:
 non-interactive `ssh host cmd`, scp and Ansible runs do not appear in the
 Sessions tab.
 
-Press `esc` to return to the agents list, `r` to force a refresh, `l` to jump
+Press `esc` to return to the agents list, `r` to force a refresh (it also
+retries a down ssh tunnel), `l` to jump
 to `:alerts` filtered to this agent.
 
 While in Top or Packages, press `/` to start typing a substring filter.
