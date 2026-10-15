@@ -15,6 +15,25 @@ Its companion is [`blackwall`](https://github.com/ksemele/blackwall), a
 k9s-style terminal UI for Wazuh that replaces the dashboard for day-to-day
 work. The TUI works with any Wazuh 4.x; the stack is not required.
 
+## Why Blackwall
+
+It is for 1–50 Linux hosts: a homelab, a small team, a handful of servers, with
+no SOC on staff. It picks a few well-known tools, deploys them with Ansible and
+tunes them for signal over noise, so the alerts you get are worth reading. A
+Wazuh all-in-one host for up to 25 agents needs 4 vCPU and 8 GiB RAM (Wazuh's
+own sizing).
+
+| | What it is | Pick it when |
+|---|---|---|
+| **Blackwall Stack** | Wazuh 4 + auditd + nftables with custom rules, opt-in automated blocking (observe first), Telegram alerts | You run Linux hosts and want few, readable alerts |
+| **Security Onion** 3.x | Full NSM/NDR platform: Suricata, Zeek, packet capture, Elastic, cases. Standalone minimum: 4 cores, 24 GB RAM, 200 GB disk | You need network visibility and have the hardware and analysts |
+| **wazuh-ansible** | Official Ansible roles that install Wazuh; rules, tuning and response are up to you | You want plain Wazuh and will tune it yourself |
+| **SOCFortress**-style stacks | Wazuh, Graylog, Velociraptor, Grafana and more behind the CoPilot web UI | You run a SOC or serve several clients |
+
+Day to day you work in the terminal: [`blackwall`](https://github.com/ksemele/blackwall)
+shows agents, alerts and sessions without opening the dashboard. Blackwall does
+no network forensics and no multi-tenant SOC work; use the tools above for that.
+
 ## Modules
 
 | Module | Purpose | Stage |
