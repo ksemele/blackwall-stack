@@ -47,7 +47,7 @@ From the final review of that work.
 
 1. **Credentials.** `wazuh_indexer_admin_password` (lab value in three role
    defaults) and the API users (`wazuh` / `wazuh-wui`, packaged defaults) must
-   come from ansible-vault in the prod inventory, and the API passwords must be
+   come from the owner's secret management (not the repo; no ansible-vault), and the API passwords must be
    changed on the host. Add a role assert that refuses the lab defaults when
    `bw_lab` is not set. Loopback binding narrows exposure but does not remove
    it (any local process or container egress can reach 127.0.0.1).
@@ -59,7 +59,7 @@ From the final review of that work.
    window and runbook).
 3. **Agent enrollment.** `use_password` is `no`; `wazuh_agent_sources` is the
    only gate on 1514/1515. In prod list explicit agent IPs and/or enable a
-   vaulted authd password.
+   authd password supplied like the other secrets.
 4. **Certificate storage.** A prod inventory must set `wazuh_certs_local_dir`
    outside `tests/` (role defaults fall back to the lab path) and keep the CA
    key off the server.

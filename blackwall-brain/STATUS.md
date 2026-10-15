@@ -4,7 +4,7 @@ status: in_progress
 stage: 3
 last_updated: 2026-10-15
 last_task: "Lab deploy with a real key: text-block parsing for thinking models, low effort, real retries, optional workspace id header, strict verify-brain, bw-lab/bw-check brain targets"
-next_task: "ansible-vault for prod secrets; decide whether voice should skip brain verify alerts"
+next_task: "Noise: one message per alert when Brain is on; voice skips brain verify alerts (secrets are managed outside the repo)"
 blockers: []
 ---
 
@@ -38,5 +38,5 @@ blockers: []
   on a single VPS we would have to run our own issuer. The switch likely means
   moving `brain.py` to the Anthropic Python SDK, which does the token exchange
   and refresh itself (today the module is stdlib-only by design).
-- Prod secrets via ansible-vault (`claude_api_key`, Telegram).
+- Prod secrets (`claude_api_key`, Telegram) are supplied from the owner's own secret management, not stored in the repo (no ansible-vault).
 - The lab API key expires 30 days after 2026-10-14.
