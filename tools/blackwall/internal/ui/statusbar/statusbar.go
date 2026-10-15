@@ -9,11 +9,13 @@ import (
 )
 
 type State struct {
-	Context string
-	Wazuh   string
-	Indexer string
-	Refresh time.Duration
-	Paused  bool
+	Context   string
+	Wazuh     string
+	Tunnel    string // "" for direct contexts; e.g. "prod up"
+	TunnelBad bool   // render Tunnel as an error (reconnecting / down)
+	Indexer   string
+	Refresh   time.Duration
+	Paused    bool
 }
 
 func Render(s State) string {
@@ -23,6 +25,13 @@ func Render(s State) string {
 	}
 	ctxBadge := styles.ContextBadge.Render(s.Context)
 	body := fmt.Sprintf("context: %s · wazuh: %s", ctxBadge, s.Wazuh)
+	if s.Tunnel != "" {
+		t := s.Tunnel
+		if s.TunnelBad {
+			t = styles.Error.Render(t)
+		}
+		body += " · ssh: " + t
+	}
 	if s.Indexer != "" {
 		body += " · indexer: " + s.Indexer
 	}

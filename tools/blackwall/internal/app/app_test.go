@@ -211,3 +211,21 @@ func TestApp_ShowAgentAlertsActivatesAlertsView(t *testing.T) {
 		t.Errorf("alerts view got %v, want %v", alerts.lastMsg, msg)
 	}
 }
+
+func TestApp_RefreshKeyCallsHookAndReachesView(t *testing.T) {
+	a := fakeView{name: ":a"}
+	calls := 0
+	m := New(Deps{Views: []views.View{&a}, InitialView: ":a", OnRefresh: func() { calls++ }})
+	m.Update(tea.KeyMsg{Type: tea.KeyCtrlR})
+	m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'r'}})
+	if calls != 2 {
+		t.Errorf("OnRefresh calls = %d, want 2", calls)
+	}
+	if k, ok := a.lastMsg.(tea.KeyMsg); !ok || k.String() != "r" {
+		t.Errorf("view lastMsg = %#v, want the r key", a.lastMsg)
+	}
+	m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'x'}})
+	if calls != 2 {
+		t.Errorf("other keys must not call OnRefresh")
+	}
+}

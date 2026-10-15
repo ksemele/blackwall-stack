@@ -24,6 +24,7 @@ const (
 	reachPending reachState = iota // probing in progress
 	reachUp                        // responded
 	reachDown                      // unreachable
+	reachSSH                       // behind an ssh tunnel: not probed (would need ssh)
 )
 
 // ProbeResultMsg carries the result of a single context probe.
@@ -99,6 +100,14 @@ func (m *Model) probeAllCmd() tea.Cmd {
 			})
 			continue
 		}
+		if ctx.SSH != nil {
+			// server/port are as seen from the ssh host; probing them
+			// locally would hit the wrong endpoint.
+			cmds = append(cmds, func() tea.Msg {
+				return ProbeResultMsg{Name: name, Reach: reachSSH}
+			})
+			continue
+		}
 		sub := *ctx.Wazuh
 		n := name // capture
 		cmds = append(cmds, func() tea.Msg {
@@ -161,6 +170,8 @@ func (m *Model) circle(name string) string {
 		return styles.Active.Render("●")
 	case reachDown:
 		return styles.Disconnected.Render("●")
+	case reachSSH:
+		return styles.Pending.Render("○")
 	default: // reachPending
 		return styles.Pending.Render("●")
 	}
@@ -191,6 +202,9 @@ func (m *Model) View() string {
 		server := ""
 		if ctx.Wazuh != nil {
 			server = fmt.Sprintf("%s:%d", ctx.Wazuh.Server, ctx.Wazuh.Port)
+			if ctx.SSH != nil {
+				server += " via ssh " + ctx.SSH.Host
+			}
 		}
 		circle := m.circle(name)
 		textPart := table.Row(widths, []string{name, ctx.Description, server})

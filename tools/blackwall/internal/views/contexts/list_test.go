@@ -62,3 +62,22 @@ func TestList_DownMovesCursor(t *testing.T) {
 		t.Error("cursor did not move on KeyDown")
 	}
 }
+
+func TestList_SSHContextNotProbedLocally(t *testing.T) {
+	cfg := sampleConfig()
+	cfg.Contexts["sentinel"] = config.Context{
+		SSH:   &config.SSHTunnel{Host: "black-sentinel-03"},
+		Wazuh: &config.WazuhSubsystem{Server: "127.0.0.1", Port: 55000},
+	}
+	v := New(cfg)
+	// Run only the sentinel probe: it must answer without any network call.
+	v.order = []string{"sentinel"}
+	msg := v.probeAllCmd()() // a one-command Batch is the command itself
+	if r := msg.(ProbeResultMsg); r.Name != "sentinel" || r.Reach != reachSSH {
+		t.Fatalf("probe = %+v, want reachSSH", r)
+	}
+	v.Update(msg)
+	if out := v.View(); !strings.Contains(out, "via ssh black-sentinel-03") || !strings.Contains(out, "○") {
+		t.Errorf("ssh context row missing tunnel marker:\n%s", out)
+	}
+}

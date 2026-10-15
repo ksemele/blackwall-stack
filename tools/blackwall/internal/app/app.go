@@ -33,6 +33,10 @@ type Deps struct {
 	// ContextSwitchedMsg when done.
 	SwitchContext func(name string) tea.Cmd
 
+	// OnRefresh is called (without consuming the key) on `r` / ctrl+r, before
+	// the active view handles it; main uses it to retry a down ssh tunnel.
+	OnRefresh func()
+
 	// HelpView is the view pushed when the user presses `?`.
 	// If nil, the `?` key is a no-op.
 	HelpView views.View
@@ -47,6 +51,7 @@ type Model struct {
 	status      func() statusbar.State
 	pauseToggle func()
 	switchCtx   func(name string) tea.Cmd
+	onRefresh   func()
 	helpView    views.View
 
 	// helpOpen is true while the help overlay is shown.
@@ -66,6 +71,7 @@ func New(d Deps) *Model {
 		status:      d.Status,
 		pauseToggle: d.PauseToggle,
 		switchCtx:   d.SwitchContext,
+		onRefresh:   d.OnRefresh,
 		helpView:    d.HelpView,
 	}
 	for i, v := range d.Views {
@@ -174,6 +180,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, cmd
 		}
 
+		if s := msg.String(); (s == "r" || s == "ctrl+r") && m.onRefresh != nil {
+			m.onRefresh() // the view still gets the key below
+		}
 		if msg.String() == ":" {
 			m.paletteOpen = true
 			m.paletteInput = ":"
