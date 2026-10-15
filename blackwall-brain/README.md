@@ -48,6 +48,7 @@ max_tokens:         2048   # thinking counts against it
 | Variable | Default | Purpose |
 |---|---|---|
 | `brain_ignore_rule_ids` | `["99999"]` | `rule.id`s never analyzed (Voice's verify rule) |
+| `claude_api_url` / `claude_timeout` | Anthropic messages URL / `30` | endpoint and per-request timeout (override in tests) |
 | `brain_state_max_ids` | `10000` | processed IDs kept in the state file |
 
 The state file keeps only the newest `brain_state_max_ids` IDs: compacted at
@@ -63,7 +64,7 @@ the lab inventory derives it from `brain_enabled`). The roles stay independent.
 
 If Claude fails for an alert after 3 attempts, Brain does not drop it: it sends
 the raw alert to Telegram with the marker `AI analysis unavailable: <reason>`
-(e.g. `Claude API HTTP 401`) and marks it processed. If Telegram itself fails,
+(e.g. `Claude API HTTP 401`, `Claude API timeout/unreachable`) and marks it processed. If Telegram itself fails,
 the send is retried 3 times and then logged as dropped.
 
 ## Deploy
@@ -80,9 +81,12 @@ ansible-playbook ansible/playbooks/brain.yml \
 
 `brain_enabled` (default `true`) switches the analyst without uninstalling it:
 `false` stops and disables the service, the script, config and state stay in
-place. With Brain off Voice must forward everything again: Voice drops its
-`voice_max_level` by itself at deploy time (it checks the service); in the lab
-`bw-lab provision brain ...` re-deploys Voice for you.
+place. With Brain off Voice must forward everything again: Voice lifts its
+`voice_max_level` by itself, at deploy time and at runtime (it checks the
+`brain-analyst` unit every 15 s, so a crash or stop is covered too, apart from
+a window of up to 15 s plus the restart delay); in the lab
+`bw-lab provision brain ...` re-deploys Voice for you. Both roles must run on
+the same host.
 
 ```bash
 ansible-playbook ansible/playbooks/brain.yml -e brain_enabled=false   # off

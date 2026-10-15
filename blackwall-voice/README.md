@@ -51,6 +51,8 @@ read the id from `https://api.telegram.org/bot<token>/getUpdates`
 | `voice_max_level` | `""` (no upper bound) | upper bound: forward only `level <= voice_max_level` |
 | `alerter_ignore_rule_ids` | `["99998"]` | `rule.id`s never forwarded (Brain's verify rule) |
 | `alerter_state_max_ids` | `10000` | dedup IDs kept in `sent_ids.txt` |
+| `voice_cover_unit` | `brain-analyst` | unit that must be active for the upper bound to apply |
+| `voice_cover_script` | `/opt/brain-analyst/brain.py` | read at deploy time for `ANALYSIS_THRESHOLD` (bound clamp) |
 
 ### One message per alert with Brain
 
@@ -64,15 +66,29 @@ link lives in the inventory; the lab does it with a Jinja expression:
 voice_max_level: "{{ (analysis_threshold | int - 1) if (brain_enabled | default(true) | bool) else '' }}"
 ```
 
-Fail-safe: when `voice_max_level` is set, the Voice deploy checks that
-`brain-analyst` is enabled and active on the host. If it is not, the bound is
-ignored (Voice forwards everything `>= severity_threshold`) and the play prints
-`voice_max_level ignored: brain-analyst is not running on this host`. An alert
-can therefore never fall between the two roles.
+Fail-safe, two layers (`voice_cover_unit`, default `brain-analyst`):
+
+- Deploy time: when `voice_max_level` is set, the play checks that the unit is
+  enabled and active. If not, the bound is ignored (Voice forwards everything
+  `>= severity_threshold`) and the play prints `voice_max_level ignored: ...`.
+  It also reads `ANALYSIS_THRESHOLD` from the deployed Brain script
+  (`voice_cover_script`) and clamps the bound to `analysis_threshold - 1`
+  (with a `clamped` warning if it differed).
+- Runtime: while a bound is set the alerter runs `systemctl is-active` on the
+  unit at most every 15 s. While it is not active the bound is lifted and
+  everything `>= severity_threshold` is forwarded; both transitions are logged
+  once. Residual window: an alert above the bound that arrives within 15 s
+  after Brain stops (or while Brain is "activating" after a crash) can be
+  skipped by Voice and not analyzed; Brain's own retry/fallback covers alerts
+  it has already picked up.
+
+Both roles are assumed to run on the same host (`wazuh_managers`): the unit
+check and the threshold read are local.
 
 `brain_enabled` is Brain's toggle (default `true`). If you switch it with
 `-e` in the lab, `bw-lab provision brain ...` re-deploys Voice with the same
-args by itself (when Voice is installed).
+args by itself (when Voice is installed; Voice first when Brain is being
+disabled, after Brain otherwise).
 
 ### Dedup state
 

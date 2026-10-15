@@ -12,27 +12,51 @@
     quiet: true
 
 # Fail-safe: an upper bound only makes sense while Brain covers the alerts above
-# it. If brain-analyst is not enabled and active on this host, ignore the bound.
-- name: Probe brain-analyst (only when voice_max_level is set)
+# it. If the cover unit is not enabled and active on this host, ignore the bound
+# (the alerter also re-checks at runtime). Otherwise cap the bound at the
+# deployed Brain's analysis threshold - 1.
+- name: Probe the covering unit (only when voice_max_level is set)
   ansible.builtin.shell:
-    cmd: systemctl is-enabled brain-analyst && systemctl is-active brain-analyst
+    cmd: "systemctl is-enabled {{ voice_cover_unit }} && systemctl is-active {{ voice_cover_unit }}"
   register: voice_brain_probe
+  changed_when: false
+  failed_when: false
+  when: voice_max_level | default('') | string | trim | length > 0
+
+- name: Read the deployed analysis threshold
+  ansible.builtin.shell:
+    cmd: "sed -n 's/^ANALYSIS_THRESHOLD *= *\\([0-9][0-9]*\\).*/\\1/p' {{ voice_cover_script }}"
+  register: voice_brain_thr
   changed_when: false
   failed_when: false
   when: voice_max_level | default('') | string | trim | length > 0
 
 - name: Resolve the effective upper bound
   ansible.builtin.set_fact:
+    voice_cfg_level: "{{ voice_max_level | default('') | string | trim }}"
+    voice_cover_thr: "{{ voice_brain_thr.stdout | default('') | trim }}"
+    voice_cover_ok: "{{ (voice_brain_probe.rc | default(1)) == 0 }}"
+
+- name: Resolve the effective upper bound (value)
+  ansible.builtin.set_fact:
     voice_max_level_effective: >-
-      {{ voice_max_level | default('') | string | trim
-         if (voice_brain_probe.rc | default(1)) == 0 else '' }}
+      {{ '' if (voice_cfg_level == '' or not voice_cover_ok | bool)
+         else ([voice_cfg_level | int, voice_cover_thr | int - 1] | min if voice_cover_thr != ''
+               else voice_cfg_level | int) }}
 
 - name: Warn that voice_max_level is ignored
   ansible.builtin.debug:
-    msg: "voice_max_level ignored: brain-analyst is not running on this host (Voice forwards everything >= severity_threshold)"
+    msg: "voice_max_level ignored: {{ voice_cover_unit }} is not running on this host (Voice forwards everything >= severity_threshold)"
   when:
     - voice_max_level | default('') | string | trim | length > 0
-    - voice_max_level_effective | length == 0
+    - voice_max_level_effective | string | length == 0
+
+- name: Warn that voice_max_level was clamped
+  ansible.builtin.debug:
+    msg: "voice_max_level clamped from {{ voice_max_level }} to {{ voice_max_level_effective }} (deployed analysis_threshold - 1)"
+  when:
+    - voice_max_level_effective | string | length > 0
+    - voice_max_level_effective | int != voice_max_level | int
 
 - name: Ensure python3 is installed
   ansible.builtin.package:

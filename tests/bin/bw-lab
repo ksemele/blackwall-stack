@@ -90,13 +90,21 @@ cmd_provision() {
       bw_ansible blackwall-eye ansible/playbooks/cf-wall.yml --limit "$(bw_live_limit)"
       ;;
     brain)
+      # voice_max_level depends on Brain, so keep Voice consistent (same args)
+      # when it is deployed. Disabling Brain: Voice first (lift the bound before
+      # Brain stops); otherwise Brain first (the bound needs Brain running).
+      local voice_probe voice_deployed=0 disabling=0 arg
+      voice_probe="$(bw_ansible_adhoc blackwall-voice wazuh_managers -b \
+                       -m stat -a 'path=/etc/systemd/system/voice-alerter.service' 2>&1)" || true
+      if grep -q '"exists": true' <<<"$voice_probe"; then voice_deployed=1; fi
+      for arg in "$@"; do if [[ "$arg" == *brain_enabled=false* ]]; then disabling=1; fi; done
+      if (( voice_deployed && disabling )); then
+        bw_info "provision: telegram-alerter (first: Brain is being disabled)"
+        bw_ansible blackwall-voice ansible/playbooks/voice.yml "$@"
+      fi
       bw_info "provision: brain-analyst"
       bw_ansible blackwall-brain ansible/playbooks/brain.yml "$@"
-      # voice_max_level depends on Brain: keep Voice consistent (same args),
-      # but only if Voice is deployed.
-      if bw_ansible_adhoc blackwall-voice wazuh_managers -b \
-           -m stat -a 'path=/etc/systemd/system/voice-alerter.service' 2>&1 \
-           | grep -q '"exists": true'; then
+      if (( voice_deployed && ! disabling )); then
         bw_info "provision: telegram-alerter (re-run to match Brain)"
         bw_ansible blackwall-voice ansible/playbooks/voice.yml "$@"
       fi

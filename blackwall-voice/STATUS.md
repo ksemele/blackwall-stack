@@ -97,8 +97,10 @@ blockers: []
 
 ## Open questions
 
+- Log rotation of `alerts.json` loses the unread tail (the alerter reopens at EOF); pre-existing, not addressed.
+
 - `telegram_bot_token` and `telegram_chat_id`: in the lab they come from env (`BW_TELEGRAM_*` in `.envrc`, direnv); scrubbed from git history on 2026-10-12. For prod — supplied from the owner's secret management (no ansible-vault).
-- `voice_max_level` is ignored (with a warning) when `brain-analyst` is not running on the host; `bw-lab provision brain` re-runs Voice.
+- `voice_max_level` is ignored when `brain-analyst` is not active: at deploy time (warning, clamp to the deployed analysis_threshold - 1) and at runtime (15 s check). `bw-lab provision brain` re-runs Voice (first when disabling Brain).
 
 ## Decisions
 

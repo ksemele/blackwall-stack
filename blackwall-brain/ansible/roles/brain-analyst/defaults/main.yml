@@ -35,6 +35,8 @@ brain_install_dir: /opt/brain-analyst
 claude_api_key: ""
 # Required only when the API key is not scoped to a workspace (wrkspc_...)
 claude_workspace_id: ""
+claude_api_url: "https://api.anthropic.com/v1/messages"
+claude_timeout: 30   # seconds per request
 claude_model: "claude-haiku-5-5"
 # Thinking is on by default for this model and counts against max_tokens:
 # keep room for it, and keep it short with low effort.

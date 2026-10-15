@@ -41,6 +41,8 @@ blockers: []
 
 ## Plans
 
+- Backlog: log rotation of `alerts.json` loses the unread tail (reopen at EOF); pre-existing.
+
 - **Workload identity federation instead of a static API key.** Short-lived
   tokens exchanged from an OIDC JWT, no long-lived secret on the host. Worth it
   once Brain runs where an OIDC issuer comes for free (Kubernetes, AWS, GCP);
