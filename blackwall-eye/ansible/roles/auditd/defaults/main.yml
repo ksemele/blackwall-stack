@@ -1,2 +1,5 @@
 ---
 auditd_log_format: ENRICHED
+auditd_packages:
+  Debian: [auditd, audispd-plugins]
+  RedHat: [audit]

@@ -1,0 +1,42 @@
+---
+# sentinel.yml — Wazuh server stack on the RHEL-family lab node (black-sentinel-03).
+# Not part of all.yml / bw-lab provision eye; run directly:
+#   cd blackwall-eye && ansible-playbook ansible/playbooks/sentinel.yml
+# Order: certs -> firewall (with podman coexistence) -> indexer -> manager/filebeat
+# -> dashboard -> Cloudflare origin filter. The manager is agent 000, so no agent role.
+
+- import_playbook: wazuh-certificates.yml
+  vars:
+    wazuh_cert_hosts: sentinel
+
+- name: Firewall on the sentinel node
+  hosts: sentinel
+  become: true
+  roles:
+    - role: nftables
+      tags: [nftables, firewall]
+
+- name: Wazuh indexer on the sentinel node
+  hosts: sentinel
+  become: true
+  roles:
+    - wazuh-indexer
+
+- name: Wazuh manager on the sentinel node
+  hosts: sentinel
+  become: true
+  roles:
+    - wazuh-manager
+
+- name: Wazuh dashboard on the sentinel node
+  hosts: sentinel
+  become: true
+  roles:
+    - wazuh-dashboard
+
+- name: Cloudflare origin filter on the sentinel node
+  hosts: sentinel
+  become: true
+  roles:
+    - role: cf-wall
+      tags: [cf-wall, firewall]

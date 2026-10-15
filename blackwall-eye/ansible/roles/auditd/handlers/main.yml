@@ -1,6 +1,31 @@
 ---
-- name: Restart auditd
-  systemd:
+# Same-named handlers collapse into one, so each family gets a unique name and
+# listens on the shared notify topic.
+- name: Reload audit rules (Debian)
+  listen: Reload audit rules
+  ansible.builtin.systemd:
     name: auditd
     state: restarted
+  when: ansible_facts['os_family'] == 'Debian'
+  ignore_errors: "{{ _dockerenv.stat.exists | default(false) }}"
+
+- name: Reload audit rules (RedHat)
+  listen: Reload audit rules
+  ansible.builtin.command: augenrules --load
+  when: ansible_facts['os_family'] == 'RedHat'
+  ignore_errors: "{{ _dockerenv.stat.exists | default(false) }}"
+
+- name: Restart auditd (Debian)
+  listen: Restart auditd
+  ansible.builtin.systemd:
+    name: auditd
+    state: restarted
+  when: ansible_facts['os_family'] == 'Debian'
+  ignore_errors: "{{ _dockerenv.stat.exists | default(false) }}"
+
+# RHEL refuses `systemctl restart auditd`; the service wrapper is the supported path.
+- name: Restart auditd (RedHat)
+  listen: Restart auditd
+  ansible.builtin.command: service auditd restart
+  when: ansible_facts['os_family'] == 'RedHat'
   ignore_errors: "{{ _dockerenv.stat.exists | default(false) }}"

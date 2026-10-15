@@ -3,13 +3,43 @@ module: blackwall-eye
 status: in_progress
 stage: 1
 last_updated: 2026-10-15
-last_task: "prod firewall as code: nftables role on RHEL + podman + drop-in, new cf-wall role, nft-equiv tool, Rocky 9 lab node"
-next_task: "Choose the next Eye item: Suricata/Zeek network layer (stage 3) or Wazuh version pin"
+last_task: "Wazuh server stack on RHEL (lab sentinel next to podman, loopback-only, per-host certs); version pinning; footprint measured"
+next_task: "Before the prod host becomes the manager: backlog item (auditd on real RHEL), then a prod inventory for the stack (loopback binds, heap) — owner decides when"
 blockers: []
 ---
 
 ## Done
 
+- 2026-10-15: Wazuh server stack on the RHEL family (spec
+  `docs/superpowers/specs/2026-10-15-wazuh-server-rhel-design.md`).
+  - `wazuh-indexer`, `wazuh-manager` (+ filebeat), `wazuh-dashboard` on dnf
+    (pinned, `disable_excludes`); binding variables (`wazuh_api_host`,
+    dashboard host/port, indexer host, `wazuh_indexer_heap`); certificates per
+    server host.
+  - Lab node `black-sentinel-03` (Rocky 9) models the prod host: podman nginx
+    on 443 (podman `firewall_driver = nftables`), `nftables` with `nft_podman`
+    and forward drop, `cf-wall`, the stack on 127.0.0.1. `bw-check sentinel`:
+    loopback binds, not reachable on the lab IP, 443 via cf-wall allow -> DNAT ->
+    forward, non-allowed source dropped, netavark + container DNS survive a
+    reload.
+  - Footprint (idle, heap 1g): 2.2 GiB container; indexer 1.75 GiB, manager
+    ~460 MiB, dashboard ~170 MiB, filebeat ~15 MiB; CPU ~4 %.
+  - Wazuh packages pinned (apt hold / yum exclude), checked by
+    `bw-check versions`.
+- 2026-10-15: Wazuh agent on the RHEL family (spec
+  `docs/superpowers/specs/2026-10-15-wazuh-agent-rhel-design.md`).
+  - New `wazuh-repo` role: Wazuh version + apt (signed-by keyring, no
+    `apt_key`) and yum repositories; meta dependency of all four Wazuh roles.
+  - `wazuh-agent` on Debian + RedHat (journald source on RedHat), `auditd` on
+    both (RedHat: `audit` package, `augenrules --load` / `service auditd restart`).
+  - Lab: `black-rocky-02` enrolled; inventory split into OS and functional
+    groups; `verify-agents.yml` checks every agent by name;
+    `verify-agent-events.yml` proves a failed SSH login on the RHEL agent
+    reaches the indexer.
+  - Carried into sub-project B (before the prod host is provisioned): smoke
+    test auditd handlers on a real RHEL host, incl. immutable rules (`-e 2`).
+- 2026-10-15: Wazuh packages pinned against unattended upgrades (apt hold on
+  Debian, yum repo `exclude` + `disable_excludes` on RedHat).
 - 2026-10-15: prod firewall as code (spec `docs/superpowers/specs/2026-10-14-nftables-prod-port-design.md`).
   - `nftables` role: Debian + RedHat (`nft_conf_path`), `nftables.service`
     drop-in without `flush ruleset`, optional `nft_podman` (anti-spoof,

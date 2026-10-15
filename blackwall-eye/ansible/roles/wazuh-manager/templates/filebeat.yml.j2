@@ -1,14 +1,14 @@
 # Filebeat config — manager ships alerts to the local Wazuh indexer.
 # Mirrors Wazuh 4.14 reference (wazuh-installation-assistant/config/filebeat/filebeat.yml).
 output.elasticsearch:
-  hosts: ["172.28.0.10:9200"]
+  hosts: ["{{ wazuh_indexer_network_host }}:9200"]
   protocol: https
   username: "{{ wazuh_indexer_admin_user }}"
   password: "{{ wazuh_indexer_admin_password }}"
   ssl.certificate_authorities:
     - /etc/filebeat/certs/root-ca.pem
-  ssl.certificate: "/etc/filebeat/certs/black-master-00.pem"
-  ssl.key: "/etc/filebeat/certs/black-master-00-key.pem"
+  ssl.certificate: "/etc/filebeat/certs/{{ inventory_hostname }}.pem"
+  ssl.key: "/etc/filebeat/certs/{{ inventory_hostname }}-key.pem"
 
 setup.template.json.enabled: true
 setup.template.json.path: '/etc/filebeat/wazuh-template.json'

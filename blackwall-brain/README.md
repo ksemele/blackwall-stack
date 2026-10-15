@@ -68,6 +68,9 @@ ansible-playbook ansible/playbooks/brain.yml                          # on again
 
 In the lab: `tests/bin/bw-lab provision brain -e brain_enabled=false`; while it
 is off, `bw-check brain` reports SKIP. Set it in the inventory to make it stick.
+Enabling requires `claude_api_key`, `telegram_bot_token` and `telegram_chat_id`
+(the role fails up front otherwise — in the lab run through `direnv exec .`);
+disabling works without them.
 
 ## Verify
 

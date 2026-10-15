@@ -1,0 +1,28 @@
+---
+# Rocky 9 server node (Wazuh server stack, podman nginx fixture).
+
+# Wazuh server stack bound to loopback (certs generated per host).
+wazuh_cert_ip: "127.0.0.1"
+wazuh_certs_local_dir: "{{ playbook_dir }}/../../../tests/.wazuh-certs/{{ inventory_hostname }}"
+wazuh_indexer_network_host: "127.0.0.1"
+wazuh_indexer_heap: "1g"
+wazuh_api_host: "127.0.0.1"
+wazuh_dashboard_listen_host: "127.0.0.1"
+wazuh_dashboard_listen_port: 5601
+wazuh_indexer_url: "https://127.0.0.1:9200"
+wazuh_manager_api_url: "https://127.0.0.1:55000"
+
+# Firewall: podman's default network (bridge podman0) coexists with the base table.
+nft_podman:
+  net: 10.88.0.0/16
+  if: podman0
+# Prod model: 443 is not public; it reaches nginx only via cf-wall allow -> netavark DNAT -> forward.
+nft_public_tcp: [22]
+nft_forward_policy: drop
+# black-master-00 plays the admin/allowed source.
+cfwall_admin_allow: [172.28.0.10]
+wazuh_agent_sources: [172.28.0.0/24]
+nft_restricted:
+  - {port: 1514, name: agents_events, sources: "{{ wazuh_agent_sources }}"}
+  - {port: 1515, name: agents_enroll, sources: "{{ wazuh_agent_sources }}"}
+cfwall_wan_if: eth0

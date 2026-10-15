@@ -1,0 +1,101 @@
+---
+# verify-agent-events.yml — Prove events from RHEL-family agents reach the indexer.
+#
+# Lab only (bw_lab). From the manager, a failed SSH login is provoked on each
+# live RHEL-family agent; the check then polls the indexer for the resulting
+# authentication alert. Proves journald collection -> manager -> filebeat ->
+# indexer end to end, which Ubuntu (auth.log) agents already cover elsewhere.
+#
+# Usage (from blackwall-eye/):
+#   ansible-playbook -i ../tests/inventory/hosts.yml ansible/playbooks/verify-agent-events.yml
+
+- name: Verify RHEL-family agent events reach the indexer
+  hosts: wazuh_managers
+  become: true
+  gather_facts: false
+
+  vars:
+    _event_agents: >-
+      {{ groups['wazuh_agents'] | intersect(groups['rhel9'] | default([]))
+         | difference(wazuh_fixture_agents | default([])) }}
+    # The indexer binds its network address, not loopback (wazuh-indexer role).
+    # wazuh_indexer_network_host is only a role default, not set in the
+    # inventory, so the lab address is kept as the fallback here.
+    _indexer_url: "https://{{ wazuh_indexer_network_host | default('172.28.0.10') }}:{{ wazuh_indexer_http_port | default(9200) }}"
+
+    _index_pattern: "wazuh-alerts-*"
+    # Hit count of the search result in `_r`; 0 when the response has no hits
+    # (400/404 while the index is not created or searchable yet).
+    _hit_count: >-
+      {{ (_r.json | default({})).get('hits', {}).get('total', {}).get('value', 0) | int }}
+
+  tasks:
+    - name: Skip outside the lab
+      ansible.builtin.meta: end_play
+      when: not (bw_lab | default(false) | bool)
+
+    - name: Assert there are agents to check
+      ansible.builtin.assert:
+        that: _event_agents | length > 0
+        fail_msg: >-
+          no live RHEL-family agent to check (groups rhel9 and wazuh_agents
+          must intersect, fixtures excluded)
+        quiet: true
+
+    - name: Record start time
+      ansible.builtin.command: date -u +%Y-%m-%dT%H:%M:%SZ
+      register: _start
+      changed_when: false
+
+    - name: Provoke a failed SSH login on each agent
+      ansible.builtin.command: >-
+        ssh -o BatchMode=yes -o StrictHostKeyChecking=no
+        -o UserKnownHostsFile=/dev/null -o ConnectTimeout=5
+        nosuchuser@{{ item }}
+      failed_when: false
+      changed_when: false
+      loop: "{{ _event_agents }}"
+
+    - name: Wait for the authentication alert in the indexer
+      ansible.builtin.uri:
+        url: "{{ _indexer_url }}/{{ _index_pattern }}/_search"
+        method: POST
+        user: "{{ wazuh_indexer_admin_user }}"
+        password: "{{ wazuh_indexer_admin_password }}"
+        force_basic_auth: true
+        validate_certs: false
+        body_format: json
+        body:
+          size: 1
+          query:
+            bool:
+              filter:
+                - term: {agent.name: "{{ item }}"}
+                - terms: {rule.groups: [authentication_failed, invalid_login]}
+                - range: {"@timestamp": {gte: "{{ _start.stdout }}"}}
+        status_code: [200, 400, 404]
+        return_content: true
+      register: _hits
+      until: _hit_count | int > 0
+      # An exhausted poll must reach the assert below, which reports the last result.
+      ignore_errors: true
+      retries: 24
+      delay: 5
+      loop: "{{ _event_agents }}"
+      loop_control:
+        label: "{{ item }}"
+      vars:
+        _r: "{{ _hits }}"
+
+    - name: Assert an alert arrived for every agent
+      ansible.builtin.assert:
+        that: _hit_count | int > 0
+        fail_msg: >-
+          no authentication alert from {{ item.item }} in the indexer within 120 s;
+          last result: {{ item.json | default(item.content | default(item.msg | default(''))) }}
+        quiet: true
+      loop: "{{ _hits.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+      vars:
+        _r: "{{ item }}"

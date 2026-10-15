@@ -37,9 +37,9 @@
       ansible.builtin.file:
         path: /var/ossec/logs/alerts/alerts.json
         state: touch
-        owner: root
-        group: root
-        mode: "0644"
+        owner: wazuh
+        group: wazuh
+        mode: "0640"
         modification_time: preserve
         access_time: preserve
 

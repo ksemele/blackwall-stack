@@ -1,13 +1,25 @@
 ---
-- name: Wait for dpkg lock to be released
-  shell: while fuser /var/lib/dpkg/lock-frontend /var/lib/dpkg/lock >/dev/null 2>&1; do sleep 2; done
-  changed_when: false
+- name: Debian — install dashboard
+  when: ansible_facts['os_family'] == 'Debian'
+  block:
+    - name: Install wazuh-dashboard package
+      apt:
+        name: "wazuh-dashboard{{ wazuh_pkg_suffix }}"
+        allow_change_held_packages: true
+        state: present
+        update_cache: true
 
-- name: Install wazuh-dashboard package
-  apt:
-    name: "wazuh-dashboard={{ wazuh_version }}-*"
+    - name: Hold wazuh-dashboard
+      ansible.builtin.dpkg_selections:
+        name: wazuh-dashboard
+        selection: hold
+
+- name: RedHat — install dashboard
+  when: ansible_facts['os_family'] == 'RedHat'
+  ansible.builtin.dnf:
+    name: "wazuh-dashboard{{ wazuh_pkg_suffix }}"
+    disable_excludes: wazuh
     state: present
-    update_cache: true
 
 - name: Ensure /etc/wazuh-dashboard/certs dir exists
   file:
@@ -16,6 +28,13 @@
     owner: wazuh-dashboard
     group: wazuh-dashboard
     mode: "0500"
+
+- name: Unpack cert bundle (removed again at the end of the dashboard role)
+  ansible.builtin.unarchive:
+    src: "{{ wazuh_certs_local_dir }}/wazuh-certificates.tar"
+    dest: /tmp/
+    remote_src: false
+  changed_when: false
 
 - name: Copy dashboard TLS certs from bundle
   copy:
@@ -119,7 +138,7 @@
 
 - name: Wait for dashboard HTTPS to return 302 (full init)
   uri:
-    url: "https://127.0.0.1:443/"
+    url: "https://{{ '127.0.0.1' if wazuh_dashboard_listen_host == '0.0.0.0' else wazuh_dashboard_listen_host }}:{{ wazuh_dashboard_listen_port }}/"
     method: GET
     status_code: 302
     validate_certs: false
@@ -128,3 +147,9 @@
   until: _dash_check.status == 302
   retries: 60
   delay: 5
+
+# Last role of both server playbooks: drop the unpacked key material.
+- name: Remove unpacked cert bundle
+  ansible.builtin.file:
+    path: /tmp/wazuh-certificates
+    state: absent

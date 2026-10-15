@@ -1,32 +1,41 @@
 ---
-- name: Wait for dpkg lock to be released
-  shell: while fuser /var/lib/dpkg/lock-frontend /var/lib/dpkg/lock >/dev/null 2>&1; do sleep 2; done
-  changed_when: false
+- name: Debian — install manager
+  when: ansible_facts['os_family'] == 'Debian'
+  block:
+    - name: Install prerequisites (curl)
+      apt:
+        name:
+          - curl
+        state: present
+        update_cache: true
 
-- name: Install prerequisites (gnupg, curl)
-  apt:
-    name:
-      - gnupg
-      - curl
-    state: present
-    update_cache: true
+    - name: Install wazuh-manager package
+      apt:
+        name: "wazuh-manager{{ wazuh_pkg_suffix }}"
+        allow_change_held_packages: true
+        state: present
+        update_cache: true
 
-- name: Add Wazuh GPG key
-  apt_key:
-    url: "{{ wazuh_apt_key_url }}"
-    state: present
+    - name: Hold wazuh-manager
+      ansible.builtin.dpkg_selections:
+        name: wazuh-manager
+        selection: hold
 
-- name: Add Wazuh apt repository
-  apt_repository:
-    repo: "{{ wazuh_apt_repo }}"
-    state: present
-    filename: wazuh
+- name: RedHat — install manager
+  when: ansible_facts['os_family'] == 'RedHat'
+  block:
+    # curl is present as curl-minimal on the container image; asking for the
+    # full package conflicts. tar is needed by unarchive.
+    - name: Install prerequisites (tar)
+      ansible.builtin.dnf:
+        name: tar
+        state: present
 
-- name: Install wazuh-manager package
-  apt:
-    name: "wazuh-manager={{ wazuh_version }}-*"
-    state: present
-    update_cache: true
+    - name: Install wazuh-manager package
+      ansible.builtin.dnf:
+        name: "wazuh-manager{{ wazuh_pkg_suffix }}"
+        disable_excludes: wazuh
+        state: present
 
 - name: Deploy ossec.conf from template
   template:
@@ -44,6 +53,15 @@
     owner: wazuh
     group: wazuh
     mode: "0660"
+  notify: Restart wazuh-manager
+
+# Without an active host: line the API listens on the packaged default
+# (['0.0.0.0', '::']); wazuh_api_host narrows it (e.g. 127.0.0.1).
+- name: Set API bind address
+  ansible.builtin.lineinfile:
+    path: /var/ossec/api/configuration/api.yaml
+    regexp: '^#?host:'
+    line: "host: {{ ['0.0.0.0', '::'] if wazuh_api_host == '0.0.0.0' else [wazuh_api_host] }}"
   notify: Restart wazuh-manager
 
 - name: Enable and start wazuh-manager service
@@ -65,11 +83,27 @@
   loop: "{{ wazuh_manager_agent_groups }}"
   when: ("  " ~ item ~ " (") not in _agent_groups.stdout
 
-- name: Install filebeat (Wazuh-shipped variant)
-  apt:
-    name: "filebeat={{ wazuh_filebeat_version | default('7.10.2-2') }}"
+- name: Debian — install filebeat (Wazuh-shipped variant)
+  when: ansible_facts['os_family'] == 'Debian'
+  block:
+    - name: Install filebeat
+      apt:
+        name: "filebeat={{ wazuh_filebeat_version }}"
+        allow_change_held_packages: true
+        state: present
+        update_cache: true
+
+    - name: Hold filebeat
+      ansible.builtin.dpkg_selections:
+        name: filebeat
+        selection: hold
+
+- name: RedHat — install filebeat (Wazuh-shipped variant)
+  ansible.builtin.dnf:
+    name: "filebeat-{{ wazuh_filebeat_version }}"
+    disable_excludes: wazuh
     state: present
-    update_cache: true
+  when: ansible_facts['os_family'] == 'RedHat'
 
 - name: Download Wazuh filebeat module for v4.x
   get_url:
@@ -103,7 +137,14 @@
     group: root
     mode: "0500"
 
-- name: Copy filebeat TLS certs (reuse master node bundle)
+- name: Unpack cert bundle (removed again at the end of the dashboard role)
+  ansible.builtin.unarchive:
+    src: "{{ wazuh_certs_local_dir }}/wazuh-certificates.tar"
+    dest: /tmp/
+    remote_src: false
+  changed_when: false
+
+- name: Copy filebeat TLS certs
   copy:
     src: "/tmp/wazuh-certificates/{{ item.src }}"
     dest: "/etc/filebeat/certs/{{ item.dest }}"
@@ -113,8 +154,8 @@
     remote_src: true
   loop:
     - { src: "root-ca.pem",            dest: "root-ca.pem" }
-    - { src: "black-master-00.pem",    dest: "black-master-00.pem" }
-    - { src: "black-master-00-key.pem", dest: "black-master-00-key.pem" }
+    - { src: "{{ inventory_hostname }}.pem",     dest: "{{ inventory_hostname }}.pem" }
+    - { src: "{{ inventory_hostname }}-key.pem", dest: "{{ inventory_hostname }}-key.pem" }
   notify: Restart filebeat
 
 - name: Deploy filebeat.yml

@@ -1,4 +1,19 @@
 ---
+# Empty secrets render a script that can never work (e.g. a lab run without
+# `direnv exec .`). Fail before touching the host; disabling needs no secrets.
+- name: Require Claude and Telegram credentials when enabled
+  ansible.builtin.assert:
+    that:
+      - claude_api_key | default('') | length > 0
+      - telegram_bot_token | default('') | length > 0
+      - telegram_chat_id | default('') | string | length > 0
+    fail_msg: >-
+      claude_api_key / telegram_bot_token / telegram_chat_id is empty. In the lab
+      run through `direnv exec .` (values come from .envrc), elsewhere pass them
+      via ansible-vault. To turn the analyst off use -e brain_enabled=false.
+    quiet: true
+  when: brain_enabled | bool
+
 - name: Ensure python3 is installed
   ansible.builtin.package:
     name: python3

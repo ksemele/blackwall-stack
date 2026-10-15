@@ -5,6 +5,8 @@
   gather_facts: false
 
   vars:
+    # Mirrors wazuh_pinned_packages in the wazuh-repo role defaults.
+    pinned_packages: [wazuh-agent, wazuh-manager, wazuh-indexer, wazuh-dashboard, filebeat]
     expected_packages:
       # auditd is deliberately absent here: the auditd role runs from
       # monitored-host.yml, which targets wazuh_agents only. The manager is not
@@ -16,6 +18,8 @@
         - filebeat
         - nftables
       rhel9:
+        - wazuh-agent
+        - audit
         - nftables
       wazuh_agents:
         - wazuh-agent
@@ -54,7 +58,7 @@
 
     - name: Assert every expected package is installed
       ansible.builtin.assert:
-        that: "'install ok installed' in item.stdout"
+        that: item.stdout | trim is match('^\\S+ \\S+ (install|hold) ok installed$')
         fail_msg: "package {{ item.item }} is not installed on {{ inventory_hostname }}"
       loop: "{{ pkg_query.results }}"
       loop_control:
@@ -78,3 +82,31 @@
         label: "{{ item.item }}"
       when: hostvars[groups['wazuh_managers'] | first].pkg_query is defined
 
+    # Pins: Wazuh packages change version only through Ansible.
+    - name: Assert pinned Wazuh packages are held (Debian)
+      ansible.builtin.assert:
+        that: item.stdout | trim is match('^\\S+ \\S+ hold ok installed$')
+        fail_msg: "{{ item.item }} is not held on {{ inventory_hostname }} (apt-mark hold missing)"
+        quiet: true
+      loop: "{{ pkg_query.results | selectattr('item', 'in', pinned_packages) | list }}"
+      loop_control:
+        label: "{{ item.item }}"
+      when: "'rhel9' not in group_names"
+
+    - name: Read the Wazuh yum repo file (RedHat)
+      ansible.builtin.slurp:
+        src: /etc/yum.repos.d/wazuh.repo
+      register: wazuh_repo_file
+      when: "'rhel9' in group_names"
+
+    - name: Assert the Wazuh yum repo excludes the pinned packages (RedHat)
+      vars:
+        _excl: "{{ (wazuh_repo_file.content | b64decode).splitlines() | select('match', '^exclude\\s*=') | list }}"
+      ansible.builtin.assert:
+        that:
+          - _excl | length > 0
+          - item in (_excl | first)
+        fail_msg: "{{ item }} is not in the exclude line of /etc/yum.repos.d/wazuh.repo on {{ inventory_hostname }}"
+        quiet: true
+      loop: "{{ pkg_query.results | selectattr('item', 'in', pinned_packages) | map(attribute='item') | list }}"
+      when: "'rhel9' in group_names"

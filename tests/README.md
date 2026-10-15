@@ -7,7 +7,8 @@ Docker environment shared by all Blackwall modules.
 | `black-master-00` | Wazuh manager + indexer + dashboard (all-in-one) |
 | `black-host-01` | Wazuh agent + auditd target |
 | `black-dead-98` | agent fixture, stopped on purpose (`disconnected` status) |
-| `black-rocky-02` | Rocky Linux 9, firewall roles on the RHEL family |
+| `black-rocky-02` | Rocky Linux 9: Wazuh agent (journald) + firewall roles on the RHEL family |
+| `black-sentinel-03` | Rocky Linux 9: Wazuh server stack node (podman nginx fixture on 443) |
 | `black-metrics-00` | Prometheus |
 | `black-grafana-00` | Grafana |
 | `black-aptcache-00` | apt-cacher-ng — apt cache for the nodes, lab only |
@@ -27,6 +28,12 @@ Two scripts drive everything:
 > Raw `docker` commands below assume the **repo root**; raw `ansible` commands
 > assume the **module directory** (`blackwall-eye/`, `blackwall-voice/`), each of
 > which has an `ansible.cfg` pointing at `../tests/inventory/`.
+>
+> Inventory layout (`tests/inventory/hosts.yml`): OS groups (`ubuntu2204`,
+> `rhel9`) list hosts by distribution; functional groups (`wazuh_managers`,
+> `wazuh_agents`, `cf_wall`) sit beside them, so a host can be both. Agents that
+> are broken on purpose are listed in `wazuh_fixture_agents` and skipped by the
+> agent checks.
 
 ---
 
@@ -69,7 +76,7 @@ tests/bin/bw-lab reset
 | `bw-lab down [--keep-data]` | stop the environment; volumes are removed unless `--keep-data` |
 | `bw-lab reset` | `down -v` + wipe Wazuh certificates + `up` |
 | `bw-lab status` | containers, published ports, health of Prometheus/Grafana/dashboard |
-| `bw-lab provision <target> [ansible args]` | ansible only: `eye`, `nftables`, `metrics`, `voice`, `cf-wall`, `brain`, `fixtures`, `all`; `brain` passes extra args through, e.g. `-e brain_enabled=false` |
+| `bw-lab provision <target> [ansible args]` | ansible only: `eye`, `nftables`, `metrics`, `voice`, `cf-wall`, `brain`, `sentinel` (podman nginx fixture, then the full Wazuh server stack + firewall + cf-wall on black-sentinel-03; not part of `all`), `fixtures`, `all`; `brain` passes extra args through, e.g. `-e brain_enabled=false` |
 | `bw-lab ssh <host> [cmd...]` | shell into a container (root password `blackwall`) |
 | `bw-lab logs <service> [-f]` | compose logs for one service |
 | `bw-lab open <target>` | open `dashboard`, `grafana` or `prometheus` in a browser |
@@ -105,6 +112,13 @@ asking for the password.
 
 ## 3. `bw-check` — verification
 
+The sentinel (`black-sentinel-03`) is a separate Wazuh stack: it is excluded
+from the main-stack checks and provisions (`hosts: all` plays run with
+`!sentinel`) and has its own target `sentinel`. Its podman fixture needs the
+`containers.podman` Ansible collection on the controller, and the indexer role
+needs `ansible.posix` (`ansible-galaxy collection install containers.podman
+ansible.posix`).
+
 ```bash
 tests/bin/bw-check all        # everything; exit code 0 only when nothing failed
 tests/bin/bw-check metrics    # just one group
@@ -117,10 +131,11 @@ tests/bin/bw-check metrics    # just one group
 | `nft` | `chain input` is `policy drop` and every expected port is in `set public_tcp` |
 | `cf-wall` | table `inet blackwall_wall` loaded with Cloudflare prefixes, timer enabled, a refresh that fetches junk leaves the live rules untouched (opt-in: SKIP until `bw-lab provision cf-wall`) |
 | `ports` | expected listeners inside the containers, plus published ports probed from the Mac |
-| `wazuh` | agents registered on the manager, REST API answers, indexer answers, `black-ghost-99` is `never_connected` and `black-dead-98` is `disconnected`, dashboard responds |
+| `wazuh` | every agent in `wazuh_agents` (minus `wazuh_fixture_agents`) is `Active` on the manager, RHEL-family agent events (a failed SSH login) reach the indexer, REST API answers, indexer answers, `black-ghost-99` is `never_connected` and `black-dead-98` is `disconnected`, dashboard responds |
 | `metrics` | node_exporter serves metrics, Prometheus targets are `up`, `node_load1` returns data, Grafana is healthy with its datasource and dashboard |
 | `voice` | `telegram-alerter` is running and Telegram accepted a synthetic alert |
 | `brain` | `brain-analyst` is running; a synthetic level-10 alert was analysed by Claude and delivered to Telegram |
+| `sentinel` | Wazuh stack on `black-sentinel-03`: services active, indexer/API/dashboard answer on 127.0.0.1 but not on 172.28.0.16 (probed from master), agent 000 active, packages excluded, podman nginx on 443, `inet netavark` and container DNS survive `systemctl reload nftables` (opt-in: SKIP until `bw-lab provision sentinel`) |
 
 Every line is `PASS`, `FAIL` or `SKIP`; the exit code is 0 only when there is no
 `FAIL`, so this is usable straight from CI. Output of a failing step is printed
@@ -182,7 +197,8 @@ Unset variables render as empty strings — playbooks still run, delivery just f
 | `black-master-00` | manager + indexer + dashboard | `2200→22` | `5601→443`, `127.0.0.1:55000→55000`, `127.0.0.1:9200→9200` | `172.28.0.10` |
 | `black-host-01` | agent + auditd target | `2201→22` | — | `172.28.0.11` |
 | `black-dead-98` | agent fixture — disconnected | `2202→22` | — | `172.28.0.98` |
-| `black-rocky-02` | Rocky Linux 9 — firewall roles | `2203→22` | — | `172.28.0.15` |
+| `black-rocky-02` | Rocky Linux 9 — agent + firewall roles | `2203→22` | — | `172.28.0.15` |
+| `black-sentinel-03` | Rocky Linux 9 — server node + podman nginx fixture | `2204→22` | — | `172.28.0.16` |
 | `black-metrics-00` | Prometheus | — | `9090→9090` | `172.28.0.12` |
 | `black-grafana-00` | Grafana | — | `3000→3000` | `172.28.0.13` |
 | `black-aptcache-00` | apt-cacher-ng | — | — | `172.28.0.14` |
@@ -204,7 +220,7 @@ mount at `tests/.apt-cache/` (gitignored), so it survives `bw-lab down` and
 
 `packages.wazuh.com` is HTTPS-only, and a proxy cannot cache through a CONNECT
 tunnel. So the lab inventory (`tests/inventory/group_vars/all.yml`) points
-`wazuh_apt_repo` at `http://packages.wazuh.com/...`, and the cache remaps that
+`wazuh_apt_repo_url` at `http://packages.wazuh.com/...`, and the cache remaps that
 to the `https://` upstream (`tests/docker/images/aptcache/blackwall.conf`).
 Packages are still verified by the Wazuh GPG signature on the repo metadata.
 Role defaults keep `https://` — none of this exists outside the lab.
@@ -670,6 +686,12 @@ cat tests/docker/ssh_config >> ~/.ssh/config
 `wazuh-certificates.yml` and consumed by indexer, manager (filebeat),
 and dashboard roles. It's per-environment and gitignored.
 
+The sentinel node (`black-sentinel-03`) has its own bundle at
+`tests/.wazuh-certs/black-sentinel-03/` (node name = hostname, IP 127.0.0.1),
+generated by `ansible/playbooks/sentinel.yml` (or
+`wazuh-certificates.yml -e wazuh_cert_hosts=sentinel`). `bw-lab reset` does not
+touch it.
+
 To rotate certs:
 
 ```bash
@@ -758,7 +780,7 @@ blackwall/                                  # repo root
 │   ├── inventory/
 │   │   ├── hosts.yml
 │   │   └── group_vars/                     # loaded because it sits next to the inventory
-│   │       ├── all.yml                     # lab: wazuh_apt_repo via the apt cache
+│   │       ├── all.yml                     # lab: wazuh_apt_repo_url via the apt cache
 │   │       ├── wazuh_managers.yml
 │   │       └── wazuh_agents.yml
 │   ├── triggers/
@@ -776,6 +798,7 @@ blackwall/                                  # repo root
 │       │   ├── monitored-host.yml          # agent + auditd
 │       │   ├── nftables.yml
 │       │   ├── verify-agents.yml
+│       │   ├── verify-agent-events.yml
 │       │   ├── verify-api.yml
 │       │   ├── verify-auditd.yml
 │       │   ├── verify-nftables.yml

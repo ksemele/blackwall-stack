@@ -29,6 +29,13 @@
   </client_buffer>
 
   <!-- Log collection -->
+{% if ansible_facts['os_family'] == 'RedHat' %}
+  <!-- RHEL family: system logs live in journald (no rsyslog files) -->
+  <localfile>
+    <location>journald</location>
+    <log_format>journald</log_format>
+  </localfile>
+{% else %}
   <localfile>
     <log_format>syslog</log_format>
     <location>/var/log/auth.log</location>
@@ -38,6 +45,7 @@
     <log_format>syslog</log_format>
     <location>/var/log/syslog</location>
   </localfile>
+{% endif %}
 {% if wazuh_sessions_enabled %}
   <!-- Login sessions for the blackwall Sessions tab (manager rule 100100) -->
   <localfile>

@@ -1,0 +1,62 @@
+---
+# sentinel-podman.yml — nginx in rootful podman on black-sentinel-03 (443->80).
+# Fixture for the nft/podman coexistence checks: netavark owns `table inet
+# netavark`, the firewall role must leave it alone.
+#
+# Usage (from repo root):
+#   tests/bin/bw-lab provision sentinel
+#
+# Spike result (Rocky 9.8, podman 5.8, netavark 1.17): overlay storage and
+# systemd cgroups work nested in the lab container unchanged. Only the firewall
+# driver needs setting: the default (iptables) writes legacy tables that
+# `nft list tables` cannot see, so pin netavark to the nftables driver.
+#
+# Idempotent: safe to run multiple times.
+- name: Podman nginx fixture
+  hosts: sentinel
+  become: true
+
+  tasks:
+    - name: Install podman
+      ansible.builtin.dnf:
+        name: podman
+        state: present
+
+    - name: Pin netavark to the nftables firewall driver
+      ansible.builtin.copy:
+        dest: /etc/containers/containers.conf.d/50-firewall.conf
+        content: |
+          [network]
+          firewall_driver = "nftables"
+        mode: "0644"
+      register: firewall_conf
+
+    # A changed firewall driver only applies to containers created afterwards.
+    - name: Drop the container so it is recreated under the new driver
+      containers.podman.podman_container:
+        name: web
+        state: absent
+      when: firewall_conf is changed
+
+    - name: Run nginx on 443
+      containers.podman.podman_container:
+        name: web
+        image: docker.io/library/nginx:1.27-alpine
+        state: started
+        restart_policy: always
+        publish:
+          - "0.0.0.0:443:80/tcp"
+
+    - name: Restart podman containers on boot
+      ansible.builtin.systemd:
+        name: podman-restart.service
+        enabled: true
+
+    - name: Wait for nginx
+      ansible.builtin.uri:
+        url: http://127.0.0.1:443
+        status_code: 200
+      register: web
+      retries: 10
+      delay: 1
+      until: web is succeeded
