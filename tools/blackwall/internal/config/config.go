@@ -13,9 +13,25 @@ type Config struct {
 
 type Context struct {
 	Description string            `yaml:"description"`
+	SSH         *SSHTunnel        `yaml:"ssh,omitempty"`
 	Wazuh       *WazuhSubsystem   `yaml:"wazuh,omitempty"`
 	Indexer     *IndexerSubsystem `yaml:"indexer,omitempty"`
 }
+
+// SSHTunnel reaches a loopback-only manager through the system ssh: the
+// wazuh/indexer server and port are then as seen from Host.
+type SSHTunnel struct {
+	// Host is the ssh destination: an alias from ~/.ssh/config or user@host.
+	Host string `yaml:"host"`
+	// Command replaces the plain "ssh" argv prefix (e.g. sshpass ... ssh -F file).
+	// When set, BatchMode is not forced, so password helpers keep working.
+	Command []string `yaml:"command"`
+	// ConnectTimeout bounds waiting for the forwarded ports; 0 means DefaultSSHConnectTimeout.
+	ConnectTimeout time.Duration `yaml:"connect_timeout"`
+}
+
+// DefaultSSHConnectTimeout applies when ssh.connect_timeout is omitted.
+const DefaultSSHConnectTimeout = 10 * time.Second
 
 type WazuhSubsystem struct {
 	Server   string `yaml:"server"`
@@ -49,6 +65,10 @@ func DefaultExcludeGroups() []string { return []string{"sca", "blackwall_session
 type TLS struct {
 	InsecureSkipVerify bool   `yaml:"insecure_skip_verify"`
 	CAFile             string `yaml:"ca_file"`
+	// ServerName overrides the name verified in the server certificate. It is
+	// not read from YAML: the ssh tunnel sets it to the configured server when
+	// the client dials 127.0.0.1:<local port> instead.
+	ServerName string `yaml:"-"`
 }
 
 type UI struct {

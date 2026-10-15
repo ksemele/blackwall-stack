@@ -58,6 +58,12 @@ func ApplyDefaults(cfg Config) Config {
 		cfg.SelectContextOnStart = true
 	}
 	for name, ctx := range cfg.Contexts {
+		if ctx.SSH != nil && ctx.SSH.ConnectTimeout == 0 {
+			s := *ctx.SSH
+			s.ConnectTimeout = DefaultSSHConnectTimeout
+			ctx.SSH = &s
+			cfg.Contexts[name] = ctx
+		}
 		if ctx.Indexer == nil {
 			continue
 		}
@@ -77,7 +83,7 @@ func ApplyDefaults(cfg Config) Config {
 
 var envVarRE = regexp.MustCompile(`\$\{([A-Za-z_][A-Za-z0-9_]*)\}`)
 
-// ExpandEnv walks every string inside Contexts.*.Wazuh and
+// ExpandEnv walks every string inside Contexts.*.SSH, Contexts.*.Wazuh and
 // Contexts.*.Indexer and substitutes ${VAR} from the process environment.
 // An empty post-expansion value is an error (typically a missing env var).
 func ExpandEnv(cfg Config) (Config, error) {
@@ -97,6 +103,18 @@ func ExpandEnv(cfg Config) (Config, error) {
 			return out
 		}
 
+		if ctx.SSH != nil {
+			s := *ctx.SSH
+			s.Host = expand(s.Host, "ssh.host")
+			if s.Command != nil {
+				cmd := make([]string, len(s.Command))
+				for i, a := range s.Command {
+					cmd[i] = expand(a, fmt.Sprintf("ssh.command[%d]", i))
+				}
+				s.Command = cmd
+			}
+			ctx.SSH = &s
+		}
 		if ctx.Wazuh != nil {
 			w := *ctx.Wazuh
 			w.Server = expand(w.Server, "wazuh.server")
@@ -130,6 +148,9 @@ func Validate(cfg Config) error {
 		return fmt.Errorf("config: current context %q not defined in contexts", cfg.Current)
 	}
 	for name, ctx := range cfg.Contexts {
+		if err := validateSSH(name, ctx); err != nil {
+			return err
+		}
 		if w := ctx.Wazuh; w != nil {
 			if w.Server == "" || w.Port == 0 || w.User == "" || w.Password == "" {
 				return fmt.Errorf(
@@ -158,6 +179,29 @@ func Validate(cfg Config) error {
 				return fmt.Errorf("contexts.%s.indexer.alerts.min_level: %d is outside 0–15", name, *l)
 			}
 		}
+	}
+	return nil
+}
+
+func validateSSH(name string, ctx Context) error {
+	s := ctx.SSH
+	if s == nil {
+		return nil
+	}
+	if strings.TrimSpace(s.Host) == "" {
+		return fmt.Errorf("contexts.%s.ssh.host is required when the ssh block is present", name)
+	}
+	for i, a := range s.Command {
+		if strings.TrimSpace(a) == "" {
+			return fmt.Errorf("contexts.%s.ssh.command[%d] is empty", name, i)
+		}
+	}
+	// Sub-second values are almost certainly a typo (500ms vs 500s).
+	if s.ConnectTimeout < time.Second {
+		return fmt.Errorf("contexts.%s.ssh.connect_timeout must be a duration of at least 1s (e.g. 10s)", name)
+	}
+	if ctx.Wazuh == nil {
+		return fmt.Errorf("contexts.%s.ssh needs a wazuh section to forward", name)
 	}
 	return nil
 }
