@@ -1,0 +1,495 @@
+#!/usr/bin/env python3
+"""blackwall-fang-refresh -- reputation blocklists into nftables table inet blackwall_fang.
+
+Fetches Spamhaus DROP / FireHOL level1 (https), drops everything private or
+reserved, carves the allowlist (config + Cloudflare + this host's addresses)
+out of the blocklist, renders the table for MODE (observe|enforce), checks it
+with `nft -c`, loads it and only then persists it.
+
+Any failure before the load leaves the live table and the persisted file
+untouched. Source data (and the Cloudflare list) that was validated AND applied is cached
+under /var/lib/blackwall-fang/ (a cache write error only logs a warning). If a download
+fails, or the fresh data is rejected (floor / format check), the table is rebuilt from that
+cache with the CURRENT mode and allowlist (exit 3). A cache older than
+MAX_CACHE_AGE_DAYS is not trusted: the table is rebuilt with an EMPTY blocklist (fail open,
+mode and allowlist unchanged, exit 4). The very first run (no cache, no table, no persisted
+file) with no successful fetch loads an EMPTY blocklist (fail open) and exits 2. With no
+cache at all, a rejected update aborts (exit 1, live table untouched).
+Exit codes: 0 ok, 1 aborted (nothing touched), 2 fail-open empty (first run),
+3 from cache, 4 cache too old -> empty blocklist.
+ERROR and WARNING lines also go to syslog (identifier blackwall-fang-refresh) so that
+Wazuh can alert on a degraded refresh.
+
+Config: /etc/blackwall/fang.conf (KEY=VALUE lines, see the fang-reputation role).
+Run:    blackwall-fang-refresh [--dry-run]
+"""
+import fcntl
+import hashlib
+import ipaddress
+import json
+import os
+import subprocess
+import sys
+import syslog
+import tempfile
+import time
+import urllib.request
+from datetime import datetime, timezone
+
+CONF = os.environ.get("BLACKWALL_FANG_CONF", "/etc/blackwall/fang.conf")
+TABLE = "blackwall_fang"
+MAX_BYTES = 32 * 1024 * 1024
+STATE_DIR = os.environ.get("BLACKWALL_FANG_STATE", "/var/lib/blackwall-fang")
+CF_MIN = 10  # Cloudflare IPv4 list sanity floor
+
+# Never blocked: private, loopback, link-local, CGNAT, documentation, multicast,
+# reserved (0/8 "this network" included).
+RESERVED = [ipaddress.ip_network(n) for n in (
+    "0.0.0.0/8", "10.0.0.0/8", "100.64.0.0/10", "127.0.0.0/8", "169.254.0.0/16",
+    "172.16.0.0/12", "192.0.0.0/24", "192.0.2.0/24", "192.88.99.0/24",
+    "192.168.0.0/16", "198.18.0.0/15", "198.51.100.0/24", "203.0.113.0/24",
+    "192.31.196.0/24", "192.52.193.0/24", "192.175.48.0/24",
+    "224.0.0.0/4", "240.0.0.0/4", "255.255.255.255/32")]
+MIN_PREFIX = 8
+
+
+class Abort(Exception):
+    """The update is rejected; nothing is touched."""
+
+
+class FetchError(Abort):
+    """A source could not be downloaded."""
+
+
+def log(msg):
+    """stderr always; ERROR/WARNING also to syslog (Wazuh alerts on them).
+
+    Under systemd stderr already lands in the journal under the same identifier,
+    so those lines go through syslog only (no duplicate event)."""
+    level = (syslog.LOG_ERR if msg.startswith("ERROR") else
+             syslog.LOG_WARNING if msg.startswith("WARNING") else None)
+    if level is not None:
+        try:
+            syslog.openlog("blackwall-fang-refresh", syslog.LOG_PID, syslog.LOG_DAEMON)
+            syslog.syslog(level, msg)
+            syslog.closelog()
+        except Exception:
+            level = None
+        else:
+            if os.environ.get("JOURNAL_STREAM"):
+                return
+    print("[blackwall-fang-refresh] %s" % msg, file=sys.stderr)
+
+
+# ---------- pure helpers (unit-tested) ----------
+
+def subtract(nets, excl):
+    """Remove the address space of `excl` from every network in `nets`."""
+    out = []
+    for n in nets:
+        pieces = [n]
+        for e in excl:
+            nxt = []
+            for p in pieces:
+                if not p.overlaps(e):
+                    nxt.append(p)
+                elif p.subnet_of(e):
+                    continue
+                else:  # e is strictly inside p
+                    nxt.extend(p.address_exclude(e))
+            pieces = nxt
+            if not pieces:
+                break
+        out.extend(pieces)
+    return out
+
+
+def parse_list(text):
+    """Spamhaus JSON lines ({"cidr": ...}) and plain netsets -> IPv4 networks."""
+    nets = []
+    for line in text.splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        if line.startswith("{"):
+            try:
+                tok = json.loads(line).get("cidr")
+            except ValueError:
+                continue
+            if not tok:
+                continue
+        else:
+            tok = line.split()[0]
+        if ":" in tok:
+            continue
+        try:
+            nets.append(ipaddress.ip_network(tok, strict=True))
+        except ValueError:
+            continue
+    return nets
+
+
+def reserved_space(test_blockable=()):
+    """RESERVED, minus the test-only exemptions (empty in production)."""
+    return subtract(RESERVED, list(test_blockable)) if test_blockable else list(RESERVED)
+
+
+def compute(raw_lists, cf_text, allowlist, host_addrs, min_entries, test_blockable=(), names=None):
+    """-> (blocklist, allow, n_before_allow). Raises Abort on a bad update."""
+    reserved = reserved_space(test_blockable)
+    kept = []
+    # Every source must contribute: one junk/empty list next to a good one is
+    # a failed update, not a smaller blocklist.
+    per_source = max(1, min_entries // max(1, len(raw_lists)))
+    for i, text in enumerate(raw_lists):
+        got = 0
+        label = "source #%d%s" % (i + 1, " (%s)" % names[i] if names else "")
+        for n in parse_list(text):
+            rest = subtract([n], reserved)
+            if not rest:
+                continue  # entirely private / reserved
+            if n.prefixlen < MIN_PREFIX:
+                raise Abort("suspicious prefix %s in %s (shorter than /%d) -- update rejected"
+                            % (n, label, MIN_PREFIX))
+            kept.extend(rest)
+            got += 1
+        if got < per_source:
+            raise Abort("%s yielded only %d usable entries (minimum %d each) -- update rejected"
+                        % (label, got, per_source))
+    block = list(ipaddress.collapse_addresses(kept))
+    if len(block) < min_entries:
+        raise Abort("only %d blocklist entries after filtering (minimum %d) -- update rejected"
+                    % (len(block), min_entries))
+
+    allow = []
+    for a in allowlist:
+        try:
+            net = ipaddress.ip_network(a, strict=False)
+        except ValueError:
+            raise Abort("bad ALLOWLIST entry: %r" % a)
+        if net.version != 4:
+            log("WARNING: IPv6 ALLOWLIST entry %s skipped (Fang is IPv4 only)" % net)
+            continue
+        if net.prefixlen < MIN_PREFIX:
+            raise Abort("ALLOWLIST entry %s is shorter than /%d" % (net, MIN_PREFIX))
+        allow.append(net)
+    if cf_text is not None:
+        cf = parse_list(cf_text)
+        if len(cf) < CF_MIN:
+            raise Abort("Cloudflare list has only %d prefixes (minimum %d) -- update rejected"
+                        % (len(cf), CF_MIN))
+        if any(n.prefixlen < MIN_PREFIX for n in cf):
+            raise Abort("Cloudflare list has a prefix shorter than /%d" % MIN_PREFIX)
+        allow.extend(cf)
+    for h in host_addrs:
+        allow.append(ipaddress.ip_network(h + "/32"))
+    allow = list(ipaddress.collapse_addresses(allow))
+    n_before = len(block)
+    block = list(ipaddress.collapse_addresses(subtract(block, allow)))
+    return block, allow, n_before
+
+
+def elements(nets):
+    return ",\n".join("            %s" % n for n in nets)
+
+
+def set_block(name, nets):
+    s = "    set %s {\n        type ipv4_addr\n        flags interval\n        auto-merge\n" % name
+    if nets:
+        s += "        elements = {\n%s\n        }\n" % elements(nets)
+    return s + "    }\n\n"
+
+
+def render(wan_if, mode, allow, block, stamp=""):
+    if mode not in ("observe", "enforce"):
+        raise Abort("MODE must be observe or enforce, got %r" % mode)
+    # `update` breaks the rule when fang_hits is full, so the drop is its own rule.
+    drop_rule = ("        ip saddr @blocklist_static counter drop\n"
+                 if mode == "enforce" else "")
+    out = [
+        "#!/usr/sbin/nft -f\n#\n"
+        "# GENERATED by blackwall-fang-refresh -- manual edits will be overwritten.\n"
+        "# Source: blackwall-fang/ansible/roles/fang-reputation (Ansible-managed)\n"
+        "# Mode: %s   allow: %d   blocklist: %d   updated: %s\n\n" % (mode, len(allow), len(block), stamp),
+        "table inet %s\ndelete table inet %s\n\ntable inet %s {\n\n" % (TABLE, TABLE, TABLE),
+        set_block("allow_v4", allow),
+        set_block("blocklist_static", block),
+        "    # Per-source hits (would-be drops in observe mode, drops in enforce), read by\n"
+        "    # blackwall-fw-export. Reset on every refresh (the table is replaced).\n"
+        "    set fang_hits {\n        type ipv4_addr\n        flags dynamic,timeout\n"
+        "        timeout 1h\n        size 65536\n        counter\n    }\n\n",
+        "    # Priority -160: before cf-wall (-150) and netavark DNAT (-100), so host ports\n"
+        "    # and published container ports are both covered.\n"
+        "    chain prerouting {\n"
+        "        type filter hook prerouting priority -160; policy accept;\n\n"
+        "        # External interface only.\n"
+        '        iifname != "%s" accept\n\n' % wan_if,
+        "        ip saddr @allow_v4 accept\n"
+        "        ct state established,related accept\n\n"
+        "        ip saddr @blocklist_static update @fang_hits { ip saddr counter }\n"
+        + drop_rule + "    }\n}\n",
+    ]
+    return "".join(out)
+
+
+# ---------- I/O ----------
+
+def read_conf(path):
+    conf = {}
+    with open(path) as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            k, v = line.split("=", 1)
+            conf[k.strip()] = v.strip().strip('"').strip("'")
+    return conf
+
+
+def fetch(url, allow_file):
+    if url.startswith("file://"):
+        if not allow_file:
+            raise Abort("file:// source %s refused (TEST_MODE is off)" % url)
+        try:
+            with open(url[len("file://"):]) as f:
+                return f.read()
+        except OSError as e:
+            raise FetchError("cannot read %s: %s" % (url, e))
+    if not url.startswith("https://"):
+        raise Abort("source %s is not https" % url)
+    err = None
+    for attempt in range(3):
+        try:
+            req = urllib.request.Request(url, headers={"User-Agent": "blackwall-fang-refresh"})
+            with urllib.request.urlopen(req, timeout=20) as r:
+                if not r.geturl().startswith("https://"):
+                    raise Abort("%s redirected away from https" % url)
+                data = r.read(MAX_BYTES + 1)
+            if len(data) > MAX_BYTES:
+                raise Abort("%s is larger than %d bytes" % (url, MAX_BYTES))
+            return data.decode("utf-8", "replace")
+        except Abort:
+            raise
+        except Exception as e:  # network, TLS, HTTP errors
+            err = e
+            time.sleep(2)
+    raise FetchError("failed to download %s: %s" % (url, err))
+
+
+def _cache_name(key):
+    return os.path.join(STATE_DIR, hashlib.sha1(key.encode()).hexdigest()[:16] + ".txt")
+
+
+def cache_save(key, text):
+    os.makedirs(STATE_DIR, mode=0o700, exist_ok=True)
+    os.chmod(STATE_DIR, 0o700)
+    path = _cache_name(key)
+    with open(path + ".new", "w") as f:
+        f.write(text)
+    os.chmod(path + ".new", 0o600)
+    os.replace(path + ".new", path)
+
+
+def cache_age(key):
+    """Age of the cache file in seconds, or None."""
+    try:
+        return max(0, int(time.time() - os.stat(_cache_name(key)).st_mtime))
+    except OSError:
+        return None
+
+
+def cache_load(key):
+    try:
+        with open(_cache_name(key)) as f:
+            return f.read()
+    except OSError:
+        return None
+
+
+def host_addresses():
+    try:
+        out = subprocess.run(["ip", "-o", "-4", "addr", "show"], capture_output=True,
+                             text=True, check=True).stdout
+    except (OSError, subprocess.CalledProcessError):
+        log("WARNING: cannot list host addresses (ip failed); continuing without them")
+        return []
+    addrs = []
+    for line in out.splitlines():
+        parts = line.split()
+        if "inet" in parts:
+            addrs.append(parts[parts.index("inet") + 1].split("/")[0])
+    return addrs
+
+
+def nft(*args):
+    return subprocess.run(["nft"] + list(args), capture_output=True, text=True)
+
+
+def table_loaded():
+    return nft("list", "table", "inet", TABLE).returncode == 0
+
+
+def apply(text, rules_out, dry_run):
+    with tempfile.TemporaryDirectory() as tmp:
+        path = os.path.join(tmp, "blackwall-fang.nft")
+        with open(path, "w") as f:
+            f.write(text)
+        r = nft("-c", "-f", path)
+        if r.returncode != 0:
+            raise Abort("generated ruleset fails nft -c: %s" % r.stderr.strip())
+        if dry_run:
+            log("--dry-run: ruleset passes nft -c, nothing applied")
+            print(text)
+            return
+        # Load first, persist after: a rejected file must never reach the boot config.
+        r = nft("-f", path)
+        if r.returncode != 0:
+            raise Abort("ruleset failed to apply (%s); %s left unchanged"
+                        % (r.stderr.strip(), rules_out))
+        os.makedirs(os.path.dirname(rules_out), exist_ok=True)
+        tmp_out = rules_out + ".new"
+        with open(tmp_out, "w") as f:
+            f.write(text)
+        os.chmod(tmp_out, 0o644)
+        os.replace(tmp_out, rules_out)
+        log("nftables: table inet %s updated and saved to %s" % (TABLE, rules_out))
+
+
+def main(argv):
+    dry_run = "--dry-run" in argv
+    if os.geteuid() != 0:
+        raise Abort("must run as root")
+    try:
+        conf = read_conf(CONF)
+    except OSError as e:
+        raise Abort("cannot read %s: %s" % (CONF, e))
+    mode = conf.get("MODE", "observe")
+    wan_if = conf.get("WAN_IF", "")
+    rules_out = conf.get("RULES_OUT", "/etc/nftables.d/blackwall-fang.nft")
+    sources = conf.get("SOURCES", "").split()
+    cf_url = conf.get("CF_URL", "https://www.cloudflare.com/ips-v4")
+    allowlist = conf.get("ALLOWLIST", "").split()
+    test_mode = conf.get("TEST_MODE", "0") == "1"
+    blockable = []
+    if conf.get("TEST_BLOCKABLE", "").split():
+        if not test_mode:
+            log("WARNING: TEST_BLOCKABLE ignored (TEST_MODE is off)")
+        else:
+            for x in conf["TEST_BLOCKABLE"].split():
+                try:
+                    net = ipaddress.ip_network(x, strict=True)
+                except ValueError:
+                    raise Abort("bad TEST_BLOCKABLE entry %r" % x)
+                if net.version != 4 or net.prefixlen != 32:
+                    raise Abort("TEST_BLOCKABLE accepts single IPv4 hosts (/32) only, got %r" % x)
+                blockable.append(net)
+    try:
+        min_entries = int(conf.get("MIN_ENTRIES", "500"))
+    except ValueError:
+        raise Abort("MIN_ENTRIES is not a number")
+    try:
+        max_cache_age = int(conf.get("MAX_CACHE_AGE_DAYS", "7"))
+    except ValueError:
+        raise Abort("MAX_CACHE_AGE_DAYS is not a number")
+    if mode not in ("observe", "enforce"):
+        raise Abort("MODE must be observe or enforce, got %r" % mode)
+    if not sources:
+        raise Abort("SOURCES is empty")
+    # A wrong interface name would make `iifname != WAN accept` accept everything.
+    if not wan_if:
+        raise Abort("WAN_IF is empty; set fang_wan_if")
+    if not os.path.exists("/sys/class/net/%s" % wan_if):
+        raise Abort("WAN_IF=%s does not exist" % wan_if)
+    if not nft("--version").returncode == 0:
+        raise Abort("nft not found")
+
+    stamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    hosts = host_addresses()
+    cf_key = "cf:" + cf_url
+    names = sources + [cf_url]
+
+    def from_cache():
+        """-> (raw, cf_text, oldest age in s) or None when anything is not cached."""
+        raw = [cache_load(u) for u in sources]
+        cf = cache_load(cf_key)
+        if None in raw or cf is None:
+            return None
+        return raw, cf, max(cache_age(k) or 0 for k in sources + [cf_key])
+
+    def fail_open_empty():
+        _, allow, _ = compute([], None, allowlist, hosts, 0, blockable)
+        apply(render(wan_if, mode, allow, [], stamp), rules_out, dry_run)
+
+    def age_text(age):
+        return "%dh%02dm" % divmod(age // 60, 60)
+
+    code = 0
+    fresh = False
+    why = None  # why the cache is used
+    try:
+        raw = [fetch(u, test_mode) for u in sources]
+        cf_text = fetch(cf_url, test_mode)
+        fresh = True
+    except FetchError as e:
+        why = "download failed: %s" % e
+    if fresh:
+        try:
+            block, allow, n_before = compute(raw, cf_text, allowlist, hosts, min_entries,
+                                             blockable, names)
+        except Abort as e:
+            if from_cache() is None:
+                raise
+            fresh = False
+            why = "fresh data rejected: %s" % e
+    if not fresh:
+        cached = from_cache()
+        if cached is None:
+            # First install, nothing cached, live or persisted: fail open with
+            # an empty blocklist rather than leaving no table at all.
+            if not table_loaded() and not os.path.exists(rules_out):
+                log("WARNING: %s; first run without data: loading an EMPTY blocklist (fail open)" % why)
+                fail_open_empty()
+                return 2
+            raise FetchError(why)
+        raw, cf_text, age = cached
+        if age > max_cache_age * 86400:
+            log("ERROR: %s; the cached data is %s old (limit %d days): loading an EMPTY "
+                "blocklist (fail open), mode and allowlist unchanged"
+                % (why, age_text(age), max_cache_age))
+            fail_open_empty()
+            return 4
+        log("WARNING: %s; rebuilding from cached data (oldest cache file %s old) "
+            "with the current mode and allowlist" % (why, age_text(age)))
+        block, allow, n_before = compute(raw, cf_text, allowlist, hosts, min_entries,
+                                         blockable, names)
+        code = 3
+    log("blocklist: %d entries (%d after carving the allowlist), allow: %d, mode: %s%s"
+        % (n_before, len(block), len(allow), mode, "" if fresh else " [from cache]"))
+    apply(render(wan_if, mode, allow, block, stamp), rules_out, dry_run)
+    if fresh and not dry_run:  # cache = the data last applied successfully
+        try:
+            for u, t in zip(sources, raw):
+                cache_save(u, t)
+            cache_save(cf_key, cf_text)
+        except OSError as e:
+            log("WARNING: cannot write the cache in %s: %s (the table was applied)" % (STATE_DIR, e))
+    log("done")
+    return code
+
+
+if __name__ == "__main__":
+    try:
+        lock = open("/run/blackwall-fang-refresh.lock", "w")
+    except OSError as e:
+        log("ERROR: cannot open lock file in /run: %s" % e)
+        sys.exit(1)
+    try:
+        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError:
+        log("ERROR: another refresh is running")
+        sys.exit(1)
+    try:
+        sys.exit(main(sys.argv[1:]))
+    except Abort as e:
+        log("ERROR: %s" % e)
+        sys.exit(1)

@@ -1,0 +1,7 @@
+# Managed by the Ansible role blackwall-fang/fang-reputation. Do not edit by hand.
+# Picked up by blackwall-fw-export (Eye). The kind follows the mode (re-rendered on a
+# mode change): observe -> blocklist_would_drop (Wazuh rule 100206, level 5),
+# enforce -> blocklist_dropped (rule 100208, level 3).
+kind={{ 'blocklist_dropped' if fang_mode == 'enforce' else 'blocklist_would_drop' }}
+table=inet blackwall_fang
+set=fang_hits

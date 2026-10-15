@@ -9,6 +9,17 @@ whose packet count grew:
 
   blackwall-fw: kind=<kind> src=<ip> new=<n> total=<n> burst=<yes|no>
 
+Extra sets: every <dropin dir>/*.conf (default /etc/blackwall/fw-export.d)
+declares one more set to watch, so other modules can plug in without Eye knowing
+them:
+  kind=<name>            word characters only; not a built-in kind or "summary"
+  table=[<family> ]<table>   family defaults to inet
+  set=<set>
+They get the same baseline, cooldown and cap as the built-in sets and are
+ordered after origin_direct and the scan bursts, before the plain rest. A malformed
+or conflicting file is skipped with one stderr line. Files not owned by root or
+writable by group/other are skipped too (the directory must stay root-owned).
+
 A counter that went down (reload, cf-wall refresh, timeout re-add) counts as
 new = current. Missing tables/sets print nothing; the exit code is always 0.
 
@@ -22,7 +33,7 @@ that left the set (timeout) and returns starts fresh.
 The first run (state missing or corrupt) only records a baseline and prints
 nothing. State is saved before anything is printed; if it cannot be saved,
 nothing is printed. At most max_lines lines are printed per run (origin_direct
-first, then input_drop bursts, forward_drop bursts, the rest; highest new first
+first, then input_drop bursts, forward_drop bursts, drop-in sets, the rest; highest new first
 within a class), the rest is summarised as:
   blackwall-fw: kind=summary suppressed=<n> burst=no
 
@@ -35,9 +46,13 @@ Environment overrides (tests):
   BLACKWALL_FW_NOW            current time, epoch seconds (default: time.time())
   BLACKWALL_FW_DEBUG          print "baseline recorded" to stderr (silent otherwise)
   BLACKWALL_FW_CONF           config file (default /etc/blackwall/fw-export.conf)
+  BLACKWALL_FW_DROPIN_DIR     extra-set directory (default /etc/blackwall/fw-export.d)
+  BLACKWALL_FW_DROPIN_UID     required owner uid of drop-in files (default 0; tests)
 """
 import json
 import os
+import re
+import stat
 import subprocess
 import sys
 import time
@@ -47,6 +62,7 @@ SETS = [
     ("forward_drop", "blackwall_base", "dropped_forward"),
     ("origin_direct", "blackwall_wall", "origin_direct"),
 ]
+BUILTIN_KINDS = {k for k, _, _ in SETS} | {"summary"}
 DEFAULT_THRESHOLD = 20
 DEFAULT_MAX_LINES = 200
 DEFAULT_COOLDOWN = 3600
@@ -78,7 +94,58 @@ def setting(env, key, default):
         return default
 
 
-def load_set(table, name):
+WORD = re.compile(r"^\w+$")
+
+
+def extra_sets():
+    """[(kind, family, table, set)] from the drop-in directory (sorted by file name)."""
+    d = os.environ.get("BLACKWALL_FW_DROPIN_DIR", "/etc/blackwall/fw-export.d")
+    try:
+        names = sorted(n for n in os.listdir(d) if n.endswith(".conf"))
+    except OSError:
+        return []
+    res, kinds = [], set(BUILTIN_KINDS)
+    try:
+        want_uid = int(os.environ.get("BLACKWALL_FW_DROPIN_UID", "0"))
+    except ValueError:
+        want_uid = 0
+    for fn in names:
+        conf = {}
+        try:
+            # O_NONBLOCK: opening a FIFO must not hang; it is rejected by the fstat below.
+            fd = os.open(os.path.join(d, fn), os.O_RDONLY | os.O_NONBLOCK)
+            with os.fdopen(fd) as f:
+                st = os.fstat(f.fileno())
+                if (not stat.S_ISREG(st.st_mode) or st.st_uid != want_uid
+                        or st.st_mode & 0o022):
+                    err("ignoring %r: must be a regular file owned by root, not group/other-writable" % fn)
+                    continue
+                for line in f:
+                    line = line.strip()
+                    if line and not line.startswith("#"):
+                        k, sep, v = line.partition("=")
+                        if sep:
+                            conf[k.strip()] = v.strip()
+        except (OSError, UnicodeError) as e:
+            err("ignoring %r: %s" % (fn, e))
+            continue
+        kind, name = conf.get("kind", ""), conf.get("set", "")
+        tparts = conf.get("table", "").split()
+        if len(tparts) == 1:
+            tparts = ["inet"] + tparts
+        if (len(tparts) != 2 or not WORD.match(kind) or not WORD.match(name)
+                or not all(WORD.match(t) for t in tparts)):
+            err("ignoring %r: need kind=<word> table=[family ]<table> set=<word>" % fn)
+            continue
+        if kind in kinds:
+            err("ignoring %r: duplicate or reserved kind %r" % (fn, kind))
+            continue
+        kinds.add(kind)
+        res.append((kind, tparts[0], tparts[1], name))
+    return res
+
+
+def load_set(family, table, name):
     """Return the parsed nft JSON, or None when the set is not available."""
     jdir = os.environ.get("BLACKWALL_FW_NFT_JSON_DIR")
     try:
@@ -86,7 +153,7 @@ def load_set(table, name):
             with open(os.path.join(jdir, "%s.%s.json" % (table, name))) as f:
                 return json.load(f)
         out = subprocess.run(
-            [NFT, "-j", "list", "set", "inet", table, name],
+            [NFT, "-j", "list", "set", family, table, name],
             stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=20,
         )
         if out.returncode != 0:
@@ -164,8 +231,9 @@ def run():
         now = int(time.time())
 
     events = []  # (new, kind, ip, total, burst)
-    for kind, table, name in SETS:
-        doc = load_set(table, name)
+    allsets = [(k, "inet", t, n) for k, t, n in SETS] + extra_sets()
+    for kind, family, table, name in allsets:
+        doc = load_set(family, table, name)
         if doc is None:
             continue  # keep the old state: the set may come back
         cur = counters(doc)
@@ -206,8 +274,10 @@ def run():
             cls = 1
         elif burst and k == "forward_drop":
             cls = 2
+        elif k not in BUILTIN_KINDS:
+            cls = 3  # drop-in sets: after origin_direct and the scan bursts
         else:
-            cls = 3
+            cls = 4
         return (cls, -n, k, ipkey(ip))
     events.sort(key=prio)
     lines = ["blackwall-fw: kind=%s src=%s new=%d total=%d burst=%s"

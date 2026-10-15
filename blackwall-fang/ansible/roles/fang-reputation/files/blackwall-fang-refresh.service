@@ -1,0 +1,18 @@
+[Unit]
+Description=Blackwall: refresh Fang reputation blocklists (nftables inet blackwall_fang)
+After=network-online.target nftables.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/blackwall-fang-refresh
+# The script reads /etc/blackwall/fang.conf itself.
+# A failed refresh (network glitch, bad data, rejected ruleset) changes nothing
+# and leaves this unit failed: that is the visible signal. The next timer run retries.
+# Exit 2 = first run without data, an empty blocklist was loaded (fail open; the
+#          table changed).
+# Exit 3 = download failed or the fresh data was rejected, the table was REBUILT from
+#          cached data with the current mode and allowlist (the age is in the journal).
+# Exit 4 = the cache is older than MAX_CACHE_AGE_DAYS: an EMPTY blocklist was loaded
+#          (fail open; mode and allowlist unchanged; ERROR in syslog -> Wazuh 100207).
+# Exit 1 = aborted, nothing touched. ERROR/WARNING lines also reach Wazuh (100207/100209).

@@ -1,0 +1,4 @@
+{"cidr":"4.5.6.0/24","sblid":"SBL0","rir":"test"}
+{"cidr":"5.6.7.0/24","sblid":"SBL0","rir":"test"}
+{"cidr":"10.9.0.0/16","sblid":"SBL0","rir":"test"}
+{"type":"metadata","timestamp":0,"size":0,"records":0}

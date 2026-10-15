@@ -1,0 +1,161 @@
+---
+- name: Interface and mode are valid
+  ansible.builtin.assert:
+    that:
+      - fang_wan_if != ''
+      - fang_mode in ['observe', 'enforce']
+      - fang_sources | length > 0
+      - fang_mode != 'enforce' or (fang_allowlist | length > 0)
+      - fang_max_cache_age_days | int > 0
+      - fang_test_mode or (fang_test_blockable | length == 0 and fang_test_files | length == 0)
+      - not fang_test_mode or (fang_sources | reject('match', '^file://') | list | length == 0)
+      - fang_test_mode or (fang_sources | select('match', '^file://') | list | length == 0)
+    fail_msg: >-
+      fang_wan_if is required, fang_mode must be observe|enforce, test lists
+      need fang_test_mode, fang_test_mode requires file:// sources only
+      (and file:// sources require fang_test_mode), and enforce mode needs a
+      non-empty fang_allowlist (Fang filters all WAN ports including SSH: list the
+      admin, monitoring and agent source addresses)
+
+- name: Require the Eye nftables setup first
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  register: nft_req
+  failed_when: not nft_req.stat.exists
+  loop:
+    - /etc/nftables.d
+    - /etc/systemd/system/nftables.service.d/blackwall.conf
+  loop_control:
+    label: "{{ item }}"
+
+- name: Python 3.7 or newer is present
+  ansible.builtin.command: python3 -c 'import sys; sys.exit(0 if sys.version_info >= (3, 7) else 1)'
+  changed_when: false
+  check_mode: false
+
+- name: Config directory
+  ansible.builtin.file:
+    path: /etc/blackwall
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Install blackwall-fang-refresh
+  ansible.builtin.copy:
+    src: blackwall-fang-refresh
+    dest: /usr/local/sbin/blackwall-fang-refresh
+    owner: root
+    group: root
+    mode: "0755"
+  notify: Refresh Fang blocklists
+
+- name: Exporter drop-in directory
+  ansible.builtin.file:
+    path: /etc/blackwall/fw-export.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Report blocklist hits through blackwall-fw-export
+  ansible.builtin.template:
+    src: fw-export-fang.conf.j2
+    dest: /etc/blackwall/fw-export.d/fang.conf
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Lab test list directory
+  ansible.builtin.file:
+    path: /etc/blackwall/fang-test
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  when: fang_test_mode
+
+- name: Install lab test lists
+  ansible.builtin.copy:
+    src: "{{ item }}"
+    dest: "/etc/blackwall/fang-test/{{ item | basename }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop: "{{ fang_test_files }}"
+  when: fang_test_mode
+  notify: Refresh Fang blocklists
+
+- name: Install refresh config
+  ansible.builtin.template:
+    src: fang.conf.j2
+    dest: /etc/blackwall/fang.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Refresh Fang blocklists
+
+- name: Install refresh service
+  ansible.builtin.copy:
+    src: blackwall-fang-refresh.service
+    dest: /etc/systemd/system/blackwall-fang-refresh.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload systemd
+
+- name: Install refresh timer
+  ansible.builtin.template:
+    src: blackwall-fang-refresh.timer.j2
+    dest: /etc/systemd/system/blackwall-fang-refresh.timer
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload systemd
+
+- name: Remove Fang's table when nftables stops
+  ansible.builtin.copy:
+    src: zz-blackwall-fang.conf
+    dest: /etc/systemd/system/nftables.service.d/zz-blackwall-fang.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload systemd
+
+- name: Run pending refresh and systemd reload now
+  ansible.builtin.meta: flush_handlers
+
+# Covers a host where the files were already in place but the table is gone
+# (not loaded, or not persisted).
+- name: Is the Fang table loaded?
+  ansible.builtin.command: nft list table inet blackwall_fang
+  register: fang_live
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Is the Fang table persisted?
+  ansible.builtin.stat:
+    path: /etc/nftables.d/blackwall-fang.nft
+  register: fang_persisted
+
+- name: Generate the table if it is missing
+  ansible.builtin.command: /usr/local/sbin/blackwall-fang-refresh
+  when: fang_live.rc != 0 or not fang_persisted.stat.exists
+  register: fang_first
+  failed_when: fang_first.rc not in [0, 2, 3, 4]
+
+- name: WARNING - degraded refresh (fail-open empty blocklist, or applied from cache)
+  ansible.builtin.debug:
+    msg: >-
+      WARNING on {{ inventory_hostname }}: the refresh could not download the lists.
+      rc=2 (first run) or rc=4 (cache older than {{ fang_max_cache_age_days }} days) loaded an
+      EMPTY blocklist (nothing is blocked); rc=3 rebuilt the table from cached data with
+      the current mode and allowlist. Check journalctl -u blackwall-fang-refresh and the sources.
+  when: (fang_refresh.rc | default(0)) in [2, 3, 4] or (fang_first.rc | default(0)) in [2, 3, 4]
+
+- name: Enable the refresh timer
+  ansible.builtin.systemd:
+    name: blackwall-fang-refresh.timer
+    enabled: true
+    state: started

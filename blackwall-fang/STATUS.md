@@ -1,10 +1,10 @@
 ---
 module: blackwall-fang
-status: pending
+status: in_progress
 stage: 5
 last_updated: 2026-10-15
-last_task: "Module created; scope agreed: defensive blocking first (production), counter-attack research later"
-next_task: "Layer 1: reputation blocklists (Spamhaus DROP/EDROP, FireHOL level1) into an nftables set; then layer 2: in-kernel ban on connection attempts"
+last_task: "Layer 1 (reputation blocklists) done: role fang-reputation, Wazuh event 100206, bw-check fang (observe + enforce + junk list) green; real-source observe run on the lab sentinel (4619 entries, exit 0)"
+next_task: "Layer 2: in-kernel ban on connection attempts (blocklist_dynamic with timeout, observe first)"
 blockers: []
 ---
 
@@ -20,12 +20,12 @@ research-only topic for later.
 Each layer is opt-in and starts in observe-only mode (sets fill and alert,
 nothing is dropped) before enforcement is switched on.
 
-**In work:**
+**Layer 1 is done** (role `fang-reputation`, see README; `bw-check fang`).
 
-1. **Reputation** — Spamhaus DROP/EDROP and FireHOL level1 loaded into a
+1. **Reputation** (done) — Spamhaus DROP/EDROP and FireHOL level1 loaded into a
    `blocklist_static` nftables set by a refresh script + timer (same pattern
    as `cf-wall`: sanity floor, `nft -c`, load before persist).
-2. **In-kernel ban on attempts** — nftables rate rules move a source into
+2. **In-kernel ban on attempts** (next) — nftables rate rules move a source into
    `blocklist_dynamic` (with timeout) when it makes too many new connection
    attempts within a window: to closed ports (scans) and to open services such
    as SSH (brute force / floods). Thresholds and timeouts are variables; short
@@ -55,3 +55,20 @@ nothing is dropped) before enforcement is switched on.
 - Lab proof: `black-rocky-02` attacks `black-sentinel-03`; `bw-check` verifies
   the ban, its expiry, observe-only mode and that allowlisted sources are never
   touched.
+
+## Known minor issues (from the layer 1 reviews)
+
+- Mode switch: the exporter drop-in kind changes before the table is rebuilt;
+  an exporter run in that window can report existing `fang_hits` once under the
+  new kind, and the old kind's exporter state is never pruned. Fix: render the
+  drop-in after the refresh, or prune state for kinds no drop-in declares.
+- `JOURNAL_STREAM` presence alone decides that stderr goes to the journal;
+  compare its dev:inode with `fstat(2)` to be exact (only affects hand runs from
+  a shell that inherited the variable).
+- Debian 12+ ships without rsyslog: the Debian branch of the Wazuh ossec.conf
+  templates reads `/var/log/syslog`, so Fang's syslog lines (rules 100207/100209)
+  would not be collected there. Switch Debian to journald too (Eye).
+- A source URL change drops its cache entry; a failed fetch right after the
+  change exits 1 (visible) instead of using older cached data.
+- The per-source floor is `fang_min_entries / sources`; raising
+  `fang_min_entries` high can reject a normal Spamhaus list.

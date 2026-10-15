@@ -145,6 +145,10 @@ decoder, fields `fw_kind`, `srcip`, `fw_new`, `fw_total`, `fw_burst`,
 | 100203 | 6 | `kind=forward_drop` with `burst=yes` |
 | 100204 | 3 | `kind=summary`: exporter output was capped, `fw_suppressed` sources dropped |
 | 100205 | 3 | exporter error line (`blackwall-fw-export: ...` on stderr, field `fw_error`) |
+| 100206 | 5 | `kind=blocklist_would_drop` (Fang observe drop-in set): a listed source reached the host, would be dropped in enforce |
+| 100207 | 7 | syslog/journald line from program `blackwall-fang-refresh` containing `ERROR` (Fang refresh failed or degraded: stale cache, empty blocklist) |
+| 100208 | 3 | `kind=blocklist_dropped` (Fang enforce drop-in set): a listed source was dropped |
+| 100209 | 5 | program `blackwall-fang-refresh` with `WARNING` (applied from cache, fail-open); the manager reads system logs from journald on the RedHat family, `/var/log/{auth.log,syslog}` on Debian |
 
 What is counted: packets dropped by the final policy path (input and forward
 `policy drop`, and cf-wall's origin-direct drop). Invalid-state and anti-spoof
@@ -273,13 +277,33 @@ that went down after a reload counts as `new = total`); nothing is printed when
 nothing changed or a table/set is absent:
 
 ```
-blackwall-fw: kind=<input_drop|forward_drop|origin_direct> src=<ip> new=<n> total=<n> burst=<yes|no>
+blackwall-fw: kind=<input_drop|forward_drop|origin_direct|drop-in kind> src=<ip> new=<n> total=<n> burst=<yes|no>
 ```
 
-`burst=yes` when `new >= nft_track_scan_threshold`. The first run (state missing or corrupt) only records a baseline and prints nothing; state is saved before printing (if that fails, nothing is printed); each (kind, src) is reported at most once per `nft_track_report_cooldown`; output is capped by `nft_track_max_lines` (origin_direct first, then input/forward bursts, then the rest, highest `new` first). Overrides for tests:
+`burst=yes` when `new >= nft_track_scan_threshold`. The first run (state missing or corrupt) only records a baseline and prints nothing; state is saved before printing (if that fails, nothing is printed); each (kind, src) is reported at most once per `nft_track_report_cooldown`; output is capped by `nft_track_max_lines` (origin_direct first, then input/forward bursts, then drop-in sets, then the rest, highest `new` first). Overrides for tests:
 `BLACKWALL_FW_NFT_JSON_DIR`, `BLACKWALL_FW_STATE_DIR`,
-`BLACKWALL_FW_SCAN_THRESHOLD`, `BLACKWALL_FW_MAX_LINES`, `BLACKWALL_FW_REPORT_COOLDOWN`, `BLACKWALL_FW_NOW`, `BLACKWALL_FW_CONF`. Unit test (no nft needed):
+`BLACKWALL_FW_SCAN_THRESHOLD`, `BLACKWALL_FW_MAX_LINES`, `BLACKWALL_FW_REPORT_COOLDOWN`, `BLACKWALL_FW_NOW`, `BLACKWALL_FW_CONF`, `BLACKWALL_FW_DROPIN_DIR`. Unit test (no nft needed):
 `tools/test-fw-export`.
+
+**Drop-in sets.** Other modules can have their per-source counter sets reported
+without Eye knowing them: every `/etc/blackwall/fw-export.d/*.conf` declares
+
+```
+kind=<name>                 # word characters; not a built-in kind or "summary"
+table=[<family> ]<table>    # family defaults to inet
+set=<set>                   # dynamic set with per-element counters
+```
+
+and is treated like a built-in set (silent baseline, per-source cooldown, cap;
+ordered after origin_direct and the scan bursts). A malformed or duplicate file
+is skipped with a `blackwall-fw-export: ignoring ...` stderr line (rule 100205).
+Files that are not owned by root or are group/other-writable are skipped the same
+way, so `/etc/blackwall/fw-export.d` must stay root-owned (0755, files 0644): anyone
+who can write there can make the exporter read arbitrary nft sets. A malformed
+drop-in raises rule 100205 on every run (every 10 s to a few minutes, depending on
+the interval) until it is fixed or removed.
+Fang uses this for `kind=blocklist_would_drop` / `blocklist_dropped` (rules 100206 / 100208, chosen by its mode); the decoder accepts any
+`\w+` kind, a new kind needs only its own rule.
 
 ## Verification playbooks
 

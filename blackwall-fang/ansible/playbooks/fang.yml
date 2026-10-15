@@ -1,0 +1,9 @@
+---
+- name: Fang reputation blocklists
+  hosts: fang
+  become: true
+  gather_facts: true
+
+  roles:
+    - role: fang-reputation
+      tags: [fang, reputation]

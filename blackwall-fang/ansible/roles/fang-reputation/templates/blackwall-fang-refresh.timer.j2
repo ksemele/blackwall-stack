@@ -1,0 +1,12 @@
+[Unit]
+Description=Blackwall: refresh Fang reputation blocklists
+
+[Timer]
+OnCalendar={{ fang_refresh_calendar }}
+# Jitter, so we don't hit the list servers exactly at midnight along with everyone else.
+RandomizedDelaySec={{ fang_refresh_jitter }}
+# If the host was off when the timer was due, catch up after boot.
+Persistent=true
+
+[Install]
+WantedBy=timers.target

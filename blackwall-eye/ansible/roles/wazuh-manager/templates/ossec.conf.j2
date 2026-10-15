@@ -61,6 +61,13 @@
   </auth>
 
   <!-- Log collection on the manager host itself -->
+{% if ansible_facts['os_family'] == 'RedHat' %}
+  <!-- RHEL family: system logs live in journald (no rsyslog files) -->
+  <localfile>
+    <location>journald</location>
+    <log_format>journald</log_format>
+  </localfile>
+{% else %}
   <localfile>
     <log_format>syslog</log_format>
     <location>/var/log/auth.log</location>
@@ -70,6 +77,7 @@
     <log_format>syslog</log_format>
     <location>/var/log/syslog</location>
   </localfile>
+{% endif %}
 
   <localfile>
     <log_format>syslog</log_format>

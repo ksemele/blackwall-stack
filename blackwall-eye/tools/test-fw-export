@@ -7,6 +7,8 @@ here=$(cd "$(dirname "$0")" && pwd)
 exp="$here/../ansible/roles/nftables/files/blackwall-fw-export"
 fx="$here/testdata/fw-export"
 fail=0
+# drop-in files must be owned by root in production; the test owns them itself
+export BLACKWALL_FW_DROPIN_UID=$(id -u)
 tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT
 fresh() { mktemp -d "$tmp/s.XXXXXX"; }
 
@@ -14,7 +16,7 @@ run() { # <fixture dir> <state dir> [extra env as VAR=val ...]
     local f=$1 s=$2; shift 2
     env BLACKWALL_FW_NFT_JSON_DIR="$fx/$f" BLACKWALL_FW_STATE_DIR="$s" \
         BLACKWALL_FW_SCAN_THRESHOLD=20 BLACKWALL_FW_REPORT_COOLDOWN=0 \
-        BLACKWALL_FW_CONF=/nonexistent "$@" \
+        BLACKWALL_FW_CONF=/nonexistent BLACKWALL_FW_DROPIN_DIR=/nonexistent "$@" \
         python3 "$exp" 2>/dev/null
 }
 check() { # <name> <expected> <actual>
@@ -57,7 +59,7 @@ $P src=203.0.113.11 new=19 total=19 burst=no" "$(run boundary "$s")"
 conf="$tmp/conf"; printf 'scan_threshold=3\nmax_lines=200\n' > "$conf"
 s=$(fresh); echo '{}' > "$s/state.json"
 out=$(env -u BLACKWALL_FW_SCAN_THRESHOLD BLACKWALL_FW_NFT_JSON_DIR="$fx/run2" \
-    BLACKWALL_FW_STATE_DIR="$s" BLACKWALL_FW_CONF="$conf" python3 "$exp" 2>/dev/null)
+    BLACKWALL_FW_STATE_DIR="$s" BLACKWALL_FW_CONF="$conf" BLACKWALL_FW_DROPIN_DIR=/nonexistent python3 "$exp" 2>/dev/null)
 check conf-threshold "$P src=203.0.113.3 new=30 total=30 burst=yes
 $P src=203.0.113.1 new=12 total=12 burst=yes
 $P src=203.0.113.2 new=1 total=1 burst=no" "$out"
@@ -109,7 +111,8 @@ PY
 runat() { # <fixture dir (absolute)> <state dir> <now> [extra env]
     local f=$1 s=$2 now=$3; shift 3
     env BLACKWALL_FW_NFT_JSON_DIR="$f" BLACKWALL_FW_STATE_DIR="$s" BLACKWALL_FW_SCAN_THRESHOLD=20 \
-        BLACKWALL_FW_REPORT_COOLDOWN=3600 BLACKWALL_FW_NOW="$now" BLACKWALL_FW_CONF=/nonexistent "$@" \
+        BLACKWALL_FW_REPORT_COOLDOWN=3600 BLACKWALL_FW_NOW="$now" BLACKWALL_FW_CONF=/nonexistent \
+        BLACKWALL_FW_DROPIN_DIR=/nonexistent "$@" \
         python3 "$exp" 2>/dev/null
 }
 
@@ -160,6 +163,65 @@ out=$(runat "$f" "$s" 1000 BLACKWALL_FW_MAX_LINES=200 BLACKWALL_FW_REPORT_COOLDO
 check cap-origin-first "blackwall-fw: kind=origin_direct src=203.0.113.77 new=1 total=1 burst=no" "$(echo "$out" | head -1)"
 check cap-lines 201 "$(echo "$out" | wc -l | tr -d ' ')"
 check cap-summary "blackwall-fw: kind=summary suppressed=51 burst=no" "$(echo "$out" | tail -1)"
+
+# Drop-in sets (/etc/blackwall/fw-export.d/*.conf)
+D="$tmp/dropin"; mkdir -p "$D"
+printf 'kind=blocklist_would_drop\ntable=inet blackwall_fang\nset=fang_hits\n' > "$D/fang.conf"
+printf 'kind=bad kind\ntable=x\nset=y\n' > "$D/malformed.conf"
+printf 'table=x\n' > "$D/missing.conf"
+printf 'kind=input_drop\ntable=t\nset=s\n' > "$D/dup-builtin.conf"
+printf 'kind=summary\ntable=t\nset=s\n' > "$D/dup-summary.conf"
+printf 'kind=blocklist_would_drop\ntable=t\nset=s\n' > "$D/zz-dup.conf"
+printf 'kind=x\ntable=t\nset=s\n' > "$D/ignored.txt"
+H=blackwall_fang.fang_hits; B="blackwall-fw: kind=blocklist_would_drop"
+s=$(fresh); f="$tmp/di"
+gen "$f" $H 172.28.0.15=1; runat "$f" "$s" 1000 BLACKWALL_FW_DROPIN_DIR="$D" >/dev/null
+gen "$f" $H 172.28.0.15=4
+check dropin-hit "$B src=172.28.0.15 new=3 total=4 burst=no" "$(runat "$f" "$s" 1001 BLACKWALL_FW_DROPIN_DIR="$D" BLACKWALL_FW_REPORT_COOLDOWN=0)"
+errs=$(env BLACKWALL_FW_NFT_JSON_DIR="$f" BLACKWALL_FW_STATE_DIR="$(fresh)" BLACKWALL_FW_DROPIN_DIR="$D" \
+    BLACKWALL_FW_CONF=/nonexistent python3 "$exp" 2>&1 >/dev/null)
+check dropin-errors 5 "$(echo "$errs" | grep -c '^blackwall-fw-export: ignoring')"
+# unsafe drop-ins are skipped: group/other-writable, foreign owner; names are quoted
+D2="$tmp/dropin-unsafe"; mkdir -p "$D2"
+printf 'kind=gw\ntable=t\nset=s\n' > "$D2/gw.conf"; chmod 664 "$D2/gw.conf"
+printf 'kind=ow\ntable=t\nset=s\n' > "$D2/ow.conf"; chmod 646 "$D2/ow.conf"
+printf 'kind=okk\ntable=t\nset=s\n' > "$D2/ok.conf"; chmod 644 "$D2/ok.conf"
+printf 'kind=nl\ntable=t\nset=s\n' > "$D2/$(printf 'a\nb').conf"; chmod 666 "$D2/$(printf 'a\nb').conf"
+errs=$(env BLACKWALL_FW_NFT_JSON_DIR="$f" BLACKWALL_FW_STATE_DIR="$(fresh)" BLACKWALL_FW_DROPIN_DIR="$D2" \
+    BLACKWALL_FW_CONF=/nonexistent python3 "$exp" 2>&1 >/dev/null)
+check dropin-unsafe-skipped 3 "$(echo "$errs" | grep -c '^blackwall-fw-export: ignoring')"
+check dropin-unsafe-quoted 0 "$(echo "$errs" | grep -vc '^blackwall-fw-export: ignoring')"
+errs=$(env BLACKWALL_FW_NFT_JSON_DIR="$f" BLACKWALL_FW_STATE_DIR="$(fresh)" BLACKWALL_FW_DROPIN_DIR="$D2" \
+    BLACKWALL_FW_DROPIN_UID=0 BLACKWALL_FW_CONF=/nonexistent python3 "$exp" 2>&1 >/dev/null)
+if [ "$(id -u)" != 0 ]; then
+    check dropin-foreign-owner 4 "$(echo "$errs" | grep -c '^blackwall-fw-export: ignoring')"
+fi
+# a FIFO named *.conf must be skipped, not hang the exporter
+D3="$tmp/dropin-fifo"; mkdir -p "$D3"; mkfifo "$D3/pipe.conf"
+errs=$(env BLACKWALL_FW_NFT_JSON_DIR="$f" BLACKWALL_FW_STATE_DIR="$(fresh)" BLACKWALL_FW_DROPIN_DIR="$D3" \
+    BLACKWALL_FW_CONF=/nonexistent perl -e 'alarm 10; exec @ARGV' python3 "$exp" 2>&1 >/dev/null)
+check dropin-fifo-skipped 1 "$(echo "$errs" | grep -c '^blackwall-fw-export: ignoring')"
+# silent baseline, per-source cooldown and a missing drop-in dir
+s=$(fresh)
+check dropin-baseline "" "$(runat "$f" "$s" 1000 BLACKWALL_FW_DROPIN_DIR="$D")"
+gen "$f" $H 172.28.0.15=9; check dropin-first "$B src=172.28.0.15 new=5 total=9 burst=no" "$(runat "$f" "$s" 1010 BLACKWALL_FW_DROPIN_DIR="$D")"
+gen "$f" $H 172.28.0.15=20; check dropin-cooldown "" "$(runat "$f" "$s" 1020 BLACKWALL_FW_DROPIN_DIR="$D")"
+s=$(fresh); runat "$f" "$s" 1000 BLACKWALL_FW_DROPIN_DIR="$tmp/none" >/dev/null
+check dropin-dir-missing "" "$(runat "$f" "$s" 1010 BLACKWALL_FW_DROPIN_DIR="$tmp/none")"
+# a missing drop-in set keeps its state and does not disturb built-ins
+s=$(fresh); echo '{}' > "$s/state.json"
+check dropin-set-missing "$P src=203.0.113.1 new=5 total=5 burst=no
+$P src=203.0.113.2 new=1 total=1 burst=no" "$(run run1 "$s" BLACKWALL_FW_DROPIN_DIR="$D")"
+# cap priority: origin_direct, bursts, drop-in sets, rest
+s=$(fresh); echo '{}' > "$s/state.json"; f="$tmp/prio"
+gen "$f" blackwall_base.dropped_input 203.0.113.60=30 203.0.113.61=5
+gen "$f" blackwall_wall.origin_direct 203.0.113.62=1
+gen "$f" $H 172.28.0.15=2
+out=$(runat "$f" "$s" 1000 BLACKWALL_FW_DROPIN_DIR="$D" BLACKWALL_FW_REPORT_COOLDOWN=0 BLACKWALL_FW_MAX_LINES=3)
+check dropin-priority "blackwall-fw: kind=origin_direct src=203.0.113.62 new=1 total=1 burst=no
+$P src=203.0.113.60 new=30 total=30 burst=yes
+$B src=172.28.0.15 new=2 total=2 burst=no
+blackwall-fw: kind=summary suppressed=1 burst=no" "$out"
 
 # State cannot be written => nothing printed
 s=$(fresh); echo '{}' > "$s/state.json"; chmod 500 "$s"
