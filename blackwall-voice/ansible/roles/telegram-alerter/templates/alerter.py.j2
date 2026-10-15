@@ -19,6 +19,12 @@ ALERT_LOG      = "{{ alerter_alert_log }}"
 STATE_FILE     = "{{ alerter_state_file }}"
 LOG_FILE       = "{{ alerter_log_file }}"
 SEVERITY_THRESHOLD = {{ severity_threshold }}
+# Upper bound: alerts above it are left to Brain (None = no upper bound)
+MAX_LEVEL      = {% if voice_max_level | string | trim %}{{ voice_max_level | int }}{% else %}None{% endif %}
+
+# Synthetic test alerts of other modules (rule.id), never forwarded
+IGNORE_RULE_IDS = set({{ alerter_ignore_rule_ids | map('string') | list | tojson }})
+STATE_MAX_IDS  = {{ alerter_state_max_ids | int }}
 POLL_INTERVAL  = {{ poll_interval }}
 SEND_ATTEMPTS  = 3
 BOT_TOKEN      = "{{ telegram_bot_token }}"
@@ -45,6 +51,50 @@ def load_sent_ids() -> set:
 def save_sent_id(alert_id: str) -> None:
     with open(STATE_FILE, "a") as f:
         f.write(alert_id + "\n")
+
+
+STATE_COMPACT_INTERVAL = 3600
+_last_compact = 0.0
+
+
+def compact_state(sent_ids: set) -> None:
+    """Keep only the newest STATE_MAX_IDS IDs: atomic rewrite (tmp + rename).
+
+    The in-memory set is trimmed to match the file. Older IDs are useless:
+    the tail seeks to EOF at start, so they can never come back.
+    """
+    global _last_compact
+    _last_compact = time.monotonic()
+    try:
+        with open(STATE_FILE) as f:
+            lines = [line.strip() for line in f if line.strip()]
+    except FileNotFoundError:
+        return
+    except OSError as exc:
+        log.error("Cannot read state file for compaction: %s", exc)
+        return
+    # Newest last; a repeated ID counts at its latest position.
+    ordered = list(dict.fromkeys(reversed(lines)))[:STATE_MAX_IDS][::-1]
+    if len(ordered) == len(lines):
+        sent_ids.intersection_update(ordered)
+        return
+    tmp = STATE_FILE + ".tmp"
+    try:
+        with open(tmp, "w") as f:
+            f.write("".join(i + "\n" for i in ordered))
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp, STATE_FILE)
+    except OSError as exc:
+        log.error("State compaction failed: %s", exc)
+        return
+    sent_ids.intersection_update(ordered)
+    log.info("Compacted state file: %d -> %d IDs", len(lines), len(ordered))
+
+
+def maybe_compact_state(sent_ids: set) -> None:
+    if time.monotonic() - _last_compact >= STATE_COMPACT_INTERVAL:
+        compact_state(sent_ids)
 
 
 def format_message(alert: dict) -> str:
@@ -103,9 +153,12 @@ def tail_alerts(sent_ids: set) -> None:
     # Seek to end so we only process new alerts after startup
     fh.seek(0, 2)
     current_inode = os.fstat(fh.fileno()).st_ino
-    log.info("Tailing %s (severity >= %d, inode=%d)", ALERT_LOG, SEVERITY_THRESHOLD, current_inode)
+    log.info("Tailing %s (severity %d..%s, inode=%d)", ALERT_LOG, SEVERITY_THRESHOLD,
+             MAX_LEVEL if MAX_LEVEL is not None else "inf", current_inode)
 
     while True:
+        maybe_compact_state(sent_ids)
+
         # Detect file replacement (log rotation / lineinfile recreate)
         try:
             disk_inode = os.stat(ALERT_LOG).st_ino
@@ -133,8 +186,15 @@ def tail_alerts(sent_ids: set) -> None:
             log.warning("Non-JSON line skipped: %s", line[:80])
             continue
 
-        level = alert.get("rule", {}).get("level", 0)
+        rule = alert.get("rule", {})
+        if str(rule.get("id", "")) in IGNORE_RULE_IDS:
+            continue
+        level = rule.get("level", 0)
         if level < SEVERITY_THRESHOLD:
+            continue
+        if MAX_LEVEL is not None and level > MAX_LEVEL:
+            log.info("Skipped alert %s (level %d above voice_max_level %d, Brain covers it)",
+                     alert.get("id") or alert.get("_id", ""), level, MAX_LEVEL)
             continue
 
         alert_id = alert.get("id") or alert.get("_id", "")
@@ -164,6 +224,7 @@ def tail_alerts(sent_ids: set) -> None:
 def main() -> None:
     log.info("voice-alerter starting (threshold=%d, poll=%ds)", SEVERITY_THRESHOLD, POLL_INTERVAL)
     sent_ids = load_sent_ids()
+    compact_state(sent_ids)
     log.info("Loaded %d already-sent IDs from state file", len(sent_ids))
 
     while True:

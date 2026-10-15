@@ -4,14 +4,30 @@
   hosts: wazuh_managers
   become: true
   vars:
+    # The deployed MAX_LEVEL is the truth (read from the installed script, so
+    # it does not depend on how the alerter was deployed). With it set (Brain
+    # on), the alert is injected at that level and Voice must deliver it; when
+    # the window is empty (max < severity_threshold) it is injected at
+    # severity_threshold and Voice must skip it instead.
+    verify_max: "{{ deployed_max.stdout | trim if deployed_max.stdout is defined and deployed_max.stdout | trim != 'None' else '' }}"
+    verify_level: >-
+      {{ verify_max | int if (verify_max and verify_max | int >= severity_threshold | default(5) | int)
+         else severity_threshold | default(5) | int }}
+    expect_delivery: "{{ not verify_max or verify_level | int <= verify_max | int }}"
     synthetic_alert_id: "verify-voice-{{ ansible_date_time.epoch }}"
     synthetic_alert_json: >-
       {"id":"{{ synthetic_alert_id }}","timestamp":"{{ ansible_date_time.iso8601 }}",
-      "rule":{"level":10,"description":"Synthetic verify-voice test alert","id":"99999"},
+      "rule":{"level":{{ verify_level | int }},"description":"Synthetic verify-voice test alert","id":"99999"},
       "agent":{"name":"verify-bot"},"manager":{"name":"black-master-00"},
       "full_log":"synthetic alert injected by verify-voice.yml"}
 
   tasks:
+    - name: Read the deployed upper bound (MAX_LEVEL)
+      ansible.builtin.shell:
+        cmd: "sed -n 's/^MAX_LEVEL *= *//p' {{ alerter_install_dir | default('/opt/voice-alerter') }}/alerter.py"
+      register: deployed_max
+      changed_when: false
+
     - name: Check voice-alerter service is active
       ansible.builtin.systemd:
         name: voice-alerter
@@ -58,6 +74,7 @@
       ignore_errors: true
 
     - name: Check synthetic alert ID is in state file (dedup confirmation)
+      when: expect_delivery | bool
       ansible.builtin.assert:
         that:
           - state_file_content.content is defined
@@ -71,6 +88,14 @@
       # Without a token there is nothing to deliver; only the pickup is checked below.
       ignore_errors: "{{ (telegram_bot_token | default('')) | length == 0 }}"
 
+    - name: Check Voice skipped the alert above voice_max_level (Brain covers it)
+      when: not (expect_delivery | bool)
+      ansible.builtin.assert:
+        that:
+          - state_file_content.content is defined
+          - synthetic_alert_id not in (state_file_content.content | b64decode)
+        success_msg: "Alert above voice_max_level ({{ verify_max }}) was skipped, as intended"
+
     - name: Show state file contents
       ansible.builtin.debug:
         msg: "State file: {{ state_file_content.content | default('') | b64decode }}"
@@ -82,7 +107,7 @@
       changed_when: false
       failed_when: false
 
-    - name: Assert alerter attempted the synthetic alert
+    - name: Assert alerter picked up the synthetic alert
       ansible.builtin.assert:
         that: log_check.rc == 0
         fail_msg: >-

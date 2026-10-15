@@ -2,13 +2,27 @@
 module: blackwall-voice
 status: in_progress
 stage: 2
-last_updated: 2026-10-14
-last_task: "End-to-end Telegram delivery verified in the lab (real bot, threshold 10); alerter logs Telegram error bodies and retries failed sends"
-next_task: "Rotation/TTL for sent_ids.txt; skip brain verify alerts; one message per alert when Brain is on"
+last_updated: 2026-10-15
+last_task: "Noise: bounded dedup state, ignored verify rules, voice_max_level upper bound (one message per alert with Brain)"
+next_task: "Dashboard (OpenSearch) is deferred; next Voice work is channel routing (Slack/webhook)"
 blockers: []
 ---
 
 ## Done
+
+### 2026-10-15 — less noise
+
+- `sent_ids.txt` is capped at `alerter_state_max_ids` (10000): compacted at
+  startup and hourly, atomic rewrite, in-memory set trimmed to match.
+- `alerter_ignore_rule_ids` (default `["99998"]`, Brain's verify rule) are
+  dropped; Brain ignores Voice's `99999`.
+- `voice_max_level` (default empty = no upper bound): forward only
+  `severity_threshold <= level <= voice_max_level`. The lab inventory sets it
+  to `analysis_threshold - 1` when `brain_enabled` is true, so each alert gives
+  one message. `verify-voice.yml` reads the deployed bound and asserts skip
+  instead of delivery when the window is empty.
+- Verified in the lab: Brain on -> one Telegram message (Brain's), Voice logs
+  `Skipped alert`; Brain off -> Voice sends it; `bw-check all` green.
 
 ### 2026-10-14 — end-to-end Telegram delivery
 
@@ -84,7 +98,7 @@ blockers: []
 ## Open questions
 
 - `telegram_bot_token` and `telegram_chat_id`: in the lab they come from env (`BW_TELEGRAM_*` in `.envrc`, direnv); scrubbed from git history on 2026-10-12. For prod — supplied from the owner's secret management (no ansible-vault).
-- The state file (`sent_ids.txt`) grows without bound — needs rotation/TTL eventually.
+- `brain_enabled` passed with `-e` only reaches the role it is passed to: toggle Brain and re-deploy Voice with the same flag (or set `brain_enabled` in the inventory).
 
 ## Decisions
 
