@@ -1,4 +1,15 @@
 ---
+- name: Refuse the removed pre-RHEL variable names
+  ansible.builtin.assert:
+    that:
+      - wazuh_apt_repo is not defined
+      - wazuh_apt_key_url is not defined
+    fail_msg: >-
+      wazuh_apt_repo and wazuh_apt_key_url were renamed: use wazuh_apt_repo_url,
+      wazuh_gpg_key_url (and wazuh_yum_repo_url for the RedHat family). The new
+      repo variables hold a URL only, not a full "deb ..." line.
+    quiet: true
+
 - name: Package version suffix for pins (apt name=ver-*, dnf name-ver)
   ansible.builtin.set_fact:
     wazuh_pkg_suffix: "{{ ('=' ~ wazuh_version ~ '-*') if ansible_facts['os_family'] == 'Debian' else ('-' ~ wazuh_version) }}"
@@ -27,7 +38,7 @@
     - name: Drop legacy unsigned Wazuh apt entry
       ansible.builtin.lineinfile:
         path: /etc/apt/sources.list.d/wazuh.list
-        regexp: '^deb\s+[^\[]'
+        regexp: '^deb\s+[^\[\s]'
         state: absent
 
     - name: Wazuh apt repository

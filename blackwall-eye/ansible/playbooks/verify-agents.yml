@@ -37,7 +37,7 @@
         _expected: "{{ groups['wazuh_agents'] | difference(wazuh_fixture_agents | default([])) }}"
       assert:
         that:
-          - "agent_list.stdout_lines | select('search', 'Name: ' ~ item ~ ',') | select('search', 'Active') | list | length == 1"
+          - "agent_list.stdout_lines | select('search', 'Name: ' ~ (item | regex_escape) ~ ',') | select('search', 'Active') | list | length == 1"
         fail_msg: >-
           agent {{ item }} is not Active on the manager (not enrolled, or not connected);
           agent_control -l: {{ agent_list.stdout_lines | join(' | ') }}

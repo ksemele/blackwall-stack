@@ -20,6 +20,12 @@
     path: /usr/bin/curl
   register: _agent_curl
 
+- name: Refresh apt cache before prerequisites
+  ansible.builtin.apt:
+    update_cache: true
+    cache_valid_time: 3600
+  when: ansible_facts['os_family'] == 'Debian'
+
 - name: Install prerequisites (curl)
   ansible.builtin.package:
     name: curl

@@ -47,12 +47,17 @@ The `wazuh-repo` role (a meta dependency of all four Wazuh roles) owns the packa
 source: apt via `wazuh_apt_repo_url` (default: the public
 `https://packages.wazuh.com/4.x/apt/`), yum via `wazuh_yum_repo_url`, signed by
 `wazuh_gpg_key_url`, at the version pinned in `wazuh_version`.
-For a fleet, point it at a company-wide package mirror instead — one variable,
-no role changes:
+For a fleet, point it at a company-wide package mirror instead — no role
+changes. For apt set `wazuh_apt_repo_url` (plus `wazuh_gpg_key_url` if the mirror
+re-signs, since `signed-by` pins that key); for yum set `wazuh_yum_repo_url`
+(plus the key):
 
 ```yaml
 wazuh_apt_repo_url: "https://apt.internal.example/wazuh/4.14.7"
+wazuh_gpg_key_url: "https://apt.internal.example/wazuh/key.gpg"  # if re-signed
 ```
+
+The old `wazuh_apt_repo` / `wazuh_apt_key_url` names are rejected by an assert.
 
 A versioned internal mirror (aptly/pulp snapshots, Artifactory or Nexus apt
 remotes, or apt-cacher-ng for a plain cache) gives:
