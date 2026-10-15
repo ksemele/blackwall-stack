@@ -145,6 +145,13 @@ decoder, fields `fw_kind`, `srcip`, `fw_new`, `fw_total`, `fw_burst`,
 | 100203 | 6 | `kind=forward_drop` with `burst=yes` |
 | 100204 | 3 | `kind=summary`: exporter output was capped, `fw_suppressed` sources dropped |
 
+What is counted: packets dropped by the final policy path (input and forward
+`policy drop`, and cf-wall's origin-direct drop). Invalid-state and anti-spoof
+drops are not counted. Counters live in the kernel sets, so they reset on every
+firewall reload (the exporter then reports `new = total`), and a source is not
+counted at all once the set reaches its size cap (silent, no error).
+End-to-end proof: `bw-check fw-events` (opt-in).
+
 `burst=yes` is decided by the exporter from `nft_track_scan_threshold`, so rules
 need no numeric comparison. The first run after deploy or state loss is silent
 (baseline). Set `BLACKWALL_FW_DEBUG=1` to see the "baseline recorded" message on
