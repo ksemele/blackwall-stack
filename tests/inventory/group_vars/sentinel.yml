@@ -1,0 +1,3 @@
+---
+# Rocky 9 server node (Wazuh server stack, podman nginx fixture).
+nft_public_tcp: [22]

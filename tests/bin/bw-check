@@ -21,7 +21,9 @@ BW_SKIP=0
 
 # black-dead-98 is stopped on purpose by tests/triggers/broken-agents.yml,
 # so host-level checks exclude it.
-BW_LIVE_HOSTS='!black-dead-98'
+# The sentinel group is provisioned by its own playbook and checked by its own
+# target; the main-stack checks skip it.
+BW_LIVE_HOSTS='!black-dead-98:!sentinel'
 
 bw_pass() { BW_PASS=$((BW_PASS + 1)); printf '  %sPASS%s %s\n' "$BW_GREEN"  "$BW_RESET" "$*"; }
 bw_fail() { BW_FAIL=$((BW_FAIL + 1)); printf '  %sFAIL%s %s\n' "$BW_RED"    "$BW_RESET" "$*"; }

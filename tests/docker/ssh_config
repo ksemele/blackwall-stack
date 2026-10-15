@@ -33,3 +33,11 @@ Host black-rocky-02
     StrictHostKeyChecking no
     UserKnownHostsFile /dev/null
     LogLevel ERROR
+
+Host black-sentinel-03
+    HostName localhost
+    Port 2204
+    User root
+    StrictHostKeyChecking no
+    UserKnownHostsFile /dev/null
+    LogLevel ERROR

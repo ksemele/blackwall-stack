@@ -128,6 +128,21 @@ services:
       blackwall-test:
         ipv4_address: 172.28.0.15
 
+  # RHEL-family server node: runs the Wazuh server stack and a podman nginx
+  # fixture on 443 (exercises the nft podman/netavark coexistence).
+  black-sentinel-03:
+    <<: *black-node
+    profiles: [ubuntu2204]
+    build:
+      context: ./images/rockylinux9
+    container_name: black-sentinel-03
+    hostname: black-sentinel-03
+    ports:
+      - "2204:22"
+    networks:
+      blackwall-test:
+        ipv4_address: 172.28.0.16
+
   # ── Monitoring stack: Prometheus + Grafana ────────────────────────────────
   # Profile: ubuntu2204
   # Plain containers, not systemd nodes: they need no privileged mode, host

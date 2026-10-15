@@ -8,6 +8,7 @@ Docker environment shared by all Blackwall modules.
 | `black-host-01` | Wazuh agent + auditd target |
 | `black-dead-98` | agent fixture, stopped on purpose (`disconnected` status) |
 | `black-rocky-02` | Rocky Linux 9: Wazuh agent (journald) + firewall roles on the RHEL family |
+| `black-sentinel-03` | Rocky Linux 9: Wazuh server stack node (podman nginx fixture on 443) |
 | `black-metrics-00` | Prometheus |
 | `black-grafana-00` | Grafana |
 | `black-aptcache-00` | apt-cacher-ng — apt cache for the nodes, lab only |
@@ -75,7 +76,7 @@ tests/bin/bw-lab reset
 | `bw-lab down [--keep-data]` | stop the environment; volumes are removed unless `--keep-data` |
 | `bw-lab reset` | `down -v` + wipe Wazuh certificates + `up` |
 | `bw-lab status` | containers, published ports, health of Prometheus/Grafana/dashboard |
-| `bw-lab provision <target> [ansible args]` | ansible only: `eye`, `nftables`, `metrics`, `voice`, `cf-wall`, `brain`, `fixtures`, `all`; `brain` passes extra args through, e.g. `-e brain_enabled=false` |
+| `bw-lab provision <target> [ansible args]` | ansible only: `eye`, `nftables`, `metrics`, `voice`, `cf-wall`, `brain`, `sentinel` (podman nginx fixture on black-sentinel-03; not part of `all`), `fixtures`, `all`; `brain` passes extra args through, e.g. `-e brain_enabled=false` |
 | `bw-lab ssh <host> [cmd...]` | shell into a container (root password `blackwall`) |
 | `bw-lab logs <service> [-f]` | compose logs for one service |
 | `bw-lab open <target>` | open `dashboard`, `grafana` or `prometheus` in a browser |
@@ -189,6 +190,7 @@ Unset variables render as empty strings — playbooks still run, delivery just f
 | `black-host-01` | agent + auditd target | `2201→22` | — | `172.28.0.11` |
 | `black-dead-98` | agent fixture — disconnected | `2202→22` | — | `172.28.0.98` |
 | `black-rocky-02` | Rocky Linux 9 — agent + firewall roles | `2203→22` | — | `172.28.0.15` |
+| `black-sentinel-03` | Rocky Linux 9 — server node + podman nginx fixture | `2204→22` | — | `172.28.0.16` |
 | `black-metrics-00` | Prometheus | — | `9090→9090` | `172.28.0.12` |
 | `black-grafana-00` | Grafana | — | `3000→3000` | `172.28.0.13` |
 | `black-aptcache-00` | apt-cacher-ng | — | — | `172.28.0.14` |
