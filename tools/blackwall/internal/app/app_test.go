@@ -229,3 +229,22 @@ func TestApp_RefreshKeyCallsHookAndReachesView(t *testing.T) {
 		t.Errorf("other keys must not call OnRefresh")
 	}
 }
+
+func TestApp_PaletteAcceptsSpace(t *testing.T) {
+	a := fakeView{name: ":a"}
+	var switched string
+	m := New(Deps{Views: []views.View{&a}, InitialView: ":a",
+		SwitchContext: func(name string) tea.Cmd { switched = name; return nil }})
+	m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{':'}})
+	for _, k := range []tea.KeyMsg{
+		{Type: tea.KeyRunes, Runes: []rune("ctx")},
+		{Type: tea.KeySpace, Runes: []rune{' '}},
+		{Type: tea.KeyRunes, Runes: []rune("lab")},
+		{Type: tea.KeyEnter},
+	} {
+		m.Update(k)
+	}
+	if switched != "lab" {
+		t.Errorf("`:ctx lab` switched to %q, want lab (palette %q, err %q)", switched, m.paletteInput, m.paletteErr)
+	}
+}

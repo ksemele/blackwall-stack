@@ -152,8 +152,11 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				return m, nil
 			default:
-				if msg.Type == tea.KeyRunes {
+				switch msg.Type {
+				case tea.KeyRunes:
 					m.paletteInput += string(msg.Runes)
+				case tea.KeySpace: // `:ctx <name>`
+					m.paletteInput += " "
 				}
 				return m, nil
 			}
