@@ -56,6 +56,11 @@ daily (`Persistent`, randomized delay); the role also runs it on install and whe
 or config change. Each refresh replaces the table, so `fang_hits` counters restart. In enforce
 mode the drop is its own rule, so a full `fang_hits` set cannot let a listed source through.
 
+Events: the role drops `/etc/blackwall/fw-export.d/fang.conf` (`kind=blocklist_hit`), so Eye's
+`blackwall-fw-export` reports growth of `fang_hits` and Wazuh rule 100206 (level 5) fires per
+source. The line carries no mode: in `observe` an alert means "would be dropped", in `enforce`
+"dropped". Cooldown and baseline are the exporter's; Fang needs no Eye code, only that file.
+
 Inspect: `nft list table inet blackwall_fang`, `nft list set inet blackwall_fang fang_hits`,
 `journalctl -u blackwall-fang-refresh`.
 

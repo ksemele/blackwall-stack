@@ -19,7 +19,8 @@
        previous run, so no numeric comparison is needed here.
        100200 base (level 0)      100201 origin_direct      100202 input_drop burst
        100203 forward_drop burst  100204 output capped (summary)
-       100205 exporter error (stderr line, decoder blackwall-fw-error) -->
+       100205 exporter error (stderr line, decoder blackwall-fw-error)
+       100206 blocklist_hit (Fang drop-in set; observe = would drop, enforce = dropped) -->
   <rule id="100200" level="0">
     <if_sid>530</if_sid>
     <match>^ossec: output: 'blackwall-fw': blackwall-fw: kind=</match>
@@ -55,6 +56,13 @@
     <if_sid>100200</if_sid>
     <field name="fw_kind">^summary$</field>
     <description>Blackwall: firewall event output capped ($(fw_suppressed) sources suppressed).</description>
+    <group>blackwall_fw,</group>
+  </rule>
+
+  <rule id="100206" level="5">
+    <if_sid>100200</if_sid>
+    <field name="fw_kind">^blocklist_hit$</field>
+    <description>Blackwall: source from a reputation blocklist (src $(srcip)).</description>
     <group>blackwall_fw,</group>
   </rule>
 

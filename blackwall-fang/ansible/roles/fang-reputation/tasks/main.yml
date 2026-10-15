@@ -46,6 +46,22 @@
     mode: "0755"
   notify: Refresh Fang blocklists
 
+- name: Exporter drop-in directory
+  ansible.builtin.file:
+    path: /etc/blackwall/fw-export.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Report blocklist hits through blackwall-fw-export
+  ansible.builtin.copy:
+    src: fw-export-fang.conf
+    dest: /etc/blackwall/fw-export.d/fang.conf
+    owner: root
+    group: root
+    mode: "0644"
+
 - name: Lab test list directory
   ansible.builtin.file:
     path: /etc/blackwall/fang-test

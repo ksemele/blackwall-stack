@@ -14,8 +14,9 @@ blockers: []
   `docs/superpowers/specs/2026-10-15-firewall-events-design.md`).
   - Per-source drop sets (`dropped_input`, `dropped_forward`, cf-wall
     `origin_direct`); `blackwall-fw-export` prints growth-only lines as a Wazuh
-    `command` localfile; rules 100200-100205 (origin-direct level 10, scan burst
-    level 8, forward burst 6).
+    `command` localfile; rules 100200-100206 (origin-direct level 10, scan burst
+    level 8, forward burst 6); 100206 blocklist_hit (level 5) for Fang drop-in
+    sets (`/etc/blackwall/fw-export.d/*.conf`).
   - `bw-check fw-events` (opt-in): origin-direct -> 100201 in the sentinel
     indexer, 60-port scan -> 100202 in the main indexer, 3 ports -> no alert.
 
