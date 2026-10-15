@@ -26,7 +26,7 @@ Commands:
   reset                               down -v + wipe Wazuh certs + up
   status                              containers, ports, monitoring health
   provision <target> [ansible args]   ansible only: eye|nftables|metrics|voice|cf-wall|brain|sentinel|fixtures|all
-                                      (brain takes extra args, e.g. -e brain_enabled=false)
+                                      (voice and brain take extra args, e.g. -e brain_enabled=false)
   ssh <host> [command...]             shell into a test container
   logs <service> [-f]                 compose logs for one service
   open <target>                       open in a browser: dashboard|grafana|prometheus
@@ -82,7 +82,7 @@ cmd_provision() {
       ;;
     voice)
       bw_info "provision: telegram-alerter"
-      bw_ansible blackwall-voice ansible/playbooks/voice.yml
+      bw_ansible blackwall-voice ansible/playbooks/voice.yml "$@"
       ;;
     cf-wall)
       bw_info "provision: cf-wall (Cloudflare origin filter)"

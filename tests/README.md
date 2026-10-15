@@ -76,7 +76,7 @@ tests/bin/bw-lab reset
 | `bw-lab down [--keep-data]` | stop the environment; volumes are removed unless `--keep-data` |
 | `bw-lab reset` | `down -v` + wipe Wazuh certificates + `up` |
 | `bw-lab status` | containers, published ports, health of Prometheus/Grafana/dashboard |
-| `bw-lab provision <target> [ansible args]` | ansible only: `eye`, `nftables`, `metrics`, `voice`, `cf-wall`, `brain`, `sentinel` (podman nginx fixture, then the full Wazuh server stack + firewall + cf-wall on black-sentinel-03; not part of `all`), `fixtures`, `all`; `brain` passes extra args through, e.g. `-e brain_enabled=false` |
+| `bw-lab provision <target> [ansible args]` | ansible only: `eye`, `nftables`, `metrics`, `voice`, `cf-wall`, `brain`, `sentinel` (podman nginx fixture, then the full Wazuh server stack + firewall + cf-wall on black-sentinel-03; not part of `all`), `fixtures`, `all`; `voice` and `brain` pass extra args through, e.g. `-e brain_enabled=false` (the lab inventory derives Voice's `voice_max_level` from `brain_enabled`, so toggle both: `provision brain -e brain_enabled=X` and `provision voice -e brain_enabled=X`) |
 | `bw-lab ssh <host> [cmd...]` | shell into a container (root password `blackwall`) |
 | `bw-lab logs <service> [-f]` | compose logs for one service |
 | `bw-lab open <target>` | open `dashboard`, `grafana` or `prometheus` in a browser |
@@ -133,7 +133,7 @@ tests/bin/bw-check metrics    # just one group
 | `ports` | expected listeners inside the containers, plus published ports probed from the Mac |
 | `wazuh` | every agent in `wazuh_agents` (minus `wazuh_fixture_agents`) is `Active` on the manager, RHEL-family agent events (a failed SSH login) reach the indexer, REST API answers, indexer answers, `black-ghost-99` is `never_connected` and `black-dead-98` is `disconnected`, dashboard responds |
 | `metrics` | node_exporter serves metrics, Prometheus targets are `up`, `node_load1` returns data, Grafana is healthy with its datasource and dashboard |
-| `voice` | `telegram-alerter` is running and Telegram accepted a synthetic alert |
+| `voice` | `telegram-alerter` is running and Telegram accepted a synthetic alert; when the deployed `voice_max_level` leaves no room for it (Brain on in the lab), it asserts Voice skipped the alert instead |
 | `brain` | `brain-analyst` is running; a synthetic level-10 alert was analysed by Claude and delivered to Telegram |
 | `sentinel` | Wazuh stack on `black-sentinel-03`: services active, indexer/API/dashboard answer on 127.0.0.1 but not on 172.28.0.16 (probed from master), agent 000 active, packages excluded, podman nginx on 443, `inet netavark` and container DNS survive `systemctl reload nftables` (opt-in: SKIP until `bw-lab provision sentinel`) |
 | `sentinel-agents` | a throwaway container (`black-probe-90`, 172.28.0.90) installs `wazuh-agent` (version from the `wazuh-repo` role) and enrolls in the sentinel: agent `Active`, input-chain counters for 1514/1515 grew, alerts for it in the sentinel indexer, syscollector OS via the API; the container and the agent entry are removed on exit, including Ctrl+C; alerts must grow over the pre-run count; `BW_PROBE_MANAGER=<ip>` points the probe at a wrong manager to test the failure path |
