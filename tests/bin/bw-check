@@ -198,6 +198,8 @@ check_wazuh() {
 
   bw_run "agents are registered on the manager" \
     bw_ansible blackwall-eye ansible/playbooks/verify-agents.yml
+  bw_run "agent events reach the indexer" \
+    bw_ansible blackwall-eye ansible/playbooks/verify-agent-events.yml
   bw_run "manager REST API answers" \
     bw_ansible blackwall-eye ansible/playbooks/verify-api.yml
 

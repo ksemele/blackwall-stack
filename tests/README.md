@@ -7,7 +7,7 @@ Docker environment shared by all Blackwall modules.
 | `black-master-00` | Wazuh manager + indexer + dashboard (all-in-one) |
 | `black-host-01` | Wazuh agent + auditd target |
 | `black-dead-98` | agent fixture, stopped on purpose (`disconnected` status) |
-| `black-rocky-02` | Rocky Linux 9, firewall roles on the RHEL family |
+| `black-rocky-02` | Rocky Linux 9: Wazuh agent (journald) + firewall roles on the RHEL family |
 | `black-metrics-00` | Prometheus |
 | `black-grafana-00` | Grafana |
 | `black-aptcache-00` | apt-cacher-ng — apt cache for the nodes, lab only |
@@ -117,7 +117,7 @@ tests/bin/bw-check metrics    # just one group
 | `nft` | `chain input` is `policy drop` and every expected port is in `set public_tcp` |
 | `cf-wall` | table `inet blackwall_wall` loaded with Cloudflare prefixes, timer enabled, a refresh that fetches junk leaves the live rules untouched (opt-in: SKIP until `bw-lab provision cf-wall`) |
 | `ports` | expected listeners inside the containers, plus published ports probed from the Mac |
-| `wazuh` | agents registered on the manager, REST API answers, indexer answers, `black-ghost-99` is `never_connected` and `black-dead-98` is `disconnected`, dashboard responds |
+| `wazuh` | every agent in `wazuh_agents` (minus `wazuh_fixture_agents`) is `Active` on the manager, RHEL-family agent events (a failed SSH login) reach the indexer, REST API answers, indexer answers, `black-ghost-99` is `never_connected` and `black-dead-98` is `disconnected`, dashboard responds |
 | `metrics` | node_exporter serves metrics, Prometheus targets are `up`, `node_load1` returns data, Grafana is healthy with its datasource and dashboard |
 | `voice` | `telegram-alerter` is running and Telegram accepted a synthetic alert |
 | `brain` | `brain-analyst` is running; a synthetic level-10 alert was analysed by Claude and delivered to Telegram |
@@ -182,7 +182,7 @@ Unset variables render as empty strings — playbooks still run, delivery just f
 | `black-master-00` | manager + indexer + dashboard | `2200→22` | `5601→443`, `127.0.0.1:55000→55000`, `127.0.0.1:9200→9200` | `172.28.0.10` |
 | `black-host-01` | agent + auditd target | `2201→22` | — | `172.28.0.11` |
 | `black-dead-98` | agent fixture — disconnected | `2202→22` | — | `172.28.0.98` |
-| `black-rocky-02` | Rocky Linux 9 — firewall roles | `2203→22` | — | `172.28.0.15` |
+| `black-rocky-02` | Rocky Linux 9 — agent + firewall roles | `2203→22` | — | `172.28.0.15` |
 | `black-metrics-00` | Prometheus | — | `9090→9090` | `172.28.0.12` |
 | `black-grafana-00` | Grafana | — | `3000→3000` | `172.28.0.13` |
 | `black-aptcache-00` | apt-cacher-ng | — | — | `172.28.0.14` |
@@ -776,6 +776,7 @@ blackwall/                                  # repo root
 │       │   ├── monitored-host.yml          # agent + auditd
 │       │   ├── nftables.yml
 │       │   ├── verify-agents.yml
+│       │   ├── verify-agent-events.yml
 │       │   ├── verify-api.yml
 │       │   ├── verify-auditd.yml
 │       │   ├── verify-nftables.yml

@@ -7,7 +7,7 @@ Host monitoring core for the Blackwall security platform. Stage 1: Wazuh manager
 - Wazuh Manager + Agent (HIDS, FIM, log collection)
 - auditd (kernel-level syscall audit)
 - Ansible IaC — no manual steps
-- Target OS: Ubuntu 22.04 LTS / Debian 12 (primary), Rocky Linux 9 (secondary)
+- Target OS: Ubuntu 22.04 LTS / Debian 12 (primary), Rocky Linux 9 (secondary; the agent reads system logs from journald)
 
 ## Test Environment
 

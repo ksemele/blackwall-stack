@@ -1,8 +1,4 @@
 ---
-- name: Wait for dpkg lock to be released
-  shell: while fuser /var/lib/dpkg/lock-frontend /var/lib/dpkg/lock >/dev/null 2>&1; do sleep 2; done
-  changed_when: false
-
 - name: Detect container environment (/.dockerenv)
   stat:
     path: /.dockerenv
@@ -17,20 +13,35 @@
       {{ wazuh_agent_container_group if _agent_dockerenv.stat.exists
          else wazuh_agent_groups }}
 
-- name: Install prerequisites (curl)
-  apt:
-    name:
-      - curl
-    state: present
-    update_cache: true
+# Rocky ships curl-minimal, which conflicts with the curl package: only
+# install when no curl binary exists.
+- name: Check for curl
+  ansible.builtin.stat:
+    path: /usr/bin/curl
+  register: _agent_curl
 
-# Pinned like the server roles: an agent newer than the manager is unsupported.
-- name: Install wazuh-agent package
-  apt:
+- name: Install prerequisites (curl)
+  ansible.builtin.package:
+    name: curl
+    state: present
+  when: not _agent_curl.stat.exists
+
+# Pinned like the server roles: an agent newer than the manager is unsupported,
+# so allow downgrading to wazuh_version.
+- name: Install wazuh-agent package (apt)
+  ansible.builtin.apt:
     name: "wazuh-agent{{ wazuh_pkg_suffix }}"
     allow_downgrade: true
     state: present
     update_cache: true
+  when: ansible_facts['os_family'] == 'Debian'
+
+- name: Install wazuh-agent package (dnf)
+  ansible.builtin.dnf:
+    name: "wazuh-agent{{ wazuh_pkg_suffix }}"
+    allow_downgrade: true
+    state: present
+  when: ansible_facts['os_family'] == 'RedHat'
 
 - name: Deploy ossec.conf from template
   template:

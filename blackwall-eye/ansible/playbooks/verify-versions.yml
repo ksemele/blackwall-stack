@@ -16,6 +16,8 @@
         - filebeat
         - nftables
       rhel9:
+        - wazuh-agent
+        - audit
         - nftables
       wazuh_agents:
         - wazuh-agent

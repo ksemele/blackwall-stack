@@ -9,3 +9,7 @@ bw_lab: true
 # from the Wazuh GPG signature on the repo metadata, not from TLS. The role
 # defaults keep https://, so nothing changes outside the lab.
 wazuh_apt_repo_url: "http://packages.wazuh.com/4.x/apt/"
+
+# Agents that are broken on purpose (bw-lab provision fixtures); agent checks
+# skip them.
+wazuh_fixture_agents: [black-dead-98]

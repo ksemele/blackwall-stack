@@ -26,7 +26,20 @@
           - agent_list.stdout_lines | select('search', 'Active') | reject('search', 'server') | list | length > 0
         fail_msg: >
           No external agents are in 'Active' state. Make sure wazuh-agent is installed and
-          running on black-host-01 and that it can reach the manager on port 1514/tcp
-          and 1515/tcp.
+          running on the monitored hosts and that they can reach the manager on port
+          1514/tcp and 1515/tcp.
         success_msg: "At least one external agent is Active — enrollment and connectivity verified."
 
+    # Every inventory agent must be enrolled and Active, except the fixtures
+    # that are broken on purpose.
+    - name: Assert every expected agent is Active
+      vars:
+        _expected: "{{ groups['wazuh_agents'] | difference(wazuh_fixture_agents | default([])) }}"
+      assert:
+        that:
+          - "agent_list.stdout_lines | select('search', 'Name: ' ~ item ~ ',') | select('search', 'Active') | list | length == 1"
+        fail_msg: >-
+          agent {{ item }} is not Active on the manager (not enrolled, or not connected);
+          agent_control -l: {{ agent_list.stdout_lines | join(' | ') }}
+        quiet: true
+      loop: "{{ _expected }}"
