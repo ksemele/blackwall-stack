@@ -96,4 +96,5 @@ m.STATE_DIR = tempfile.mkdtemp() + "/st"
 assert m.cache_load("k") is None
 m.cache_save("k", "abc"); assert m.cache_load("k") == "abc"
 assert oct(os.stat(m.STATE_DIR).st_mode & 0o777) == "0o700"
+assert m.cache_age("nope") is None and 0 <= m.cache_age("k") < 5
 print("FANG REFRESH OK")

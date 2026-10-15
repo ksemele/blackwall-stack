@@ -7,8 +7,8 @@ out of the blocklist, renders the table for MODE (observe|enforce), checks it
 with `nft -c`, loads it and only then persists it.
 
 Any failure before the load leaves the live table and the persisted file
-untouched. Validated source data (and the Cloudflare list) is cached under
-/var/lib/blackwall-fang/. If a download fails, the table is rebuilt from that
+untouched. Source data (and the Cloudflare list) that was validated AND applied is cached
+under /var/lib/blackwall-fang/ (a cache write error only logs a warning). If a download fails, the table is rebuilt from that
 cache with the CURRENT mode and allowlist (exit 3). The very first run (no
 cache, no table, no persisted file) with no successful fetch loads an EMPTY
 blocklist (fail open) and exits 2.
@@ -266,6 +266,14 @@ def cache_save(key, text):
     os.replace(path + ".new", path)
 
 
+def cache_age(key):
+    """Age of the cache file in seconds, or None."""
+    try:
+        return max(0, int(time.time() - os.stat(_cache_name(key)).st_mtime))
+    except OSError:
+        return None
+
+
 def cache_load(key):
     try:
         with open(_cache_name(key)) as f:
@@ -387,17 +395,23 @@ def main(argv):
                 apply(render(wan_if, mode, allow, [], stamp), rules_out, dry_run)
                 return 2
             raise
-        log("WARNING: download failed, rebuilding from cached data with the current mode and allowlist")
+        ages = [cache_age(k) for k in sources + ["cf:" + cf_url]]
+        log("WARNING: download failed, rebuilding from cached data (oldest cache file %s old) "
+            "with the current mode and allowlist"
+            % ("%dh%02dm" % divmod(max(a or 0 for a in ages) // 60, 60)))
         fresh = False
         code = 3
     block, allow, n_before = compute(raw, cf_text, allowlist, hosts, min_entries, blockable)
     log("blocklist: %d entries (%d after carving the allowlist), allow: %d, mode: %s%s"
         % (n_before, len(block), len(allow), mode, "" if fresh else " [from cache]"))
-    if fresh and not dry_run:  # validated by compute: safe to remember
-        for u, t in zip(sources, raw):
-            cache_save(u, t)
-        cache_save("cf:" + cf_url, cf_text)
     apply(render(wan_if, mode, allow, block, stamp), rules_out, dry_run)
+    if fresh and not dry_run:  # cache = the data last applied successfully
+        try:
+            for u, t in zip(sources, raw):
+                cache_save(u, t)
+            cache_save("cf:" + cf_url, cf_text)
+        except OSError as e:
+            log("WARNING: cannot write the cache in %s: %s (the table was applied)" % (STATE_DIR, e))
     log("done")
     return code
 

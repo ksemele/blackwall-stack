@@ -9,4 +9,7 @@ ExecStart=/usr/local/sbin/blackwall-fang-refresh
 # The script reads /etc/blackwall/fang.conf itself.
 # A failed refresh (network glitch, bad data, rejected ruleset) changes nothing
 # and leaves this unit failed: that is the visible signal. The next timer run retries.
-# Exit 2 = first run without data, an empty blocklist was loaded (fail open).
+# Exit 2 = first run without data, an empty blocklist was loaded (fail open; the
+#          table changed).
+# Exit 3 = download failed, the table was REBUILT from cached data with the current
+#          mode and allowlist (the table changed; the age is in the journal).
