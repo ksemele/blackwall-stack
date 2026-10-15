@@ -20,7 +20,9 @@
        100200 base (level 0)      100201 origin_direct      100202 input_drop burst
        100203 forward_drop burst  100204 output capped (summary)
        100205 exporter error (stderr line, decoder blackwall-fw-error)
-       100206 blocklist_hit (Fang drop-in set; observe = would drop, enforce = dropped) -->
+       100206 blocklist_would_drop (Fang observe: listed source reached the host)
+       100207 Fang refresh ERROR (syslog/journald)   100208 blocklist_dropped (Fang enforce)
+       100209 Fang refresh WARNING (applied from cache / fail-open) -->
   <rule id="100200" level="0">
     <if_sid>530</if_sid>
     <match>^ossec: output: 'blackwall-fw': blackwall-fw: kind=</match>
@@ -61,9 +63,31 @@
 
   <rule id="100206" level="5">
     <if_sid>100200</if_sid>
-    <field name="fw_kind">^blocklist_hit$</field>
-    <description>Blackwall: source from a reputation blocklist (src $(srcip)).</description>
-    <group>blackwall_fw,</group>
+    <field name="fw_kind">^blocklist_would_drop$</field>
+    <description>Blackwall: listed source reached the host, would be dropped in enforce (src $(srcip)).</description>
+    <group>blackwall_fw,blocklist,</group>
+  </rule>
+
+  <rule id="100208" level="3">
+    <if_sid>100200</if_sid>
+    <field name="fw_kind">^blocklist_dropped$</field>
+    <description>Blackwall: reputation-blocklist source dropped (src $(srcip)).</description>
+    <group>blackwall_fw,blocklist,</group>
+  </rule>
+
+  <!-- Fang refresh health (script logs ERROR/WARNING via syslog, program blackwall-fang-refresh) -->
+  <rule id="100207" level="7">
+    <program_name>^blackwall-fang-refresh</program_name>
+    <match>ERROR</match>
+    <description>Blackwall Fang: blocklist refresh failed or degraded (ERROR).</description>
+    <group>blackwall_fang,</group>
+  </rule>
+
+  <rule id="100209" level="5">
+    <program_name>^blackwall-fang-refresh</program_name>
+    <match>WARNING</match>
+    <description>Blackwall Fang: blocklist refresh degraded (applied from cache or fail-open).</description>
+    <group>blackwall_fang,</group>
   </rule>
 
   <rule id="100205" level="3">

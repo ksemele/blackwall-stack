@@ -144,8 +144,11 @@ decoder, fields `fw_kind`, `srcip`, `fw_new`, `fw_total`, `fw_burst`,
 | 100202 | 8 | `kind=input_drop` with `burst=yes`: possible scan |
 | 100203 | 6 | `kind=forward_drop` with `burst=yes` |
 | 100204 | 3 | `kind=summary`: exporter output was capped, `fw_suppressed` sources dropped |
-| 100206 | 5 | `kind=blocklist_hit`: a source from a drop-in set (Fang reputation blocklist) hit; the exporter line carries no mode, so in Fang observe mode this means "would be dropped", in enforce "dropped" |
 | 100205 | 3 | exporter error line (`blackwall-fw-export: ...` on stderr, field `fw_error`) |
+| 100206 | 5 | `kind=blocklist_would_drop` (Fang observe drop-in set): a listed source reached the host, would be dropped in enforce |
+| 100207 | 7 | syslog/journald line from program `blackwall-fang-refresh` containing `ERROR` (Fang refresh failed or degraded: stale cache, empty blocklist) |
+| 100208 | 3 | `kind=blocklist_dropped` (Fang enforce drop-in set): a listed source was dropped |
+| 100209 | 5 | program `blackwall-fang-refresh` with `WARNING` (applied from cache, fail-open); the manager reads system logs from journald on the RedHat family, `/var/log/{auth.log,syslog}` on Debian |
 
 What is counted: packets dropped by the final policy path (input and forward
 `policy drop`, and cf-wall's origin-direct drop). Invalid-state and anti-spoof
@@ -299,7 +302,7 @@ way, so `/etc/blackwall/fw-export.d` must stay root-owned (0755, files 0644): an
 who can write there can make the exporter read arbitrary nft sets. A malformed
 drop-in raises rule 100205 on every run (every 10 s to a few minutes, depending on
 the interval) until it is fixed or removed.
-Fang uses this for `kind=blocklist_hit` (rule 100206); the decoder accepts any
+Fang uses this for `kind=blocklist_would_drop` / `blocklist_dropped` (rules 100206 / 100208, chosen by its mode); the decoder accepts any
 `\w+` kind, a new kind needs only its own rule.
 
 ## Verification playbooks

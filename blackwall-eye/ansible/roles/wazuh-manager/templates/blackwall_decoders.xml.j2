@@ -10,7 +10,7 @@
      third one. Type ossec keeps stock rules 500/530 matching. Rule 100200
      matches the prefix plus the decoded fw_kind field. -->
 
-<!-- kind=<input_drop|forward_drop|origin_direct|blocklist_hit|any drop-in kind> src=<ip> new=<n> total=<n> burst=<yes|no> -->
+<!-- kind=<input_drop|forward_drop|origin_direct|any drop-in kind, e.g. blocklist_would_drop|blocklist_dropped> src=<ip> new=<n> total=<n> burst=<yes|no> -->
 <decoder name="blackwall-fw">
   <parent>ossec</parent>
   <type>ossec</type>
