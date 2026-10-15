@@ -17,7 +17,7 @@ blockers: []
     `command` localfile; rules 100200-100204 (origin-direct level 10, scan burst
     level 8, forward burst 6).
   - `bw-check fw-events` (opt-in): origin-direct -> 100201 in the sentinel
-    indexer, 30-port scan -> 100202 in the main indexer, 3 ports -> no alert.
+    indexer, 60-port scan -> 100202 in the main indexer, 3 ports -> no alert.
 
 - 2026-10-15: Wazuh server stack on the RHEL family (spec
   `docs/superpowers/specs/2026-10-15-wazuh-server-rhel-design.md`).

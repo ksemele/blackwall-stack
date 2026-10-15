@@ -144,6 +144,7 @@ decoder, fields `fw_kind`, `srcip`, `fw_new`, `fw_total`, `fw_burst`,
 | 100202 | 8 | `kind=input_drop` with `burst=yes`: possible scan |
 | 100203 | 6 | `kind=forward_drop` with `burst=yes` |
 | 100204 | 3 | `kind=summary`: exporter output was capped, `fw_suppressed` sources dropped |
+| 100205 | 3 | exporter error line (`blackwall-fw-export: ...` on stderr, field `fw_error`) |
 
 What is counted: packets dropped by the final policy path (input and forward
 `policy drop`, and cf-wall's origin-direct drop). Invalid-state and anti-spoof
@@ -153,7 +154,19 @@ counted at all once the set reaches its size cap (silent, no error).
 End-to-end proof: `bw-check fw-events` (opt-in).
 
 `burst=yes` is decided by the exporter from `nft_track_scan_threshold`, so rules
-need no numeric comparison. The first run after deploy or state loss is silent
+need no numeric comparison. A burst is per export interval: packets from one
+source between two runs. Changing `wazuh_fw_events_interval` therefore changes
+what counts as a burst (the lab's 10 s is stricter than production's 60 s: the
+same scan rate trips the threshold less often at 10 s).
+
+On a public host expect regular 100201/100202 alerts from internet scanners.
+The exporter's per-source cooldown (`nft_track_report_cooldown`, default 3600 s)
+bounds this to one alert per source per kind per hour; drops from a source in
+cooldown accumulate silently and the next report carries `new` = packets since
+its last report. To tune: raise `nft_track_scan_threshold` (fewer scans count),
+raise `nft_track_report_cooldown` (fewer repeats; `0` reports every growth),
+or raise Voice's `severity_threshold` above 8 to keep only origin-direct (10)
+alerts in Telegram. The first run after deploy or state loss is silent
 (baseline). Set `BLACKWALL_FW_DEBUG=1` to see the "baseline recorded" message on
 stderr when running the exporter by hand.
 
@@ -193,8 +206,9 @@ container-DNS part runs only in the lab (`bw_lab: true`).
 | `nft_track_drops` | `true` | per-source accounting of dropped IPv4 packets: dynamic sets `dropped_input` (and `dropped_forward` when `nft_forward_policy: drop`) with per-element counters, updated just before the final counter. Inspect: `nft list set inet blackwall_base dropped_input`; reset on every reload |
 | `nft_track_timeout` | `1h` | idle timeout of an entry in those sets |
 | `nft_track_size` | `65536` | maximum number of tracked sources per set |
-| `nft_track_scan_threshold` | `20` | packets from one source between two `blackwall-fw-export` runs that set `burst=yes`; rendered to `/etc/blackwall/fw-export.conf` |
+| `nft_track_scan_threshold` | `20` | packets from one source between two `blackwall-fw-export` runs (one export interval) that set `burst=yes`; rendered to `/etc/blackwall/fw-export.conf` |
 | `nft_track_max_lines` | `200` | cap on lines per exporter run (highest `new` first); the rest becomes one `kind=summary suppressed=<n>` line |
+| `nft_track_report_cooldown` | `3600` | seconds between two reports of the same (kind, source); growth in between accumulates silently, `0` reports every growth (lab) |
 | `nft_podman` | `{}` | `{net, if}` of a podman host: anti-spoofing on the WAN, container DNS to the host, `ct status dnat accept` and container egress in `forward` |
 | `nft_conf_path` | per OS family | `/etc/nftables.conf` (Debian) or `/etc/sysconfig/nftables.conf` (RedHat) |
 
@@ -259,9 +273,9 @@ nothing changed or a table/set is absent:
 blackwall-fw: kind=<input_drop|forward_drop|origin_direct> src=<ip> new=<n> total=<n> burst=<yes|no>
 ```
 
-`burst=yes` when `new >= nft_track_scan_threshold`. The first run (state missing or corrupt) only records a baseline and prints nothing; state is saved before printing (if that fails, nothing is printed); output is capped by `nft_track_max_lines`. Overrides for tests:
+`burst=yes` when `new >= nft_track_scan_threshold`. The first run (state missing or corrupt) only records a baseline and prints nothing; state is saved before printing (if that fails, nothing is printed); each (kind, src) is reported at most once per `nft_track_report_cooldown`; output is capped by `nft_track_max_lines` (origin_direct first, then input/forward bursts, then the rest, highest `new` first). Overrides for tests:
 `BLACKWALL_FW_NFT_JSON_DIR`, `BLACKWALL_FW_STATE_DIR`,
-`BLACKWALL_FW_SCAN_THRESHOLD`, `BLACKWALL_FW_MAX_LINES`, `BLACKWALL_FW_CONF`. Unit test (no nft needed):
+`BLACKWALL_FW_SCAN_THRESHOLD`, `BLACKWALL_FW_MAX_LINES`, `BLACKWALL_FW_REPORT_COOLDOWN`, `BLACKWALL_FW_NOW`, `BLACKWALL_FW_CONF`. Unit test (no nft needed):
 `tools/test-fw-export`.
 
 ## Verification playbooks
