@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Questions and ideas
+    url: https://github.com/ksemele/blackwall-stack/discussions
+    about: Ask how to use or deploy the stack, or discuss an idea before opening an issue.
+  - name: Report a vulnerability
+    url: https://github.com/ksemele/blackwall-stack/security/advisories/new
+    about: Report security problems privately, not in a public issue.
+  - name: Terminal UI (blackwall)
+    url: https://github.com/ksemele/blackwall/issues
+    about: Bugs and features of the k9s-style TUI go to its own repo.
