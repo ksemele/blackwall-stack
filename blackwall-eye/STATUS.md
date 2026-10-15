@@ -14,9 +14,9 @@ blockers: []
   `docs/superpowers/specs/2026-10-15-firewall-events-design.md`).
   - Per-source drop sets (`dropped_input`, `dropped_forward`, cf-wall
     `origin_direct`); `blackwall-fw-export` prints growth-only lines as a Wazuh
-    `command` localfile; rules 100200-100209 (origin-direct level 10, scan burst
+    `command` localfile; rules 100200-100212 (origin-direct level 10, scan burst
     level 8, forward burst 6); 100206 blocklist_would_drop (level 5) / 100208 blocklist_dropped (level 3) and 100207/100209 Fang refresh ERROR/WARNING (program blackwall-fang-refresh) for Fang drop-in
-    sets (`/etc/blackwall/fw-export.d/*.conf`).
+    sets; 100210-100212 ssh/scan/rate_attempts (Fang layer 2) (`/etc/blackwall/fw-export.d/*.conf`).
   - `bw-check fw-events` (opt-in): origin-direct -> 100201 in the sentinel
     indexer, 60-port scan -> 100202 in the main indexer, 3 ports -> no alert.
 

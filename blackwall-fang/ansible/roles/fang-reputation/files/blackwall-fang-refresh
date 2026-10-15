@@ -15,6 +15,9 @@ MAX_CACHE_AGE_DAYS is not trusted: the table is rebuilt with an EMPTY blocklist 
 mode and allowlist unchanged, exit 4). The very first run (no cache, no table, no persisted
 file) with no successful fetch loads an EMPTY blocklist (fail open) and exits 2. With no
 cache at all, a rejected update aborts (exit 1, live table untouched).
+Layer 2 (ATTEMPTS=1): per-source SYN-rate detectors (SSH, closed-port scan, any-port rate)
+are rendered after the reputation rules into the same table; they only record sources in
+*_flagged sets (observe only, nothing is dropped) and do not depend on the blocklists.
 Exit codes: 0 ok, 1 aborted (nothing touched), 2 fail-open empty (first run),
 3 from cache, 4 cache too old -> empty blocklist.
 ERROR and WARNING lines also go to syslog (identifier blackwall-fang-refresh) so that
@@ -200,7 +203,82 @@ def set_block(name, nets):
     return s + "    }\n\n"
 
 
-def render(wan_if, mode, allow, block, stamp=""):
+def _rate(key, val):
+    """'6/minute' -> same string; anything else is rejected (it lands in nft syntax)."""
+    import re
+    if not re.fullmatch(r"[1-9][0-9]{0,6}/(second|minute|hour|day)", val or ""):
+        raise Abort("%s must look like 6/minute, got %r" % (key, val))
+    return val
+
+
+def _int(key, val, lo, hi):
+    try:
+        n = int(val)
+    except (TypeError, ValueError):
+        raise Abort("%s is not a number: %r" % (key, val))
+    if not lo <= n <= hi:
+        raise Abort("%s must be %d..%d, got %d" % (key, lo, hi, n))
+    return n
+
+
+def _ports(key, text):
+    out = sorted({_int(key, x, 1, 65535) for x in text.split()})
+    return out
+
+
+def attempts_from_conf(conf):
+    """fang.conf -> layer 2 settings dict, or None when ATTEMPTS is off/absent."""
+    if conf.get("ATTEMPTS", "0") != "1":
+        return None
+    return {
+        "ssh_ports": _ports("SSH_PORTS", conf.get("SSH_PORTS", "22")) or [22],
+        "open_tcp": _ports("OPEN_TCP", conf.get("OPEN_TCP", "")),
+        "ssh": (_rate("SSH_RATE", conf.get("SSH_RATE", "6/minute")),
+                _int("SSH_BURST", conf.get("SSH_BURST", "4"), 1, 100000)),
+        "scan": (_rate("SCAN_RATE", conf.get("SCAN_RATE", "10/minute")),
+                 _int("SCAN_BURST", conf.get("SCAN_BURST", "10"), 1, 100000)),
+        "rate": (_rate("CONN_RATE", conf.get("CONN_RATE", "120/minute")),
+                 _int("CONN_BURST", conf.get("CONN_BURST", "60"), 1, 100000)),
+        "meter_size": _int("METER_SIZE", conf.get("METER_SIZE", "65536"), 16, 4194304),
+        "flagged_size": _int("FLAGGED_SIZE", conf.get("FLAGGED_SIZE", "65536"), 16, 4194304),
+    }
+
+
+def attempts_sets(att):
+    """Layer 2 sets (meters, flagged sets, open_tcp)."""
+    dets = ["ssh", "rate"] + (["scan"] if att["open_tcp"] else [])
+    out = ""
+    if att["open_tcp"]:
+        out += ("    # Ports that are open on this host (scan detector: anything else is closed).\n"
+                "    set open_tcp {\n        type inet_service\n        elements = { %s }\n    }\n\n"
+                % ", ".join(str(p) for p in att["open_tcp"]))
+    out += "    # Layer 2 (observe only): per-source SYN-rate meters and flagged sources.\n"
+    for d in dets:
+        out += ("    set %s_meter {\n        type ipv4_addr\n        flags dynamic,timeout\n"
+                "        timeout 5m\n        size %d\n    }\n\n" % (d, att["meter_size"]))
+        out += ("    set %s_flagged {\n        type ipv4_addr\n        flags dynamic,timeout\n"
+                "        timeout 1h\n        size %d\n        counter\n    }\n\n"
+                % (d, att["flagged_size"]))
+    return out
+
+
+def attempts_rules(att):
+    """Layer 2 rules: new TCP SYNs only, each `update` in its own rule, never a drop."""
+    syn = "ct state new tcp flags & (syn | ack) == syn"
+
+    def rule(match, d):
+        rate, burst = att[d]
+        return ("        %s%s add @%s_meter { ip saddr limit rate over %s burst %d packets } "
+                "update @%s_flagged { ip saddr counter }\n" % (syn, match, d, rate, burst, d))
+    out = "\n        # Layer 2 (observe only)\n"
+    out += rule(" tcp dport { %s }" % ", ".join(str(p) for p in att["ssh_ports"]), "ssh")
+    if att["open_tcp"]:
+        out += rule(" tcp dport != @open_tcp", "scan")
+    out += rule("", "rate")
+    return out
+
+
+def render(wan_if, mode, allow, block, stamp="", attempts=None):
     if mode not in ("observe", "enforce"):
         raise Abort("MODE must be observe or enforce, got %r" % mode)
     # `update` breaks the rule when fang_hits is full, so the drop is its own rule.
@@ -218,6 +296,7 @@ def render(wan_if, mode, allow, block, stamp=""):
         "    # blackwall-fw-export. Reset on every refresh (the table is replaced).\n"
         "    set fang_hits {\n        type ipv4_addr\n        flags dynamic,timeout\n"
         "        timeout 1h\n        size 65536\n        counter\n    }\n\n",
+        (attempts_sets(attempts) if attempts else ""),
         "    # Priority -160: before cf-wall (-150) and netavark DNAT (-100), so host ports\n"
         "    # and published container ports are both covered.\n"
         "    chain prerouting {\n"
@@ -227,7 +306,7 @@ def render(wan_if, mode, allow, block, stamp=""):
         "        ip saddr @allow_v4 accept\n"
         "        ct state established,related accept\n\n"
         "        ip saddr @blocklist_static update @fang_hits { ip saddr counter }\n"
-        + drop_rule + "    }\n}\n",
+        + drop_rule + (attempts_rules(attempts) if attempts else "") + "    }\n}\n",
     ]
     return "".join(out)
 
@@ -364,6 +443,7 @@ def main(argv):
     except OSError as e:
         raise Abort("cannot read %s: %s" % (CONF, e))
     mode = conf.get("MODE", "observe")
+    attempts = attempts_from_conf(conf)
     wan_if = conf.get("WAN_IF", "")
     rules_out = conf.get("RULES_OUT", "/etc/nftables.d/blackwall-fang.nft")
     sources = conf.get("SOURCES", "").split()
@@ -418,7 +498,7 @@ def main(argv):
 
     def fail_open_empty():
         _, allow, _ = compute([], None, allowlist, hosts, 0, blockable)
-        apply(render(wan_if, mode, allow, [], stamp), rules_out, dry_run)
+        apply(render(wan_if, mode, allow, [], stamp, attempts), rules_out, dry_run)
 
     def age_text(age):
         return "%dh%02dm" % divmod(age // 60, 60)
@@ -465,7 +545,7 @@ def main(argv):
         code = 3
     log("blocklist: %d entries (%d after carving the allowlist), allow: %d, mode: %s%s"
         % (n_before, len(block), len(allow), mode, "" if fresh else " [from cache]"))
-    apply(render(wan_if, mode, allow, block, stamp), rules_out, dry_run)
+    apply(render(wan_if, mode, allow, block, stamp, attempts), rules_out, dry_run)
     if fresh and not dry_run:  # cache = the data last applied successfully
         try:
             for u, t in zip(sources, raw):

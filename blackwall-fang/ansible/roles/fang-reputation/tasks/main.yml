@@ -7,6 +7,10 @@
       - fang_sources | length > 0
       - fang_mode != 'enforce' or (fang_allowlist | length > 0)
       - fang_max_cache_age_days | int > 0
+      - fang_ssh_ports | length > 0
+      - fang_ssh_rate is match('^[1-9][0-9]*/(second|minute|hour|day)$')
+      - fang_scan_rate is match('^[1-9][0-9]*/(second|minute|hour|day)$')
+      - fang_conn_rate is match('^[1-9][0-9]*/(second|minute|hour|day)$')
       - fang_test_mode or (fang_test_blockable | length == 0 and fang_test_files | length == 0)
       - not fang_test_mode or (fang_sources | reject('match', '^file://') | list | length == 0)
       - fang_test_mode or (fang_sources | select('match', '^file://') | list | length == 0)
@@ -65,6 +69,25 @@
     owner: root
     group: root
     mode: "0644"
+
+- name: Report layer 2 attempt detectors through blackwall-fw-export
+  ansible.builtin.template:
+    src: fw-export-fang-attempts.conf.j2
+    dest: "/etc/blackwall/fw-export.d/{{ item.file }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop: "{{ fang_attempt_dropins | selectattr('enabled') | list }}"
+  loop_control:
+    label: "{{ item.kind }}"
+
+- name: Remove drop-ins of detectors that are off
+  ansible.builtin.file:
+    path: "/etc/blackwall/fw-export.d/{{ item.file }}"
+    state: absent
+  loop: "{{ fang_attempt_dropins | rejectattr('enabled') | list }}"
+  loop_control:
+    label: "{{ item.kind }}"
 
 - name: Lab test list directory
   ansible.builtin.file:

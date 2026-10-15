@@ -149,6 +149,9 @@ decoder, fields `fw_kind`, `srcip`, `fw_new`, `fw_total`, `fw_burst`,
 | 100207 | 7 | syslog/journald line from program `blackwall-fang-refresh` containing `ERROR` (Fang refresh failed or degraded: stale cache, empty blocklist) |
 | 100208 | 3 | `kind=blocklist_dropped` (Fang enforce drop-in set): a listed source was dropped |
 | 100209 | 5 | program `blackwall-fang-refresh` with `WARNING` (applied from cache, fail-open); the manager reads system logs from journald on the RedHat family, `/var/log/{auth.log,syslog}` on Debian |
+| 100210 | 6 | `kind=ssh_attempts` (Fang layer 2 drop-in set, observe): a source exceeded the SSH new-connection rate |
+| 100211 | 6 | `kind=scan_attempts` (Fang layer 2): a source made new connections to closed ports above the rate |
+| 100212 | 5 | `kind=rate_attempts` (Fang layer 2): a source exceeded the overall new-connection rate |
 
 What is counted: packets dropped by the final policy path (input and forward
 `policy drop`, and cf-wall's origin-direct drop). Invalid-state and anti-spoof

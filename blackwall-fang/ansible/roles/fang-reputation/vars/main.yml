@@ -1,0 +1,6 @@
+---
+# Exporter drop-ins of the layer 2 detectors (one kind per file).
+fang_attempt_dropins:
+  - {file: fang-ssh.conf, kind: ssh_attempts, set: ssh_flagged, rule: 100210, enabled: "{{ fang_attempts_enabled }}"}
+  - {file: fang-scan.conf, kind: scan_attempts, set: scan_flagged, rule: 100211, enabled: "{{ fang_attempts_enabled and (fang_open_tcp | length > 0) }}"}
+  - {file: fang-rate.conf, kind: rate_attempts, set: rate_flagged, rule: 100212, enabled: "{{ fang_attempts_enabled }}"}

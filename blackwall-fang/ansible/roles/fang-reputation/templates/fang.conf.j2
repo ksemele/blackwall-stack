@@ -7,6 +7,19 @@ SOURCES="{{ fang_sources | join(' ') }}"
 CF_URL={{ fang_cloudflare_url }}
 MIN_ENTRIES={{ fang_min_entries }}
 MAX_CACHE_AGE_DAYS={{ fang_max_cache_age_days }}
+ATTEMPTS={{ 1 if fang_attempts_enabled else 0 }}
+{% if fang_attempts_enabled %}
+SSH_PORTS="{{ fang_ssh_ports | join(' ') }}"
+OPEN_TCP="{{ fang_open_tcp | join(' ') }}"
+SSH_RATE={{ fang_ssh_rate }}
+SSH_BURST={{ fang_ssh_burst }}
+SCAN_RATE={{ fang_scan_rate }}
+SCAN_BURST={{ fang_scan_burst }}
+CONN_RATE={{ fang_conn_rate }}
+CONN_BURST={{ fang_conn_burst }}
+METER_SIZE={{ fang_meter_size }}
+FLAGGED_SIZE={{ fang_flagged_size }}
+{% endif %}
 {% if fang_test_mode %}
 TEST_MODE=1
 TEST_BLOCKABLE="{{ fang_test_blockable | join(' ') }}"
