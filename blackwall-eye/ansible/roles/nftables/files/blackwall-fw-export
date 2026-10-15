@@ -23,6 +23,7 @@ Environment overrides (tests):
   BLACKWALL_FW_STATE_DIR      state directory (default /var/lib/blackwall-fw)
   BLACKWALL_FW_SCAN_THRESHOLD burst threshold (default: config file, then 20)
   BLACKWALL_FW_MAX_LINES      max lines per run (default: config file, then 200)
+  BLACKWALL_FW_DEBUG          print "baseline recorded" to stderr (silent otherwise)
   BLACKWALL_FW_CONF           config file (default /etc/blackwall/fw-export.conf)
 """
 import json
@@ -163,7 +164,8 @@ def run():
         err("cannot save state, printing nothing: %s" % e)
         return
     if not have_baseline:
-        err("baseline recorded")
+        if os.environ.get("BLACKWALL_FW_DEBUG"):
+            err("baseline recorded")
         return
 
     events.sort(key=lambda t: (-t[0], t[1], ipkey(t[2])))
