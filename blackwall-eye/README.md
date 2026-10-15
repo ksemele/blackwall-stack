@@ -160,6 +160,9 @@ container-DNS part runs only in the lab (`bw_lab: true`).
 | `nft_restricted` | `[]` | list of `{port, sources[], name?}` — port reachable only from those sources; the set is named `name` (default `src_<port>`) |
 | `nft_forward_policy` | `accept` | policy of the `forward` chain; `drop` adds a rate-limited log line and a counter |
 | `nft_log_drops` | `true` | rate-limited log line on drops |
+| `nft_track_drops` | `true` | per-source accounting of dropped IPv4 packets: dynamic sets `dropped_input` (and `dropped_forward` when `nft_forward_policy: drop`) with per-element counters, updated just before the final counter. Inspect: `nft list set inet blackwall_base dropped_input`; reset on every reload |
+| `nft_track_timeout` | `1h` | idle timeout of an entry in those sets |
+| `nft_track_size` | `65536` | maximum number of tracked sources per set |
 | `nft_podman` | `{}` | `{net, if}` of a podman host: anti-spoofing on the WAN, container DNS to the host, `ct status dnat accept` and container egress in `forward` |
 | `nft_conf_path` | per OS family | `/etc/nftables.conf` (Debian) or `/etc/sysconfig/nftables.conf` (RedHat) |
 

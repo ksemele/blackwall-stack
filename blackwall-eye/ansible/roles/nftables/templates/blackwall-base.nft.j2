@@ -24,6 +24,26 @@ table inet blackwall_base {
         elements = { {{ r.sources | join(', ') }} }
     }
 {% endfor %}
+{% if nft_track_drops %}
+
+    set dropped_input {
+        type ipv4_addr
+        flags dynamic,timeout
+        timeout {{ nft_track_timeout }}
+        size {{ nft_track_size }}
+        counter
+    }
+{% if nft_forward_policy == 'drop' %}
+
+    set dropped_forward {
+        type ipv4_addr
+        flags dynamic,timeout
+        timeout {{ nft_track_timeout }}
+        size {{ nft_track_size }}
+        counter
+    }
+{% endif %}
+{% endif %}
 
     chain input {
         type filter hook input priority filter; policy drop;
@@ -58,6 +78,9 @@ table inet blackwall_base {
 
         limit rate 5/minute log prefix "[blackwall-base] input-drop " level info
 {% endif %}
+{% if nft_track_drops %}
+        update @dropped_input { ip saddr counter }
+{% endif %}
         counter
     }
 
@@ -79,6 +102,9 @@ table inet blackwall_base {
 {% if nft_log_drops %}
 
         limit rate 5/minute log prefix "[blackwall-base] fwd-drop " level info
+{% endif %}
+{% if nft_track_drops %}
+        update @dropped_forward { ip saddr counter }
 {% endif %}
         counter
 {% endif %}
