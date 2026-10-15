@@ -191,6 +191,9 @@ func validateSSH(name string, ctx Context) error {
 	if strings.TrimSpace(s.Host) == "" {
 		return fmt.Errorf("contexts.%s.ssh.host is required when the ssh block is present", name)
 	}
+	if strings.HasPrefix(s.Host, "-") {
+		return fmt.Errorf("contexts.%s.ssh.host must not start with '-'", name)
+	}
 	for i, a := range s.Command {
 		if strings.TrimSpace(a) == "" {
 			return fmt.Errorf("contexts.%s.ssh.command[%d] is empty", name, i)

@@ -89,6 +89,7 @@ func TestSSH_ValidationErrors(t *testing.T) {
 	t.Setenv("BW_TEST_SSH_PW", "x")
 	cases := map[string]struct{ from, to, want string }{
 		"empty host":     {"host: prod-manager", `host: ""`, "ssh.host is required"},
+		"option as host": {"host: prod-manager", `host: "-oProxyCommand=x"`, "must not start with '-'"},
 		"empty command":  {`command: [sshpass, -p, "${BW_TEST_SSH_PW}", ssh, -F, ssh_config]`, `command: [ssh, ""]`, "ssh.command[1] is empty"},
 		"negative":       {"connect_timeout: 7s", "connect_timeout: -1s", "at least 1s"},
 		"bad timeout":    {"connect_timeout: 7s", "connect_timeout: soon", "time.Duration"},
