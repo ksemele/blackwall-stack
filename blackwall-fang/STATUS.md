@@ -4,7 +4,7 @@ status: in_progress
 stage: 5
 last_updated: 2026-10-15
 last_task: "Layer 1 (reputation blocklists) done: role fang-reputation, Wazuh event 100206, bw-check fang (observe + enforce + junk list) green; real-source observe run on the lab sentinel (4619 entries, exit 0)"
-next_task: "Layer 2: in-kernel ban on connection attempts (blocklist_dynamic with timeout, observe first)"
+next_task: "Layer 2 observe: in-kernel detection of SSH/scan/rate attempts (spec 2026-10-16-fang-attempts-observe-design.md)"
 blockers: []
 ---
 
@@ -31,6 +31,12 @@ nothing is dropped) before enforcement is switched on.
    as SSH (brute force / floods). Thresholds and timeouts are variables; short
    timeouts for the spoofable closed-port case. Reuses blackwall-eye's drop
    accounting for visibility.
+
+**Future tasks with specs (not started):**
+
+- Layer 2 enforcement — in-kernel bans: `docs/superpowers/specs/2026-10-16-fang-attempts-enforce-design.md`
+  (run after layer 2 observe has been tuned on the target host).
+- Wazuh active response bans: `docs/superpowers/specs/2026-10-16-fang-active-response-design.md`.
 
 **Backlog:**
 
