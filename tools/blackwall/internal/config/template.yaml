@@ -12,6 +12,11 @@ contexts:
 
   example-master:
     description: "Replace this with your real Wazuh manager"
+    # Loopback-only manager? Let blackwall open an ssh tunnel; server/port
+    # below are then as seen from that host (e.g. 127.0.0.1).
+    # ssh:
+    #   host: wazuh-manager          # ~/.ssh/config alias or user@host
+    #   connect_timeout: 10s
     wazuh:
       server:   wazuh.example.com
       port:     55000

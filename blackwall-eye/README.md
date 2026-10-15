@@ -103,7 +103,9 @@ inventory hostname, bundle in `wazuh_certs_local_dir`). The lab node
 `tests/inventory/group_vars/sentinel.yml`) runs this layout on Rocky 9 next to a
 podman nginx on 443, with `nftables` (`nft_podman`, forward policy drop) and
 `cf-wall`. Dashboard access: `ssh -L 5601:127.0.0.1:5601 <host>` then
-https://localhost:5601.
+https://localhost:5601. The `blackwall` TUI opens its own tunnel to the API and
+indexer: add an `ssh:` block to the context
+([tools/blackwall](../tools/blackwall/README.md#via-ssh-tunnel-loopback-only-managers)).
 
 Measured footprint (lab sentinel, idle ~10 min, indexer heap 1g): container
 2.2 GiB total; indexer (java) 1.75 GiB RSS, manager processes ~460 MiB,

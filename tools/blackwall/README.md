@@ -108,6 +108,157 @@ Wazuh indexer (OpenSearch). Contexts without it simply have no alerts feed.
 `alerts` is optional: an omitted `min_level` means 5, and an omitted
 `exclude_groups` means `[sca, blackwall_sessions]`. An explicit `0` or `[]` is kept.
 
+## Connecting to a manager
+
+The TUI talks to one manager per context: the Wazuh API (55000) and, optionally,
+the Wazuh indexer (9200). Reach them directly, or through an SSH tunnel that
+`blackwall` opens itself.
+
+### Direct (LAN / tailnet)
+
+```yaml
+  work:
+    description: "Manager on the tailnet"
+    wazuh:
+      server:   wazuh.example.ts.net   # name or IP the certificate is issued for
+      port:     55000
+      user:     blackwall-ro
+      password: ${BW_WORK_WAZUH_PASSWORD}
+      tls:
+        ca_file: ${HOME}/.config/blackwall/work-root-ca.pem
+    indexer:
+      server:   wazuh.example.ts.net
+      port:     9200
+      user:     blackwall-ro
+      password: ${BW_WORK_INDEXER_PASSWORD}
+      tls:
+        ca_file: ${HOME}/.config/blackwall/work-root-ca.pem
+```
+
+- **Passwords:** `${VAR}` in `server`, `user`, `password`, `ca_file` (and the
+  `ssh` block) is replaced from the environment; an unset variable is an error.
+  Keep secrets out of the file. `~` is not expanded: use `${HOME}` in paths.
+- **TLS:** `ca_file` is the root CA that signed the Wazuh certificates (the
+  `root-ca.pem` of the certificate bundle). Verification checks the name you
+  connect to, so `server` must match a DNS name or IP in the certificate.
+  `insecure_skip_verify: true` turns verification off — anyone on the path could
+  read the API password — so keep it to the lab or a temporary check.
+- **Indexer:** `:alerts` and the agent Sessions tab read the indexer, which must be
+  reachable too. Stock Wazuh often binds it to localhost; then use the SSH tunnel
+  below. Without an `indexer:` section you get agents but no alerts.
+- **Permissions:** viewing needs read access only — a Wazuh API user with the
+  built-in `readonly` role, and an indexer user that can read and search
+  `wazuh-alerts-*`. Future response actions will need more.
+
+### Via SSH tunnel (loopback-only managers)
+
+When the manager binds the API and indexer to `127.0.0.1` (the hardened layout
+in [blackwall-eye](../../blackwall-eye/README.md)), add an `ssh:` block. Selecting
+the context (`--context`, the picker, `:ctx`) starts the system `ssh` with
+`-N -L 127.0.0.1:<free port>:<server>:<port>` for the API and the indexer, waits
+until the forwarded ports answer, and points the clients at them.
+
+```yaml
+  prod:
+    ssh:
+      host: prod-manager          # ~/.ssh/config alias or user@host (required)
+      # command: [...]            # optional argv prefix instead of plain `ssh`
+      # connect_timeout: 10s      # default 10s
+    wazuh:
+      server:   127.0.0.1         # as seen FROM the ssh host
+      port:     55000
+      user:     blackwall-ro
+      password: ${BW_PROD_WAZUH_PASSWORD}
+      tls:
+        ca_file: ${HOME}/.config/blackwall/prod-root-ca.pem
+    indexer:
+      server:   127.0.0.1
+      port:     9200
+      user:     blackwall-ro
+      password: ${BW_PROD_INDEXER_PASSWORD}
+      tls:
+        ca_file: ${HOME}/.config/blackwall/prod-root-ca.pem
+```
+
+- `server` / `port` are as seen from the ssh host (usually `127.0.0.1`), not
+  from your machine.
+- The system `ssh` is used, so keys, `ssh-agent`, `~/.ssh/config`, `ProxyJump`
+  and known_hosts work as in your shell.
+- Plain `ssh` runs with `BatchMode=yes`: it never prompts, so a missing key fails
+  fast with ssh's message (e.g. `Permission denied (publickey)`) instead of
+  hanging. A custom `command` prefix drops BatchMode so password helpers work;
+  the lab uses `command: [sshpass, -p, blackwall, ssh, -F, <repo>/tests/docker/ssh_config]`
+  (lab-only password; `-F` needs an absolute path unless you start `blackwall`
+  from the repo root). The ssh command line is never shown; ssh's stderr is.
+- TLS still verifies the configured `server`: the client dials
+  `127.0.0.1:<local port>` but checks the certificate against `server` (an IP is
+  matched against the certificate's IP SANs), so `ca_file` keeps working.
+  `insecure_skip_verify` works as for direct contexts.
+- Lifecycle: the tunnel stops on context switch and on exit (`q`, Ctrl+C,
+  SIGTERM, a closed terminal); `blackwall --once` opens, queries and closes it.
+  The status bar shows `ssh: <host> up`. If ssh dies, it shows `reconnecting n/3`
+  and restarts ssh on the same ports (backoff 1s, 3s, 10s); after that it shows
+  `down: <reason>` and `Ctrl+R` retries. If the tunnel cannot start at TUI
+  startup, the TUI opens anyway with the error in the status bar.
+- The `:contexts` picker does not probe ssh contexts (a hollow `○`): that would
+  need an ssh connection per context.
+
+### Example: three contexts
+
+```yaml
+current: lab
+select_context_on_start: true
+
+contexts:
+  lab:                            # tests/bin/bw-lab, published on loopback
+    description: "Docker test env"
+    wazuh:
+      server: 127.0.0.1
+      port: 55000
+      user: wazuh
+      password: wazuh             # lab-only, public
+      tls: {insecure_skip_verify: true}
+    indexer:
+      server: 127.0.0.1
+      port: 9200
+      user: admin
+      password: Blackwall1!       # lab-only, public
+      tls: {insecure_skip_verify: true}
+
+  sentinel:                       # lab node with a loopback-only stack
+    description: "Lab sentinel (via ssh)"
+    ssh:
+      host: black-sentinel-03
+      command: [sshpass, -p, blackwall, ssh, -F, /path/to/blackwall/tests/docker/ssh_config]
+    wazuh:
+      server: 127.0.0.1
+      port: 55000
+      user: wazuh
+      password: ${BW_SENTINEL_WAZUH_PASSWORD}
+      tls: {insecure_skip_verify: true}
+    indexer:
+      server: 127.0.0.1
+      port: 9200
+      user: admin
+      password: ${BW_SENTINEL_INDEXER_PASSWORD}
+      tls: {insecure_skip_verify: true}
+
+  work:                           # reachable directly on the tailnet
+    description: "Work manager"
+    wazuh:
+      server: wazuh.example.ts.net
+      port: 55000
+      user: blackwall-ro
+      password: ${BW_WORK_WAZUH_PASSWORD}
+      tls: {ca_file: ${HOME}/.config/blackwall/work-root-ca.pem}
+    indexer:
+      server: wazuh.example.ts.net
+      port: 9200
+      user: blackwall-ro
+      password: ${BW_WORK_INDEXER_PASSWORD}
+      tls: {ca_file: ${HOME}/.config/blackwall/work-root-ca.pem}
+```
+
 ## Run
 
 ```bash
@@ -130,7 +281,7 @@ blackwall --once                       # print agents and exit (script-friendly)
 | `l` | agent card: jump to `:alerts` filtered to this agent |
 | `e` | agent card: open the Sessions tab |
 | `p` | pause / resume auto-refresh |
-| `Ctrl+R` | force refresh now |
+| `Ctrl+R` | force refresh now (also retries a down ssh tunnel) |
 | `?` | toggle help (planned) |
 
 ## Alerts
