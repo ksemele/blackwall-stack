@@ -23,10 +23,12 @@ work. The TUI works with any Wazuh 4.x; the stack is not required.
 | [blackwall-voice](./blackwall-voice/) | Alerts & dashboards | 2 — Active |
 | blackwall-brain | AI analysis agents | 3 — In progress |
 | blackwall-trap | Honeypots | 4 — Planned |
-| blackwall-fang | Active countermeasures: automatic blocking; counter-attack research | 5 — In progress (layer 1: reputation blocklists) |
+| blackwall-fang | Active response: automated blocking² | 5 — In progress (reputation blocklists; attempt detectors, observe only) |
 | [blackwall-scan](./blackwall-scan/) | External attack surface scanning (CESM)¹ | 1 — Active |
 
 ¹ Separate track from the defense chain (eye→voice→brain→trap→fang); see [blackwall-scan/STATUS.md](./blackwall-scan/STATUS.md).
+
+² Fang blocks traffic on hosts you own. Counter-attack is research only: out of scope for production, not shipped.
 
 ## Getting Started
 

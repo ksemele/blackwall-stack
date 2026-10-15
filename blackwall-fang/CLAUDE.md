@@ -1,8 +1,8 @@
 # blackwall-fang — Fang
 
-**Role:** Active countermeasures. The first, production part is defensive: automatic
-blocking of hostile sources on hosts protected by blackwall-eye's firewall roles.
-Counter-attack tooling stays a research-only topic for later.
+**Role:** Active response: automated blocking of hostile sources on hosts protected by
+blackwall-eye's firewall roles. That is the whole production scope.
+Counter-attack is research only: out of scope for production, not shipped.
 
 Read `STATUS.md` before any work; its "Rules for any automatic block" apply to every layer.
 
