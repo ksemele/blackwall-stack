@@ -1,28 +1,44 @@
 ---
-- name: Wait for dpkg lock to be released
-  shell: while fuser /var/lib/dpkg/lock-frontend /var/lib/dpkg/lock >/dev/null 2>&1; do sleep 2; done
-  changed_when: false
+- name: Debian — install indexer
+  when: ansible_facts['os_family'] == 'Debian'
+  block:
+    - name: Install prerequisites (curl, debconf, adduser)
+      apt:
+        name:
+          - curl
+          - debconf
+          - adduser
+        state: present
+        update_cache: true
 
-- name: Install prerequisites (curl, debconf, adduser)
-  apt:
-    name:
-      - curl
-      - debconf
-      - adduser
-    state: present
-    update_cache: true
+    - name: Install wazuh-indexer package
+      apt:
+        name: "wazuh-indexer{{ wazuh_pkg_suffix }}"
+        allow_change_held_packages: true
+        state: present
+        update_cache: true
 
-- name: Install wazuh-indexer package
-  apt:
-    name: "wazuh-indexer{{ wazuh_pkg_suffix }}"
-    allow_change_held_packages: true
-    state: present
-    update_cache: true
+    - name: Hold wazuh-indexer
+      ansible.builtin.dpkg_selections:
+        name: wazuh-indexer
+        selection: hold
 
-- name: Hold wazuh-indexer
-  ansible.builtin.dpkg_selections:
-    name: wazuh-indexer
-    selection: hold
+- name: RedHat — install indexer
+  when: ansible_facts['os_family'] == 'RedHat'
+  block:
+    # curl/coreutils are present as curl-minimal/coreutils-single; asking for
+    # the full packages conflicts on the container image. tar is needed by
+    # unarchive.
+    - name: Install prerequisites (tar)
+      ansible.builtin.dnf:
+        name: tar
+        state: present
+
+    - name: Install wazuh-indexer package
+      ansible.builtin.dnf:
+        name: "wazuh-indexer{{ wazuh_pkg_suffix }}"
+        disable_excludes: wazuh
+        state: present
 
 - name: Unpack cert bundle on master
   unarchive:
@@ -64,6 +80,17 @@
     mode: "0640"
   notify: Restart wazuh-indexer
 
+- name: Set JVM heap
+  ansible.builtin.lineinfile:
+    path: /etc/wazuh-indexer/jvm.options
+    regexp: '^{{ item }}'
+    line: "{{ item }}{{ wazuh_indexer_heap }}"
+  loop:
+    - "-Xms"
+    - "-Xmx"
+  when: wazuh_indexer_heap is not none
+  notify: Restart wazuh-indexer
+
 - name: Enable and start wazuh-indexer service
   systemd:
     name: wazuh-indexer
@@ -94,7 +121,7 @@
     -cacert /etc/wazuh-indexer/certs/root-ca.pem
     -cert /etc/wazuh-indexer/certs/admin.pem
     -key /etc/wazuh-indexer/certs/admin-key.pem
-    -h 172.28.0.10
+    -h {{ wazuh_indexer_network_host }}
     -p 9200
     -icl
   environment:

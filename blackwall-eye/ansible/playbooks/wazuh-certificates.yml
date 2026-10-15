@@ -4,17 +4,25 @@
 # Usage (from blackwall-eye/):
 #   ansible-playbook ansible/playbooks/wazuh-certificates.yml
 #
-# Idempotent: skips generation if ../tests/.wazuh-certs/wazuh-certificates.tar exists
-# on the controller. To rotate, delete that file and re-run.
+# One bundle per server host (node name = inventory_hostname, IP = wazuh_cert_ip,
+# default 172.28.0.10 for the main lab stack). Target another group with
+#   -e wazuh_cert_hosts=sentinel
+# Bundle path: wazuh_certs_local_dir (default ../tests/.wazuh-certs; sentinel
+# overrides it per host in group_vars).
+#
+# Idempotent: skips generation if <wazuh_certs_local_dir>/wazuh-certificates.tar
+# exists on the controller. To rotate, delete that file and re-run.
 
-- name: Generate Wazuh certificate bundle on the master, fetch to controller
-  hosts: wazuh_managers
+- name: Generate Wazuh certificate bundle per server host, fetch to controller
+  hosts: "{{ wazuh_cert_hosts | default('wazuh_managers') }}"
   become: true
   gather_facts: false
-  run_once: true
 
   vars:
-    wazuh_certs_local_dir: "{{ playbook_dir }}/../../../tests/.wazuh-certs"
+    # Play vars outrank inventory group_vars, so the overridable inputs are read
+    # through default() into private names instead of being defined here.
+    _certs_dir: "{{ wazuh_certs_local_dir | default(playbook_dir ~ '/../../../tests/.wazuh-certs') }}"
+    _cert_ip: "{{ wazuh_cert_ip | default('172.28.0.10') }}"
     wazuh_certs_remote_dir: "/root/wazuh-certs"
     wazuh_certs_tool_url: "https://packages.wazuh.com/4.14/wazuh-certs-tool.sh"
     wazuh_certs_config_url: "https://packages.wazuh.com/4.14/config.yml"
@@ -22,7 +30,7 @@
   tasks:
     - name: Check if bundle already exists on controller
       stat:
-        path: "{{ wazuh_certs_local_dir }}/wazuh-certificates.tar"
+        path: "{{ _certs_dir }}/wazuh-certificates.tar"
       register: _bundle_local
       delegate_to: localhost
       become: false
@@ -49,21 +57,21 @@
         dest: "{{ wazuh_certs_remote_dir }}/config.yml"
         mode: "0600"
 
-    - name: Customize config.yml for single-node all-in-one (master only)
+    - name: Customize config.yml for a single-node all-in-one
       copy:
         dest: "{{ wazuh_certs_remote_dir }}/config.yml"
         mode: "0600"
         content: |
           nodes:
             indexer:
-              - name: black-master-00
-                ip: 172.28.0.10
+              - name: "{{ inventory_hostname }}"
+                ip: "{{ _cert_ip }}"
             server:
-              - name: black-master-00
-                ip: 172.28.0.10
+              - name: "{{ inventory_hostname }}"
+                ip: "{{ _cert_ip }}"
             dashboard:
-              - name: black-master-00
-                ip: 172.28.0.10
+              - name: "{{ inventory_hostname }}"
+                ip: "{{ _cert_ip }}"
 
     - name: Generate certificate bundle
       command: bash ./wazuh-certs-tool.sh -A
@@ -79,7 +87,7 @@
 
     - name: Ensure local cert dir exists
       file:
-        path: "{{ wazuh_certs_local_dir }}"
+        path: "{{ _certs_dir }}"
         state: directory
         mode: "0700"
       delegate_to: localhost
@@ -88,5 +96,5 @@
     - name: Fetch bundle to controller
       fetch:
         src: "{{ wazuh_certs_remote_dir }}/wazuh-certificates.tar"
-        dest: "{{ wazuh_certs_local_dir }}/wazuh-certificates.tar"
+        dest: "{{ _certs_dir }}/wazuh-certificates.tar"
         flat: true
