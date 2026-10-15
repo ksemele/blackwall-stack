@@ -19,6 +19,7 @@ import (
 type liveTunnel struct {
 	mu     sync.Mutex
 	t      *tunnel.Tunnel
+	staged map[*tunnel.Tunnel]bool // opened by a switch, not yet applied
 	closed bool
 	wg     sync.WaitGroup
 
@@ -46,10 +47,39 @@ func (l *liveTunnel) begin() bool {
 
 func (l *liveTunnel) end() { l.wg.Done() }
 
+// stage records a tunnel opened by a context switch until the switch is
+// applied (swap) or abandoned (discard), so Close also kills it when the
+// TUI exits in between.
+func (l *liveTunnel) stage(t *tunnel.Tunnel) {
+	if t == nil {
+		return
+	}
+	l.mu.Lock()
+	if l.closed {
+		l.mu.Unlock()
+		t.Close()
+		return
+	}
+	if l.staged == nil {
+		l.staged = map[*tunnel.Tunnel]bool{}
+	}
+	l.staged[t] = true
+	l.mu.Unlock()
+}
+
+// discard closes a staged tunnel whose switch failed.
+func (l *liveTunnel) discard(t *tunnel.Tunnel) {
+	l.mu.Lock()
+	delete(l.staged, t)
+	l.mu.Unlock()
+	t.Close()
+}
+
 // swap installs t as the active tunnel and closes the previous one. After
 // Close it closes t instead.
 func (l *liveTunnel) swap(t *tunnel.Tunnel) {
 	l.mu.Lock()
+	delete(l.staged, t)
 	if l.closed {
 		l.mu.Unlock()
 		t.Close()
@@ -80,9 +110,15 @@ func (l *liveTunnel) Close() {
 	l.closed = true
 	t := l.t
 	l.t = nil
+	staged := l.staged
+	l.staged = nil
 	l.mu.Unlock()
 	l.cancel()
 	t.Close()
+	for s := range staged {
+		s.Close()
+	}
+	// Opens still in flight see closed and close their own tunnel.
 	l.wg.Wait()
 }
 

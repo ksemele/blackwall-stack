@@ -121,6 +121,7 @@ func ExpandEnv(cfg Config) (Config, error) {
 			w.User = expand(w.User, "wazuh.user")
 			w.Password = expand(w.Password, "wazuh.password")
 			w.TLS.CAFile = expand(w.TLS.CAFile, "wazuh.tls.ca_file")
+			w.TLS.ServerName = expand(w.TLS.ServerName, "wazuh.tls.server_name")
 			ctx.Wazuh = &w
 		}
 		if ctx.Indexer != nil {
@@ -129,6 +130,7 @@ func ExpandEnv(cfg Config) (Config, error) {
 			x.User = expand(x.User, "indexer.user")
 			x.Password = expand(x.Password, "indexer.password")
 			x.TLS.CAFile = expand(x.TLS.CAFile, "indexer.tls.ca_file")
+			x.TLS.ServerName = expand(x.TLS.ServerName, "indexer.tls.server_name")
 			ctx.Indexer = &x
 		}
 		if expandErr != nil {

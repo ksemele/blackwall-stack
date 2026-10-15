@@ -36,7 +36,9 @@ func Argv(s Spec) []string {
 	if len(s.Command) > 0 {
 		argv = append([]string{}, s.Command...)
 	}
-	argv = append(argv, "-N", "-o", "ExitOnForwardFailure=yes")
+	// ControlPath=none: never hand the forwards to a ControlMaster /
+	// ControlPersist master, which would outlive our process and our kill.
+	argv = append(argv, "-N", "-o", "ExitOnForwardFailure=yes", "-o", "ControlPath=none")
 	if len(s.Command) == 0 {
 		argv = append(argv, "-o", "BatchMode=yes")
 	}

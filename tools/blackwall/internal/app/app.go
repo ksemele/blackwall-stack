@@ -59,6 +59,10 @@ type Model struct {
 
 	footerMsg string // transient confirmation shown in statusbar area
 
+	// switching names the context a switch is in flight to; further
+	// switch requests are rejected until it finishes.
+	switching string
+
 	paletteOpen  bool
 	paletteInput string
 	paletteErr   string
@@ -249,15 +253,25 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case ContextChangedMsg:
-		if m.switchCtx != nil {
-			return m, m.switchCtx(msg.Name)
+		if m.switchCtx == nil {
+			return m, nil
 		}
-		return m, nil
+		if m.switching != "" {
+			m.footerMsg = "⚠ still switching to " + m.switching + "…"
+			return m, nil
+		}
+		m.switching = msg.Name
+		m.footerMsg = "switching to " + msg.Name + "…"
+		return m, m.switchCtx(msg.Name)
 
 	case ContextSwitchedMsg:
+		m.switching = ""
 		if msg.Err != nil {
 			m.footerMsg = "⚠ context switch failed: " + msg.Err.Error()
 			return m, nil
+		}
+		if msg.Apply != nil {
+			msg.Apply()
 		}
 		m.footerMsg = ""
 		// Navigate to agents view.

@@ -18,7 +18,7 @@ import (
 func TestArgv(t *testing.T) {
 	fw := []Forward{{LocalPort: 40001, RemoteHost: "127.0.0.1", RemotePort: 55000}}
 	idx := append(fw, Forward{LocalPort: 40002, RemoteHost: "::1", RemotePort: 9200})
-	common := []string{"-N", "-o", "ExitOnForwardFailure=yes"}
+	common := []string{"-N", "-o", "ExitOnForwardFailure=yes", "-o", "ControlPath=none"}
 	alive := []string{"-o", "ConnectTimeout=10", "-o", "ServerAliveInterval=15", "-o", "ServerAliveCountMax=3"}
 	cat := func(parts ...[]string) []string {
 		var out []string
@@ -249,9 +249,27 @@ func TestForContext(t *testing.T) {
 		if orig.Wazuh.Server != "10.0.0.5" || orig.Indexer.Port != 9200 {
 			t.Error("ForContext mutated the configured context")
 		}
+		if got.Wazuh.TLS.ServerName != "10.0.0.5" {
+			t.Error("default server name must be the configured server")
+		}
 		fw := tn.spec.Forwards
 		if len(fw) != 2 || fw[0].RemoteHost != "10.0.0.5" || fw[0].RemotePort != 55000 || fw[1].RemotePort != 9200 {
 			t.Errorf("forwards = %+v", fw)
+		}
+	})
+	t.Run("explicit tls.server_name wins", func(t *testing.T) {
+		t.Setenv("BW_FAKE_SSH", "listen")
+		orig := config.Context{
+			SSH:   &config.SSHTunnel{Host: "prod", Command: []string{os.Args[0]}, ConnectTimeout: 3 * time.Second},
+			Wazuh: &config.WazuhSubsystem{Server: "127.0.0.1", Port: 55000, TLS: config.TLS{ServerName: "manager.example.test"}},
+		}
+		got, tn, err := ForContext(context.Background(), orig)
+		defer tn.Close()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got.Wazuh.TLS.ServerName != "manager.example.test" {
+			t.Errorf("server name = %q", got.Wazuh.TLS.ServerName)
 		}
 	})
 }

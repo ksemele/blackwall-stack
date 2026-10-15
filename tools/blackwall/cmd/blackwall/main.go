@@ -150,6 +150,9 @@ func run() error {
 	dialCtx, tn, err := tunnel.ForContext(sigCtx, currentCtx)
 	live.swap(tn)
 	live.end()
+	if sigCtx.Err() != nil { // Ctrl+C / SIGTERM while the tunnel was opening
+		return fmt.Errorf("interrupted: %w", context.Cause(sigCtx))
+	}
 	if err != nil {
 		if flagOnce || tn == nil {
 			return err
@@ -166,7 +169,6 @@ func run() error {
 	if flagOnce {
 		return oneshot.Print(sigCtx, os.Stdout, client)
 	}
-	stopSignals() // bubbletea handles signals from here on
 
 	ctxView := ctxview.New(cfg)
 	agentsList := agentsview.NewView(client, cfg.UI.RefreshInterval)
@@ -200,8 +202,11 @@ func run() error {
 	liveCtx := cfg.Current
 	liveWazuh := wazuhAddr(currentCtx)
 
+	// switchContext prepares a switch off the UI loop (tunnel, clients,
+	// config file) and returns the state changes as Apply, which the app runs
+	// on the UI loop. The app allows one switch at a time.
 	switchContext := func(name string) tea.Cmd {
-		return func() tea.Msg {
+		return func() (msg tea.Msg) {
 			ctx := cfg.Contexts[name]
 			if ctx.Wazuh == nil {
 				return app.ContextSwitchedMsg{Name: name,
@@ -211,13 +216,22 @@ func run() error {
 				return app.ContextSwitchedMsg{Name: name, Err: errShuttingDown}
 			}
 			defer live.end()
-			// The new tunnel comes up before the old one goes, so a failed
-			// switch leaves the current context working.
-			dialCtx, newTn, err := tunnel.ForContext(live.ctx, ctx)
+			var newTn *tunnel.Tunnel
 			fail := func(err error) tea.Msg {
-				newTn.Close()
+				live.discard(newTn)
 				return app.ContextSwitchedMsg{Name: name, Err: err}
 			}
+			defer func() {
+				if r := recover(); r != nil {
+					logger.Error("context switch panic", "context", name, "panic", r)
+					msg = fail(fmt.Errorf("internal error: %v", r))
+				}
+			}()
+			// The new tunnel comes up before the old one goes, so a failed
+			// switch leaves the current context working.
+			dialCtx, tn, err := tunnel.ForContext(live.ctx, ctx)
+			newTn = tn
+			live.stage(newTn)
 			if err != nil {
 				return fail(err)
 			}
@@ -232,20 +246,17 @@ func run() error {
 			if err := config.SetCurrent(cfgPath, name); err != nil {
 				return fail(err)
 			}
-			live.swap(newTn)
-			alertsView.Replace(newIdx, alertsSettings(name, ctx.Indexer))
-			if newIdx != nil {
+			return app.ContextSwitchedMsg{Name: name, Apply: func() {
+				live.swap(newTn)
+				alertsView.Replace(newIdx, alertsSettings(name, ctx.Indexer))
 				agentsList.SetIndexer(newIdx)
-			} else {
-				agentsList.SetIndexer(nil)
-			}
-			liveIndexer = indexerAddr(ctx)
-			cfg.Current = name
-			liveCtx = name
-			liveWazuh = wazuhAddr(ctx)
-			agentsList.ReplaceClient(newClient)
-			ctxView.UpdateCurrent(name)
-			return app.ContextSwitchedMsg{Name: name}
+				agentsList.ReplaceClient(newClient)
+				ctxView.UpdateCurrent(name)
+				cfg.Current = name
+				liveCtx = name
+				liveWazuh = wazuhAddr(ctx)
+				liveIndexer = indexerAddr(ctx)
+			}}
 		}
 	}
 
@@ -270,16 +281,19 @@ func run() error {
 	})
 
 	prog := tea.NewProgram(root, tea.WithAltScreen())
-	// bubbletea handles SIGINT/SIGTERM; a closed terminal (SIGHUP) would
-	// otherwise kill the process without running the deferred tunnel Close.
-	hup := make(chan os.Signal, 1)
-	signal.Notify(hup, syscall.SIGHUP)
-	defer signal.Stop(hup)
+	// sigCtx stays registered for the whole TUI (bubbletea's own SIGINT/
+	// SIGTERM handler is installed only inside Run, and it ignores SIGHUP), so
+	// there is no window where a signal kills the process without running the
+	// deferred tunnel Close. A signal stops the program; stopSignals at return
+	// only releases this goroutine.
 	go func() {
-		<-hup
+		<-sigCtx.Done()
 		prog.Kill()
 	}()
 	if _, err := prog.Run(); err != nil {
+		if errors.Is(err, tea.ErrProgramKilled) && sigCtx.Err() != nil {
+			return fmt.Errorf("terminated by signal")
+		}
 		return err
 	}
 	return nil

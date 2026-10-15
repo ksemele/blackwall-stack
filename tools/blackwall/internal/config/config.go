@@ -65,10 +65,10 @@ func DefaultExcludeGroups() []string { return []string{"sca", "blackwall_session
 type TLS struct {
 	InsecureSkipVerify bool   `yaml:"insecure_skip_verify"`
 	CAFile             string `yaml:"ca_file"`
-	// ServerName overrides the name verified in the server certificate. It is
-	// not read from YAML: the ssh tunnel sets it to the configured server when
-	// the client dials 127.0.0.1:<local port> instead.
-	ServerName string `yaml:"-"`
+	// ServerName overrides the name verified in the server certificate
+	// (DNS name or IP SAN). Optional; for ssh contexts it defaults to the
+	// configured server, since the client dials 127.0.0.1:<local port>.
+	ServerName string `yaml:"server_name"`
 }
 
 type UI struct {

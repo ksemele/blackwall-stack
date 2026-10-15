@@ -126,3 +126,16 @@ func TestSSH_ResolveKeepsBlock(t *testing.T) {
 		t.Errorf("resolved ssh = %+v", s)
 	}
 }
+
+func TestTLS_ServerNameFromYAML(t *testing.T) {
+	t.Setenv("BW_TEST_SSH_PW", "x")
+	t.Setenv("BW_TEST_SN", "manager.example.test")
+	body := strings.Replace(sshYAML, "      password: wazuh\n", "      password: wazuh\n      tls:\n        server_name: ${BW_TEST_SN}\n", 1)
+	cfg, err := loadSSH(t, body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := cfg.Contexts["prod"].Wazuh.TLS.ServerName; got != "manager.example.test" {
+		t.Errorf("server_name = %q", got)
+	}
+}
