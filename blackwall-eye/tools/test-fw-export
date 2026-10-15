@@ -2,48 +2,101 @@
 # Unit test for blackwall-fw-export: fixture JSON, no nft needed.
 # Usage: tools/test-fw-export
 set -u
+command -v python3 >/dev/null || { echo "python3 not found" >&2; exit 2; }
 here=$(cd "$(dirname "$0")" && pwd)
 exp="$here/../ansible/roles/nftables/files/blackwall-fw-export"
 fx="$here/testdata/fw-export"
 fail=0
+tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT
+fresh() { mktemp -d "$tmp/s.XXXXXX"; }
 
-run() { # <fixture dir> <state dir>
-    BLACKWALL_FW_NFT_JSON_DIR="$fx/$1" BLACKWALL_FW_STATE_DIR="$2" \
-    BLACKWALL_FW_SCAN_THRESHOLD=20 BLACKWALL_FW_CONF=/nonexistent \
-        python3 "$exp"
+run() { # <fixture dir> <state dir> [extra env as VAR=val ...]
+    local f=$1 s=$2; shift 2
+    env BLACKWALL_FW_NFT_JSON_DIR="$fx/$f" BLACKWALL_FW_STATE_DIR="$s" \
+        BLACKWALL_FW_SCAN_THRESHOLD=20 BLACKWALL_FW_CONF=/nonexistent "$@" \
+        python3 "$exp" 2>/dev/null
 }
 check() { # <name> <expected> <actual>
     if [ "$2" = "$3" ]; then echo "ok   $1"; else
         echo "FAIL $1"; echo "--- expected"; echo "$2"; echo "--- got"; echo "$3"; fail=1; fi
 }
 
-st=$(mktemp -d); trap 'rm -rf "$st"' EXIT
 P="blackwall-fw: kind=input_drop"
-check run1 "$P src=203.0.113.1 new=5 total=5 burst=no
-$P src=203.0.113.2 new=1 total=1 burst=no" "$(run run1 "$st")"
+st=$(fresh)
+check run1-baseline-silent "" "$(run run1 "$st")"
 check run1-again "" "$(run run1 "$st")"
-check run2 "$P src=203.0.113.1 new=7 total=12 burst=no
-$P src=203.0.113.3 new=30 total=30 burst=yes" "$(run run2 "$st")"
+check run2-growth "$P src=203.0.113.3 new=30 total=30 burst=yes
+$P src=203.0.113.1 new=7 total=12 burst=no" "$(run run2 "$st")"
 check run3-reload "$P src=203.0.113.1 new=2 total=2 burst=no" "$(run run3 "$st")"
 check missing-set "" "$(run missing "$st")"
 run missing "$st"; check missing-exit 0 "$?"
-# state survives a missing set: same counters again print nothing
 check after-missing "" "$(run run3 "$st")"
 
-# Real nft JSON, both versions (fresh state)
+# Real nft JSON, both versions: baseline, then identical fixture is silent
 for v in 1.0.2 1.0.9; do
-    out=$(run real-nft-$v "$(mktemp -d)")
+    s=$(fresh)
+    check "real-nft-$v baseline" "" "$(run real-nft-$v "$s")"
+    check "real-nft-$v unchanged" "" "$(run real-nft-$v "$s")"
+    # an empty state dict as baseline => everything is new
+    echo '{}' > "$s/state.json"
+    out=$(run real-nft-$v "$s")
     case "$out" in *"kind=input_drop src="*"new="*"burst="*) echo "ok   real-nft-$v input_drop";;
         *) echo "FAIL real-nft-$v: $out"; fail=1;; esac
 done
-out=$(run real-nft-1.0.9 "$(mktemp -d)")
-case "$out" in *"kind=origin_direct src="*) echo "ok   real-nft-1.0.9 origin_direct";;
-    *) echo "FAIL origin_direct: $out"; fail=1;; esac
+s=$(fresh); echo '{}' > "$s/state.json"
+case "$(run real-nft-1.0.9 "$s")" in *"kind=origin_direct src="*) echo "ok   real-nft-1.0.9 origin_direct";;
+    *) echo "FAIL origin_direct"; fail=1;; esac
 
-# Threshold from config file; env wins over it
-conf=$(mktemp); echo "scan_threshold=3" > "$conf"
-out=$(BLACKWALL_FW_NFT_JSON_DIR="$fx/run1" BLACKWALL_FW_STATE_DIR="$(mktemp -d)" BLACKWALL_FW_CONF="$conf" python3 "$exp")
-check conf-threshold "$P src=203.0.113.1 new=5 total=5 burst=yes
+# Burst boundary: new == threshold -> yes, threshold-1 -> no
+s=$(fresh); echo '{}' > "$s/state.json"
+check burst-boundary "$P src=203.0.113.10 new=20 total=20 burst=yes
+$P src=203.0.113.11 new=19 total=19 burst=no" "$(run boundary "$s")"
+
+# Config file alone sets threshold; env overrides it
+conf="$tmp/conf"; printf 'scan_threshold=3\nmax_lines=200\n' > "$conf"
+s=$(fresh); echo '{}' > "$s/state.json"
+out=$(env -u BLACKWALL_FW_SCAN_THRESHOLD BLACKWALL_FW_NFT_JSON_DIR="$fx/run2" \
+    BLACKWALL_FW_STATE_DIR="$s" BLACKWALL_FW_CONF="$conf" python3 "$exp" 2>/dev/null)
+check conf-threshold "$P src=203.0.113.3 new=30 total=30 burst=yes
+$P src=203.0.113.1 new=12 total=12 burst=yes
 $P src=203.0.113.2 new=1 total=1 burst=no" "$out"
-rm -f "$conf"
+echo '{}' > "$s/state.json"
+out=$(run run2 "$s" BLACKWALL_FW_CONF="$conf" BLACKWALL_FW_SCAN_THRESHOLD=100)
+check env-over-conf "$P src=203.0.113.3 new=30 total=30 burst=no
+$P src=203.0.113.1 new=12 total=12 burst=no
+$P src=203.0.113.2 new=1 total=1 burst=no" "$out"
+
+# Corrupt / non-dict state => silent baseline, then normal
+s=$(fresh); echo 'not json' > "$s/state.json"
+check corrupt-state-silent "" "$(run run1 "$s")"
+check corrupt-state-recovered "" "$(run run1 "$s")"
+echo '[1,2]' > "$s/state.json"
+check list-state-silent "" "$(run run1 "$s")"
+# Weird per-kind entries and values never crash
+s=$(fresh); echo '{"input_drop": [1], "origin_direct": {"x": null, "y": "z"}}' > "$s/state.json"
+out=$(run run1 "$s"); rc=$?
+check weird-state-rc 0 "$rc"
+check weird-state-out "$P src=203.0.113.1 new=5 total=5 burst=no
+$P src=203.0.113.2 new=1 total=1 burst=no" "$out"
+s=$(fresh); echo '{"input_drop": {"203.0.113.1": null, "203.0.113.2": "7"}}' > "$s/state.json"
+check weird-values "$P src=203.0.113.1 new=5 total=5 burst=no
+$P src=203.0.113.2 new=1 total=1 burst=no" "$(run run1 "$s")"
+
+# Output cap + summary
+s=$(fresh); echo '{}' > "$s/state.json"
+out=$(run many "$s" BLACKWALL_FW_MAX_LINES=3)
+check cap "$P src=198.51.100.10 new=10 total=10 burst=no
+$P src=198.51.100.9 new=9 total=9 burst=no
+$P src=198.51.100.8 new=8 total=8 burst=no
+blackwall-fw: kind=summary suppressed=7 burst=no" "$out"
+echo "$out" | grep -q . && check cap-state-saved "" "$(run many "$s" BLACKWALL_FW_MAX_LINES=3)"
+
+# State cannot be written => nothing printed
+s=$(fresh); echo '{}' > "$s/state.json"; chmod 500 "$s"
+if [ "$(id -u)" != 0 ]; then
+    check state-write-fail "" "$(run run1 "$s")"
+    chmod 700 "$s"
+else
+    echo "skip state-write-fail (root)"
+fi
 exit $fail

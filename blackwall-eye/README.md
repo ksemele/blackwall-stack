@@ -164,6 +164,7 @@ container-DNS part runs only in the lab (`bw_lab: true`).
 | `nft_track_timeout` | `1h` | idle timeout of an entry in those sets |
 | `nft_track_size` | `65536` | maximum number of tracked sources per set |
 | `nft_track_scan_threshold` | `20` | packets from one source between two `blackwall-fw-export` runs that set `burst=yes`; rendered to `/etc/blackwall/fw-export.conf` |
+| `nft_track_max_lines` | `200` | cap on lines per exporter run (highest `new` first); the rest becomes one `kind=summary suppressed=<n>` line |
 | `nft_podman` | `{}` | `{net, if}` of a podman host: anti-spoofing on the WAN, container DNS to the host, `ct status dnat accept` and container egress in `forward` |
 | `nft_conf_path` | per OS family | `/etc/nftables.conf` (Debian) or `/etc/sysconfig/nftables.conf` (RedHat) |
 
@@ -228,9 +229,9 @@ nothing changed or a table/set is absent:
 blackwall-fw: kind=<input_drop|forward_drop|origin_direct> src=<ip> new=<n> total=<n> burst=<yes|no>
 ```
 
-`burst=yes` when `new >= nft_track_scan_threshold`. Overrides for tests:
+`burst=yes` when `new >= nft_track_scan_threshold`. The first run (state missing or corrupt) only records a baseline and prints nothing; state is saved before printing (if that fails, nothing is printed); output is capped by `nft_track_max_lines`. Overrides for tests:
 `BLACKWALL_FW_NFT_JSON_DIR`, `BLACKWALL_FW_STATE_DIR`,
-`BLACKWALL_FW_SCAN_THRESHOLD`, `BLACKWALL_FW_CONF`. Unit test (no nft needed):
+`BLACKWALL_FW_SCAN_THRESHOLD`, `BLACKWALL_FW_MAX_LINES`, `BLACKWALL_FW_CONF`. Unit test (no nft needed):
 `tools/test-fw-export`.
 
 ## Verification playbooks
