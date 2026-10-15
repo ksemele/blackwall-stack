@@ -1,0 +1,86 @@
+name: Bug report
+description: Something in a role, rule, script or the lab doesn't work as documented.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report. Questions go to Discussions; security problems go
+        through private vulnerability reporting (see SECURITY.md), not here.
+
+        **Do not paste real hostnames, IPs, domains or secrets.** Replace them with
+        `example.com` names and `192.0.2.x` addresses.
+  - type: dropdown
+    id: module
+    attributes:
+      label: Module
+      options:
+        - blackwall-eye (Wazuh, auditd, nftables, rules)
+        - blackwall-voice (alerts, metrics)
+        - blackwall-brain (AI analysis)
+        - blackwall-fang (blocklists)
+        - blackwall-scan (perimeter scan)
+        - tests (lab, bw-lab, bw-check)
+        - other / not sure
+    validations:
+      required: true
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      description: Commands, playbooks and variables. A reproduction in the Docker lab is ideal.
+      placeholder: |
+        1. tests/bin/bw-lab up
+        2. tests/bin/bw-lab provision nftables
+        3. tests/bin/bw-check nft
+    validations:
+      required: true
+  - type: input
+    id: wazuh-version
+    attributes:
+      label: Wazuh version
+      placeholder: "4.14.7"
+    validations:
+      required: true
+  - type: input
+    id: distro
+    attributes:
+      label: Target distro
+      description: OS of the managed hosts (or "lab only").
+      placeholder: "Ubuntu 22.04, Rocky Linux 9"
+    validations:
+      required: true
+  - type: input
+    id: ansible-version
+    attributes:
+      label: Ansible version
+      description: First line of `ansible --version` on the controller.
+      placeholder: "ansible [core 2.17.x]"
+    validations:
+      required: true
+  - type: input
+    id: commit
+    attributes:
+      label: Commit
+      description: Output of `git rev-parse --short HEAD`.
+  - type: textarea
+    id: bw-check
+    attributes:
+      label: bw-check output
+      description: Output of `tests/bin/bw-check all` (or the relevant group) if you ran the lab. Write "not run" otherwise.
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs and other context
+      description: Ansible output, `journalctl` lines, alert JSON. Redact hosts and secrets.
+      render: text
