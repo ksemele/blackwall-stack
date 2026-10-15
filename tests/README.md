@@ -27,6 +27,12 @@ Two scripts drive everything:
 > Raw `docker` commands below assume the **repo root**; raw `ansible` commands
 > assume the **module directory** (`blackwall-eye/`, `blackwall-voice/`), each of
 > which has an `ansible.cfg` pointing at `../tests/inventory/`.
+>
+> Inventory layout (`tests/inventory/hosts.yml`): OS groups (`ubuntu2204`,
+> `rhel9`) list hosts by distribution; functional groups (`wazuh_managers`,
+> `wazuh_agents`, `cf_wall`) sit beside them, so a host can be both. Agents that
+> are broken on purpose are listed in `wazuh_fixture_agents` and skipped by the
+> agent checks.
 
 ---
 

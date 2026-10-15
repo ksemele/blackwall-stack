@@ -3,13 +3,23 @@ module: blackwall-eye
 status: in_progress
 stage: 1
 last_updated: 2026-10-15
-last_task: "prod firewall as code: nftables role on RHEL + podman + drop-in, new cf-wall role, nft-equiv tool, Rocky 9 lab node"
-next_task: "Choose the next Eye item: Suricata/Zeek network layer (stage 3) or Wazuh version pin"
+last_task: "Wazuh agent + auditd on the RHEL family (wazuh-repo role, journald), black-rocky-02 enrolled; stricter agent and event checks"
+next_task: "Sub-project B: Wazuh manager/indexer/dashboard on the RHEL family next to podman (dashboard off 443), measure memory — the prod host becomes the manager later"
 blockers: []
 ---
 
 ## Done
 
+- 2026-10-15: Wazuh agent on the RHEL family (spec
+  `docs/superpowers/specs/2026-10-15-wazuh-agent-rhel-design.md`).
+  - New `wazuh-repo` role: Wazuh version + apt (signed-by keyring, no
+    `apt_key`) and yum repositories; meta dependency of all four Wazuh roles.
+  - `wazuh-agent` on Debian + RedHat (journald source on RedHat), `auditd` on
+    both (RedHat: `audit` package, `augenrules --load` / `service auditd restart`).
+  - Lab: `black-rocky-02` enrolled; inventory split into OS and functional
+    groups; `verify-agents.yml` checks every agent by name;
+    `verify-agent-events.yml` proves a failed SSH login on the RHEL agent
+    reaches the indexer.
 - 2026-10-15: prod firewall as code (spec `docs/superpowers/specs/2026-10-14-nftables-prod-port-design.md`).
   - `nftables` role: Debian + RedHat (`nft_conf_path`), `nftables.service`
     drop-in without `flush ruleset`, optional `nft_podman` (anti-spoof,
