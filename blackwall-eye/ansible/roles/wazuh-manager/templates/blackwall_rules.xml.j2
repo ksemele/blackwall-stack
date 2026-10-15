@@ -22,7 +22,8 @@
        100205 exporter error (stderr line, decoder blackwall-fw-error)
        100206 blocklist_would_drop (Fang observe: listed source reached the host)
        100207 Fang refresh ERROR (syslog/journald)   100208 blocklist_dropped (Fang enforce)
-       100209 Fang refresh WARNING (applied from cache / fail-open) -->
+       100209 Fang refresh WARNING (applied from cache / fail-open)
+       100210 ssh_attempts  100211 scan_attempts  100212 rate_attempts (Fang layer 2, observe) -->
   <rule id="100200" level="0">
     <if_sid>530</if_sid>
     <match>^ossec: output: 'blackwall-fw': blackwall-fw: kind=</match>
@@ -73,6 +74,28 @@
     <field name="fw_kind">^blocklist_dropped$</field>
     <description>Blackwall: reputation-blocklist source dropped (src $(srcip)).</description>
     <group>blackwall_fw,blocklist,</group>
+  </rule>
+
+  <!-- Fang layer 2 (observe): per-source connection-attempt detectors -->
+  <rule id="100210" level="6">
+    <if_sid>100200</if_sid>
+    <field name="fw_kind">^ssh_attempts$</field>
+    <description>Blackwall: SSH connection-attempt rate exceeded (src $(srcip)).</description>
+    <group>blackwall_fw,attempts,</group>
+  </rule>
+
+  <rule id="100211" level="6">
+    <if_sid>100200</if_sid>
+    <field name="fw_kind">^scan_attempts$</field>
+    <description>Blackwall: closed-port scan, connections to ports that are not open (src $(srcip)).</description>
+    <group>blackwall_fw,attempts,</group>
+  </rule>
+
+  <rule id="100212" level="5">
+    <if_sid>100200</if_sid>
+    <field name="fw_kind">^rate_attempts$</field>
+    <description>Blackwall: high new-connection rate (src $(srcip)).</description>
+    <group>blackwall_fw,attempts,</group>
   </rule>
 
   <!-- Fang refresh health (script logs ERROR/WARNING via syslog, program blackwall-fang-refresh) -->

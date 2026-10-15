@@ -157,4 +157,70 @@ assert len(applied) == 1 and "blocklist: 0" in applied[0] and "5.5.5.0/24" not i
 assert any(l.startswith("ERROR") and "EMPTY" in l for l in logs), logs
 # a rejected fresh update with only a stale cache -> also empty, exit 4
 assert run({"u1": PUBLIC, "u2": "garbage\n", "cfu": CF}) == 4, logs
+
+# 11. layer 2 (observe only): detectors, ordering, never a drop of their own
+import re
+A = m.attempts_from_conf({"ATTEMPTS": "1", "OPEN_TCP": "22 443 1514"})
+assert m.attempts_from_conf({}) is None and m.attempts_from_conf({"ATTEMPTS": "0"}) is None
+block, allow, _ = m.compute([JDROP + PUBLIC], CF, ["203.0.113.7"], [], 1)
+for mode in ("observe", "enforce"):
+    for blk in (block, []):
+        t = m.render("eth0", mode, allow, blk, "", A)
+        ch = t.split("chain prerouting")[1]
+        # the only drop is the layer 1 enforce rule
+        assert ch.count("drop") == (1 if mode == "enforce" else 0), (mode, ch)
+        l2 = ch.split("# Layer 2")[1]
+        assert "drop" not in l2 and "reject" not in l2
+        assert ch.index("@allow_v4 accept") < ch.index("established,related") < ch.index("# Layer 2")
+        assert ch.index("@blocklist_static update") < ch.index("# Layer 2")  # after the reputation rules
+        assert ch.rindex("counter drop") < ch.index("# Layer 2") if mode == "enforce" else True
+        rules = [l.strip() for l in l2.splitlines() if l.strip().startswith("ct state new")]
+        assert len(rules) == 3, rules
+        for r in rules:  # new TCP SYNs only, one update per rule
+            assert r.startswith("ct state new tcp flags & (syn | ack) == syn"), r
+            assert r.count("update @") == 1 and r.count(" add @") == 1, r
+        assert "tcp dport { 22 } add @ssh_meter { ip saddr limit rate over 6/minute burst 4 packets } update @ssh_flagged" in rules[0]
+        assert "tcp dport != @open_tcp add @scan_meter { ip saddr limit rate over 10/minute burst 10 packets } update @scan_flagged" in rules[1]
+        assert "add @rate_meter { ip saddr limit rate over 120/minute burst 60 packets } update @rate_flagged" in rules[2]
+        assert "elements = { 22, 443, 1514 }" in t
+        for d in ("ssh", "scan", "rate"):
+            assert re.search(r"set %s_meter \{[^}]*flags dynamic,timeout[^}]*timeout 5m[^}]*size 65536" % d, t), d
+            assert re.search(r"set %s_flagged \{[^}]*flags dynamic,timeout[^}]*timeout 1h[^}]*size 65536[^}]*counter" % d, t), d
+# layer 2 renders with an empty blocklist (fail-open / first run)
+assert "update @ssh_flagged" in m.render("eth0", "observe", allow, [], "", A)
+# without fang_open_tcp: no scan detector, no open_tcp set
+B = m.attempts_from_conf({"ATTEMPTS": "1", "OPEN_TCP": ""})
+t = m.render("eth0", "observe", allow, block, "", B)
+assert "scan" not in t and "open_tcp" not in t and "@ssh_flagged" in t and "@rate_flagged" in t
+# disabled (or layer 1 call as before): nothing of layer 2
+for t in (m.render("eth0", "observe", allow, block), m.render("eth0", "observe", allow, block, "", None)):
+    assert "_flagged" not in t and "_meter" not in t and "Layer 2" not in t
+# custom ports/rates, and bad values never reach nft syntax
+C = m.attempts_from_conf({"ATTEMPTS": "1", "SSH_PORTS": "2222 22", "SSH_RATE": "3/second", "SSH_BURST": "2"})
+assert "tcp dport { 22, 2222 } add @ssh_meter { ip saddr limit rate over 3/second burst 2 packets }" in m.render("eth0", "observe", allow, block, "", C)
+for bad in ({"SSH_RATE": "6/min; flush ruleset"}, {"SSH_RATE": "6/hour"}, {"CONN_RATE": "5/day"}, {"SSH_PORTS": "22 x"}, {"OPEN_TCP": "70000"},
+            {"SSH_BURST": "0"}, {"METER_SIZE": "abc"}):
+    try:
+        m.attempts_from_conf(dict(bad, ATTEMPTS="1")); raise SystemExit("accepted %r" % bad)
+    except m.Abort:
+        pass
+# main() passes ATTEMPTS through, also on the degraded paths (cache, fail-open empty)
+write_conf("ATTEMPTS=1\nOPEN_TCP=\"22 443\"\n")
+assert run(DATA) == 0 and "update @ssh_flagged" in applied[0] and "elements = { 22, 443 }" in applied[0], logs
+assert run({"u1": None, "u2": None, "cfu": None}) == 3 and "update @scan_flagged" in applied[0], logs
+for k in ("u1", "u2", "cf:cfu"):
+    os.utime(m._cache_name(k), (old, old))
+assert run({"u1": None, "u2": None, "cfu": None}) == 4 and "update @rate_flagged" in applied[0], logs
+assert "173.245.48.0/20" in applied[0], "exit 4: cached Cloudflare list must be in allow_v4"
+# exit 2 (first run) with no Cloudflare list anywhere: no layer 2 at all, WARNING logged
+m.STATE_DIR = tempfile.mkdtemp() + "/st3"
+m.table_loaded = lambda: False
+m.os.path.exists = lambda p: True if p.startswith("/sys/class/net/") else False
+assert run({"u1": None, "u2": None, "cfu": None}) == 2, logs
+assert "_flagged" not in applied[0] and "Layer 2" not in applied[0], applied[0]
+assert any(l.startswith("WARNING") and "layer 2 skipped" in l for l in logs), logs
+# exit 2 with a cached Cloudflare list only: CF in allow_v4 and layer 2 present
+m.cache_save("cf:cfu", CF)
+assert run({"u1": None, "u2": None, "cfu": None}) == 2, logs
+assert "173.245.48.0/20" in applied[0] and "update @ssh_flagged" in applied[0], logs
 print("FANG REFRESH OK")

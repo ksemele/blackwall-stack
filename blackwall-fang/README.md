@@ -105,6 +105,55 @@ refresh rebuilds the table, counters restart and the exporter reports the new to
 (`blackwall-fw-export`) and its `/etc/blackwall/fw-export.d/` directory, which must stay
 root-owned (the exporter skips drop-ins that are not).
 
+### Layer 2: connection-attempt detectors (observe only)
+
+Independent of the reputation lists (rendered even with an empty blocklist), after the
+allowlist, `established,related` and the reputation rules, in the same `prerouting` chain. They
+look only at new TCP SYNs, count per source (IPv4) in set-backed `limit rate over` meters and put
+a source over the rate into a flagged set (`flags dynamic,timeout`, 1h, counters). **Nothing is
+dropped**; enforcement is a separate future spec.
+
+| Detector | Matches | Default | Flagged set | Exporter kind / Eye rule |
+|---|---|---|---|---|
+| SSH | `tcp dport` in `fang_ssh_ports` (`[22]`) | 6/minute, burst 4 | `ssh_flagged` | `ssh_attempts` / 100210 (level 6) |
+| Closed ports | `tcp dport != @open_tcp`, only when `fang_open_tcp` is non-empty | 10/minute, burst 10 | `scan_flagged` | `scan_attempts` / 100211 (level 6) |
+| Rate | any new TCP | 120/minute, burst 60 | `rate_flagged` | `rate_attempts` / 100212 (level 5) |
+
+Variables: `fang_attempts_enabled` (default `true`), `fang_ssh_ports`, `fang_open_tcp`,
+`fang_{ssh,scan,conn}_rate` (`N/second|minute`), `fang_{ssh,scan,conn}_burst`,
+`fang_meter_size`, `fang_flagged_size`. List **every** listening and published port (and agent or
+monitoring ports) in `fang_open_tcp`, or legitimate clients of an unlisted port look like
+scanners; leave it empty to run without the scan detector. The role renders the exporter drop-ins
+`fang-ssh.conf`, `fang-scan.conf`, `fang-rate.conf` in `/etc/blackwall/fw-export.d/` for the
+enabled detectors only (and removes the others). Inspect: `nft list set inet blackwall_fang
+ssh_flagged` (also `scan_flagged`, `rate_flagged`).
+
+Reading the alerts: rule 100210/100211 (level 6) and 100212 (level 5) carry `srcip` = the flagged
+source; the exporter reports growth of that source's flagged-set counter, so repeated alerts mean
+the source keeps connecting. Triage with `nft list set inet blackwall_fang ssh_flagged` (entries
+live 1h). Tune from real alerts on the target host: a legitimate source -> `fang_allowlist`; a
+real service flagged as scan -> add its port to `fang_open_tcp`; chronic noise -> raise
+`fang_*_rate` / `fang_*_burst`. Lab check: `bw-check fang` (rocky, host-01 and master against the
+sentinel; asserts growth over a baseline taken at the start, since flagged entries persist).
+
+Limits and tuning:
+
+- Legitimate high-rate sources belong in `fang_allowlist`: uptime and monitoring probes, NAT'd
+  offices, blackwall-scan's own perimeter recon (it looks like a scanner by design), and the
+  operator's own Ansible/SSH source (the controller path: every provisioning run and ssh session
+  arrives from it and would otherwise be flagged constantly).
+- Every refresh (daily timer, config change) replaces the table, so meters and flagged sets reset:
+  a flagged source alerts again once after a refresh. On a first run without any Cloudflare data,
+  layer 2 is skipped until the next successful refresh.
+- Blind spot: a spoofed-source SYN flood can fill the meter sets (65536 sources); the rule then
+  silently stops tracking new sources until entries time out (5m). Observe has nothing to
+  protect; enforcement must account for it.
+- SYN retransmits to filtered ports count as separate attempts, so one slow client can
+  exceed a low rate.
+- If the Cloudflare list is not available on a fail-open refresh (exit 2/4) and not cached,
+  layer 2 is skipped (WARNING `layer 2 skipped: no Cloudflare list`), otherwise Cloudflare
+  edges would be counted.
+
 ### Rollback
 
 ```bash
@@ -115,7 +164,7 @@ rm /etc/nftables.d/blackwall-fang.nft
 
 Leftover files (harmless without the table and the timer; remove for a clean host):
 `/usr/local/sbin/blackwall-fang-refresh`, `/etc/blackwall/fang.conf`, `/etc/blackwall/fang-test/`,
-`/etc/blackwall/fw-export.d/fang.conf`, `/var/lib/blackwall-fang/` (cache), the units
+`/etc/blackwall/fw-export.d/fang*.conf`, `/var/lib/blackwall-fang/` (cache), the units
 `blackwall-fang-refresh.{service,timer}` and
 `/etc/systemd/system/nftables.service.d/zz-blackwall-fang.conf`.
 

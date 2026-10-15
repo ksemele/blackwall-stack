@@ -103,7 +103,9 @@ inventory hostname, bundle in `wazuh_certs_local_dir`). The lab node
 `tests/inventory/group_vars/sentinel.yml`) runs this layout on Rocky 9 next to a
 podman nginx on 443, with `nftables` (`nft_podman`, forward policy drop) and
 `cf-wall`. Dashboard access: `ssh -L 5601:127.0.0.1:5601 <host>` then
-https://localhost:5601.
+https://localhost:5601. The `blackwall` TUI opens its own tunnel to the API and
+indexer: add an `ssh:` block to the context
+([tools/blackwall](../tools/blackwall/README.md#via-ssh-tunnel-loopback-only-managers)).
 
 Measured footprint (lab sentinel, idle ~10 min, indexer heap 1g): container
 2.2 GiB total; indexer (java) 1.75 GiB RSS, manager processes ~460 MiB,
@@ -149,6 +151,9 @@ decoder, fields `fw_kind`, `srcip`, `fw_new`, `fw_total`, `fw_burst`,
 | 100207 | 7 | syslog/journald line from program `blackwall-fang-refresh` containing `ERROR` (Fang refresh failed or degraded: stale cache, empty blocklist) |
 | 100208 | 3 | `kind=blocklist_dropped` (Fang enforce drop-in set): a listed source was dropped |
 | 100209 | 5 | program `blackwall-fang-refresh` with `WARNING` (applied from cache, fail-open); the manager reads system logs from journald on the RedHat family, `/var/log/{auth.log,syslog}` on Debian |
+| 100210 | 6 | `kind=ssh_attempts` (Fang layer 2 drop-in set, observe): a source exceeded the SSH new-connection rate |
+| 100211 | 6 | `kind=scan_attempts` (Fang layer 2): a source made new connections to closed ports above the rate |
+| 100212 | 5 | `kind=rate_attempts` (Fang layer 2): a source exceeded the overall new-connection rate |
 
 What is counted: packets dropped by the final policy path (input and forward
 `policy drop`, and cf-wall's origin-direct drop). Invalid-state and anti-spoof

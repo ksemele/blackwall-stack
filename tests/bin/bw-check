@@ -771,6 +771,7 @@ check_fw_events() {
 
 # _fg_counter <table> <set> <ip> — packets counted for <ip> in an nft set on the
 # sentinel; 0 when the element is absent; empty when the sentinel cannot be read.
+# With a 4th argument "present" it prints 1 when the element exists, else 0.
 _fg_counter() {
   _fe_ssh black-sentinel-03 "nft -j list set inet $1 $2" 2>/dev/null \
     | python3 -c '
@@ -784,9 +785,9 @@ for item in d.get("nftables", []):
     for e in (item.get("set") or {}).get("elem", []) or []:
         e = e.get("elem", e) if isinstance(e, dict) else None
         if isinstance(e, dict) and e.get("val") == sys.argv[1]:
-            n = (e.get("counter") or {}).get("packets", 0)
+            n = 1 if len(sys.argv) > 2 else (e.get("counter") or {}).get("packets", 0)
 print(n)
-' "$3" 2>/dev/null
+' "$3" ${4:+"$4"} 2>/dev/null
 }
 
 # Sentinel connection attempts from <host> (default rocky-02, the listed lab source): 5 x :443.
@@ -796,6 +797,15 @@ _fg_poke() {
 }
 
 # blocklist_static must hold no private/reserved space (the lab exempts rocky's /32 only).
+# Layer 2 helpers: quick SYNs to one port (parallel, short timeout), flagged-set membership.
+_fg_syns() { # <from-host> <first-port> <count> [step]
+  _fe_ssh "$1" 'p='"$2"'; for ((n = 0; n < '"$3"'; n++)); do
+      (timeout 0.5 bash -c "echo > /dev/tcp/172.28.0.16/$p" >/dev/null 2>&1 &)
+      p=$((p + '"${4:-0}"')); done; sleep 1' >/dev/null 2>&1
+}
+_fg_flagged() { # <set> <ip>: prints 1 when the source is in the flagged set
+  _fg_counter blackwall_fang "$1" "$2" present
+}
 _fg_reserved_check() {
   _fe_ssh black-sentinel-03 'nft -j list set inet blackwall_fang blocklist_static' 2>/dev/null \
     | python3 -c '
@@ -872,7 +882,7 @@ PY
       echo $?; rm -rf "$d"' 2>/dev/null | tail -1
 }
 
-# Opt-in (~3-5 min): observe -> enforce -> junk list -> back to observe, on the sentinel.
+# Opt-in (~4-6 min): observe (+ layer 2 attempt detectors) -> enforce -> junk list -> back to observe, on the sentinel.
 # rocky-02 (172.28.0.15) is on the lab test list; master (172.28.0.10) is allowlisted;
 # host-01 (172.28.0.11) is neither.
 check_fang() {
@@ -880,7 +890,7 @@ check_fang() {
   bw_require_ansible
 
   local h
-  for h in black-master-00 black-rocky-02 black-sentinel-03; do
+  for h in black-master-00 black-host-01 black-rocky-02 black-sentinel-03; do
     if ! _fe_ssh "$h" true >/dev/null 2>&1; then
       bw_fail "$h is unreachable"
       return
@@ -970,6 +980,80 @@ check_fang() {
     bw_pass "observe: rule 100206 (blocklist_would_drop) for srcip 172.28.0.15 (sentinel indexer)"
   else
     bw_fail "observe: no rule 100206 alert for 172.28.0.15 within 150 s"
+  fi
+
+  # 2a. layer 2 (observe): attempt detectors flag rocky, spare host-01 and master, drop nothing.
+  # Flagged sets keep entries for 1h, so compare against baselines taken now.
+  local lstart s0 s1 c0 c1 r0 r1 hs0 hs1 a1 a2 a3 mf banner
+  lstart="$(_fe_ssh black-sentinel-03 'date -u -d "-3 seconds" +%Y-%m-%dT%H:%M:%SZ' 2>/dev/null)"
+  s0="$(_fg_counter blackwall_fang ssh_flagged 172.28.0.15)"
+  c0="$(_fg_counter blackwall_fang scan_flagged 172.28.0.15)"
+  r0="$(_fg_counter blackwall_fang rate_flagged 172.28.0.15)"
+  hs0="$(_fg_counter blackwall_fang ssh_flagged 172.28.0.11)"
+  _fg_syns black-host-01 22 2
+  _fg_syns black-master-00 22 20
+  _fg_syns black-rocky-02 22 20
+  _fg_syns black-rocky-02 20001 30 1
+  sleep 15   # exporter baseline, then growth for it to report
+  _fg_syns black-rocky-02 22 20
+  _fg_syns black-rocky-02 20001 30 1
+  sleep 2
+  s1="$(_fg_counter blackwall_fang ssh_flagged 172.28.0.15)"
+  c1="$(_fg_counter blackwall_fang scan_flagged 172.28.0.15)"
+  r1="$(_fg_counter blackwall_fang rate_flagged 172.28.0.15)"
+  hs1="$(_fg_counter blackwall_fang ssh_flagged 172.28.0.11)"
+  if [[ -z "$s0" || -z "$s1" || -z "$c0" || -z "$c1" || -z "$r0" || -z "$r1" || -z "$hs0" || -z "$hs1" ]]; then
+    bw_fail "layer 2: could not read counters"
+    s0=0; s1=0; c0=0; c1=0; r0=0; r1=0; hs0=x; hs1=y
+  fi
+  mf="$(_fg_flagged ssh_flagged 172.28.0.10)"
+  if [[ "${s1:-0}" -gt "${s0:-0}" ]]; then
+    bw_pass "layer 2: rocky flagged by the SSH detector (ssh_flagged $s0 -> $s1)"
+  else
+    bw_fail "layer 2: rocky not flagged in ssh_flagged after 40 SSH attempts ($s0 -> ${s1:-?})"
+  fi
+  if [[ "${c1:-0}" -gt "${c0:-0}" ]]; then
+    bw_pass "layer 2: rocky flagged by the scan detector (scan_flagged $c0 -> $c1)"
+  else
+    bw_fail "layer 2: rocky not flagged in scan_flagged after 60 closed-port connects ($c0 -> ${c1:-?})"
+  fi
+  if [[ "${r1:-0}" -gt "${r0:-0}" ]]; then
+    bw_pass "layer 2: rocky flagged by the rate detector (rate_flagged $r0 -> $r1)"
+  else
+    bw_fail "layer 2: rocky not flagged in rate_flagged after ~100 new connections ($r0 -> ${r1:-?})"
+  fi
+  if [[ "${hs1:-0}" == "${hs0:-0}" ]]; then
+    bw_pass "layer 2: host-01 with 2 SSH attempts is not newly flagged"
+  else
+    bw_fail "layer 2: host-01 flagged after 2 SSH attempts (ssh_flagged $hs0 -> $hs1)"
+  fi
+  if [[ "${mf:-1}" == 0 ]]; then
+    bw_pass "layer 2: master (allowlisted) with 20 SSH attempts is never in ssh_flagged"
+  else
+    bw_fail "layer 2: master is in ssh_flagged (allowlist bypassed)"
+  fi
+  banner="$(_fe_ssh black-rocky-02 'timeout 5 bash -c "exec 3<>/dev/tcp/172.28.0.16/22; head -c 4 <&3"' 2>/dev/null)"
+  if [[ "$banner" == SSH- ]]; then
+    bw_pass "layer 2: flagged rocky still completes an SSH handshake (nothing dropped in observe)"
+  else
+    bw_fail "layer 2: flagged rocky got no SSH banner ('${banner:-none}'): something is dropping"
+  fi
+  local cf=0 cs
+  for cs in ssh_flagged scan_flagged rate_flagged; do
+    [[ "$(_fg_flagged "$cs" 172.28.0.1)" == 0 ]] || cf=1
+  done
+  if [[ "$cf" == 0 ]]; then
+    bw_pass "layer 2: controller path 172.28.0.1 (allowlisted) is never in ssh_flagged/scan_flagged/rate_flagged"
+  else
+    bw_fail "layer 2: controller source 172.28.0.1 is flagged (add it to fang_allowlist)"
+  fi
+  a1="$(_fe_wait sentinel 100210 black-sentinel-03 172.28.0.15 "$lstart")"
+  a2="$(_fe_wait sentinel 100211 black-sentinel-03 172.28.0.15 "$lstart")"
+  a3="$(_fe_wait sentinel 100212 black-sentinel-03 172.28.0.15 "$lstart")"
+  if [[ "$a1" -gt 0 && "$a2" -gt 0 && "$a3" -gt 0 ]]; then
+    bw_pass "layer 2: rules 100210, 100211 and 100212 for srcip 172.28.0.15 (sentinel indexer)"
+  else
+    bw_fail "layer 2: missing alerts within 150 s (100210: ${a1:-0}, 100211: ${a2:-0}, 100212: ${a3:-0})"
   fi
 
   # 2b. a degraded refresh (download fails, cache used) must become a Wazuh alert.

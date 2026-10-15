@@ -2,9 +2,9 @@
 module: blackwall-fang
 status: in_progress
 stage: 5
-last_updated: 2026-10-15
-last_task: "Layer 1 (reputation blocklists) done: role fang-reputation, Wazuh event 100206, bw-check fang (observe + enforce + junk list) green; real-source observe run on the lab sentinel (4619 entries, exit 0)"
-next_task: "Layer 2: in-kernel ban on connection attempts (blocklist_dynamic with timeout, observe first)"
+last_updated: 2026-10-16
+last_task: "Layer 2 (attempt detectors, observe) done: ssh/scan/rate meters + flagged sets, Eye rules 100210-100212, bw-check fang covers them (rocky flagged, host-01 and master not, handshake still completes)"
+next_task: "Tune layer 2 thresholds from real alerts on the target host, then implement the enforce spec docs/superpowers/specs/2026-10-16-fang-attempts-enforce-design.md"
 blockers: []
 ---
 
@@ -20,23 +20,30 @@ research-only topic for later.
 Each layer is opt-in and starts in observe-only mode (sets fill and alert,
 nothing is dropped) before enforcement is switched on.
 
-**Layer 1 is done** (role `fang-reputation`, see README; `bw-check fang`).
+**Layers 1 and 2 (observe) are done** (role `fang-reputation`, see README; `bw-check fang`).
 
 1. **Reputation** (done) — Spamhaus DROP/EDROP and FireHOL level1 loaded into a
    `blocklist_static` nftables set by a refresh script + timer (same pattern
    as `cf-wall`: sanity floor, `nft -c`, load before persist).
-2. **In-kernel ban on attempts** (next) — nftables rate rules move a source into
+2. **In-kernel attempt detectors** (observe done, role `fang-reputation`: ssh/scan/rate
+   meters + `*_flagged` sets, Eye rules 100210-100212; enforcement still to come) — the original plan:
+   **In-kernel ban on attempts** — nftables rate rules move a source into
    `blocklist_dynamic` (with timeout) when it makes too many new connection
    attempts within a window: to closed ports (scans) and to open services such
    as SSH (brute force / floods). Thresholds and timeouts are variables; short
    timeouts for the spoofable closed-port case. Reuses blackwall-eye's drop
    accounting for visibility.
 
+**Future tasks with specs (not started):**
+
+- Layer 2 enforcement — in-kernel bans: `docs/superpowers/specs/2026-10-16-fang-attempts-enforce-design.md`
+  (run after layer 2 observe has been tuned on the target host).
+- Wazuh active response bans: `docs/superpowers/specs/2026-10-16-fang-active-response-design.md`.
+
 **Backlog:**
 
-3. **Wazuh active response** — a nftables active-response script that bans on
-   Wazuh rules (failed SSH logins 5710/5763, scan 100202, ...) into
-   `blocklist_dynamic`. Bans on completed TCP sessions, i.e. not spoofable.
+3. **Wazuh active response** — see the spec
+   `docs/superpowers/specs/2026-10-16-fang-active-response-design.md`.
 
 **Idea — separate module:**
 

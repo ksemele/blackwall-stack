@@ -33,6 +33,10 @@ type Deps struct {
 	// ContextSwitchedMsg when done.
 	SwitchContext func(name string) tea.Cmd
 
+	// OnRefresh is called (without consuming the key) on `r` / ctrl+r, before
+	// the active view handles it; main uses it to retry a down ssh tunnel.
+	OnRefresh func()
+
 	// HelpView is the view pushed when the user presses `?`.
 	// If nil, the `?` key is a no-op.
 	HelpView views.View
@@ -47,12 +51,17 @@ type Model struct {
 	status      func() statusbar.State
 	pauseToggle func()
 	switchCtx   func(name string) tea.Cmd
+	onRefresh   func()
 	helpView    views.View
 
 	// helpOpen is true while the help overlay is shown.
 	helpOpen bool
 
 	footerMsg string // transient confirmation shown in statusbar area
+
+	// switching names the context a switch is in flight to; further
+	// switch requests are rejected until it finishes.
+	switching string
 
 	paletteOpen  bool
 	paletteInput string
@@ -66,6 +75,7 @@ func New(d Deps) *Model {
 		status:      d.Status,
 		pauseToggle: d.PauseToggle,
 		switchCtx:   d.SwitchContext,
+		onRefresh:   d.OnRefresh,
 		helpView:    d.HelpView,
 	}
 	for i, v := range d.Views {
@@ -146,8 +156,11 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				return m, nil
 			default:
-				if msg.Type == tea.KeyRunes {
+				switch msg.Type {
+				case tea.KeyRunes:
 					m.paletteInput += string(msg.Runes)
+				case tea.KeySpace: // `:ctx <name>`
+					m.paletteInput += " "
 				}
 				return m, nil
 			}
@@ -174,6 +187,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, cmd
 		}
 
+		if s := msg.String(); (s == "r" || s == "ctrl+r") && m.onRefresh != nil {
+			m.onRefresh() // the view still gets the key below
+		}
 		if msg.String() == ":" {
 			m.paletteOpen = true
 			m.paletteInput = ":"
@@ -237,15 +253,25 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case ContextChangedMsg:
-		if m.switchCtx != nil {
-			return m, m.switchCtx(msg.Name)
+		if m.switchCtx == nil {
+			return m, nil
 		}
-		return m, nil
+		if m.switching != "" {
+			m.footerMsg = "⚠ still switching to " + m.switching + "…"
+			return m, nil
+		}
+		m.switching = msg.Name
+		m.footerMsg = "switching to " + msg.Name + "…"
+		return m, m.switchCtx(msg.Name)
 
 	case ContextSwitchedMsg:
+		m.switching = ""
 		if msg.Err != nil {
 			m.footerMsg = "⚠ context switch failed: " + msg.Err.Error()
 			return m, nil
+		}
+		if msg.Apply != nil {
+			msg.Apply()
 		}
 		m.footerMsg = ""
 		// Navigate to agents view.

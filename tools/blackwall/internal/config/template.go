@@ -1,8 +1,8 @@
 package config
 
 import (
-	"errors"
 	_ "embed"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"

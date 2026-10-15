@@ -13,8 +13,11 @@ import (
 )
 
 // New returns an *http.Client honouring insecure_skip_verify and ca_file.
+// A non-empty t.ServerName is verified instead of the dialled host (used when
+// the client dials an ssh tunnel on 127.0.0.1 but the certificate names the
+// manager); an IP there is checked against the certificate's IP SANs.
 func New(t config.TLS) (*http.Client, error) {
-	cfg := &tls.Config{InsecureSkipVerify: t.InsecureSkipVerify}
+	cfg := &tls.Config{InsecureSkipVerify: t.InsecureSkipVerify, ServerName: t.ServerName}
 	if t.CAFile != "" {
 		raw, err := os.ReadFile(t.CAFile)
 		if err != nil {

@@ -15,3 +15,8 @@ fang_test_files:
 fang_sources:
   - file:///etc/blackwall/fang-test/reputation-test.netset
   - file:///etc/blackwall/fang-test/reputation-test-drop.json
+
+# Layer 2 closed-port scan detector: the sentinel's real open TCP ports (ss -ltn + podman):
+# 22 ssh, 443 nginx (published), 1514/1515 Wazuh agent events/enrollment. Host-specific,
+# so it lives here and not in group `fang`.
+fang_open_tcp: [22, 443, 1514, 1515]

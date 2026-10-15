@@ -13,12 +13,14 @@ type BackMsg struct{}
 // ContextChangedMsg announces a context switch initiated from `:contexts`.
 type ContextChangedMsg struct{ Name string }
 
-// ContextSwitchedMsg is dispatched after the context switch has been applied
-// (client replaced, config saved). The app uses it to update the status bar
-// and navigate to agents.
+// ContextSwitchedMsg is dispatched when a context switch has been prepared
+// off the UI loop (tunnel up, clients built, config saved). On success the app
+// runs Apply on the UI loop — so the swap never races with rendering — and
+// navigates to agents. Only one switch runs at a time.
 type ContextSwitchedMsg struct {
-	Name string
-	Err  error
+	Name  string
+	Err   error
+	Apply func()
 }
 
 // ShowAgentAlertsMsg asks the app to open `:alerts` filtered to one agent

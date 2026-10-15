@@ -37,3 +37,27 @@ fang_refresh_jitter: 1h
 fang_test_mode: false
 fang_test_blockable: []
 fang_test_files: []
+
+# Layer 2: per-source connection-attempt detectors (observe only, never drop).
+# New TCP SYNs from one source over a rate put the source in a flagged set
+# (ssh_flagged / scan_flagged / rate_flagged, 1h timeout) and the exporter reports
+# it (kinds ssh_attempts / scan_attempts / rate_attempts -> Eye rules 100210-100212).
+# Allowlisted and established traffic is never counted. Independent of the blocklists.
+fang_attempts_enabled: true
+# TCP ports treated as SSH.
+fang_ssh_ports: [22]
+# TCP ports that are really open on this host. The closed-port scan detector is
+# rendered only when this is non-empty: list every listening and published port
+# (and the agent/monitoring ports), or legitimate clients are flagged as scanners.
+fang_open_tcp: []
+# Rates are "N/second" or "N/minute" (the meters expire after 5m, longer units would
+# silently degrade); burst is in packets.
+fang_ssh_rate: 6/minute
+fang_ssh_burst: 4
+fang_scan_rate: 10/minute
+fang_scan_burst: 10
+fang_conn_rate: 120/minute
+fang_conn_burst: 60
+# Max tracked sources per meter / flagged set.
+fang_meter_size: 65536
+fang_flagged_size: 65536

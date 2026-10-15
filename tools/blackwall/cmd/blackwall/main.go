@@ -9,7 +9,9 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"os/signal"
 	"path/filepath"
+	"syscall"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -18,6 +20,7 @@ import (
 	"github.com/greengrunt/blackwall/tools/blackwall/internal/config"
 	bwlog "github.com/greengrunt/blackwall/tools/blackwall/internal/log"
 	"github.com/greengrunt/blackwall/tools/blackwall/internal/oneshot"
+	"github.com/greengrunt/blackwall/tools/blackwall/internal/tunnel"
 	"github.com/greengrunt/blackwall/tools/blackwall/internal/ui/statusbar"
 	"github.com/greengrunt/blackwall/tools/blackwall/internal/views"
 	agentsview "github.com/greengrunt/blackwall/tools/blackwall/internal/views/agents"
@@ -40,6 +43,11 @@ func main() {
 }
 
 func run() error {
+	// Ctrl+C / SIGTERM / SIGHUP cancel sigCtx instead of killing the process,
+	// so the deferred tunnel Close always runs (tunnel start, --once, TUI).
+	sigCtx, stopSignals := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM, syscall.SIGHUP)
+	defer stopSignals()
+
 	var (
 		flagContext              string
 		flagConfig               string
@@ -130,18 +138,42 @@ func run() error {
 	if currentCtx.Wazuh == nil {
 		return fmt.Errorf("context %q has no wazuh: subsystem", cfg.Current)
 	}
-	client, err := wazuh.New(*currentCtx.Wazuh)
+
+	live := newLiveTunnel()
+	defer live.Close() // also runs after a panic in this goroutine
+
+	// dialCtx is currentCtx, rewritten to 127.0.0.1:<local port> when the
+	// context goes through ssh.
+	if currentCtx.SSH != nil && !flagOnce {
+		fmt.Fprintf(os.Stderr, "blackwall: opening ssh tunnel to %s ...\n", currentCtx.SSH.Host)
+	}
+	live.begin()
+	dialCtx, tn, err := tunnel.ForContext(sigCtx, currentCtx)
+	live.swap(tn)
+	live.end()
+	if sigCtx.Err() != nil { // Ctrl+C / SIGTERM while the tunnel was opening
+		return fmt.Errorf("interrupted: %w", context.Cause(sigCtx))
+	}
+	if err != nil {
+		if flagOnce || tn == nil {
+			return err
+		}
+		// The TUI starts anyway: the status bar shows the error and
+		// ctrl+r retries (or pick another context).
+		logger.Warn("ssh tunnel", "context", cfg.Current, "err", err)
+	}
+	client, err := wazuh.New(*dialCtx.Wazuh)
 	if err != nil {
 		return err
 	}
 
 	if flagOnce {
-		return oneshot.Print(context.Background(), os.Stdout, client)
+		return oneshot.Print(sigCtx, os.Stdout, client)
 	}
 
 	ctxView := ctxview.New(cfg)
 	agentsList := agentsview.NewView(client, cfg.UI.RefreshInterval)
-	idx, idxAddr, err := alertsview.SearcherFor(currentCtx.Indexer)
+	idx, _, err := alertsview.SearcherFor(dialCtx.Indexer)
 	if err != nil {
 		return err
 	}
@@ -159,7 +191,7 @@ func run() error {
 		agentsList.SetIndexer(idx)
 	}
 	registered := []views.View{ctxView, agentsList, alertsView}
-	liveIndexer := idxAddr
+	liveIndexer := indexerAddr(currentCtx)
 
 	initial := ":agents"
 	if cfg.SelectContextOnStart {
@@ -169,39 +201,63 @@ func run() error {
 	// liveCtx / liveWazuh track the active context for the status bar
 	// and are updated on every context switch.
 	liveCtx := cfg.Current
-	liveWazuh := fmt.Sprintf("%s:%d", currentCtx.Wazuh.Server, currentCtx.Wazuh.Port)
+	liveWazuh := wazuhAddr(currentCtx)
 
+	// switchContext prepares a switch off the UI loop (tunnel, clients,
+	// config file) and returns the state changes as Apply, which the app runs
+	// on the UI loop. The app allows one switch at a time.
 	switchContext := func(name string) tea.Cmd {
-		return func() tea.Msg {
+		return func() (msg tea.Msg) {
 			ctx := cfg.Contexts[name]
 			if ctx.Wazuh == nil {
 				return app.ContextSwitchedMsg{Name: name,
 					Err: fmt.Errorf("context %q has no wazuh subsystem", name)}
 			}
-			newClient, err := wazuh.New(*ctx.Wazuh)
-			if err != nil {
+			if !live.begin() {
+				return app.ContextSwitchedMsg{Name: name, Err: errShuttingDown}
+			}
+			defer live.end()
+			var newTn *tunnel.Tunnel
+			fail := func(err error) tea.Msg {
+				live.discard(newTn)
 				return app.ContextSwitchedMsg{Name: name, Err: err}
 			}
-			newIdx, newIdxAddr, err := alertsview.SearcherFor(ctx.Indexer)
+			defer func() {
+				if r := recover(); r != nil {
+					logger.Error("context switch panic", "context", name, "panic", r)
+					msg = fail(fmt.Errorf("internal error: %v", r))
+				}
+			}()
+			// The new tunnel comes up before the old one goes, so a failed
+			// switch leaves the current context working.
+			dialCtx, tn, err := tunnel.ForContext(live.ctx, ctx)
+			newTn = tn
+			live.stage(newTn)
 			if err != nil {
-				return app.ContextSwitchedMsg{Name: name, Err: err}
+				return fail(err)
+			}
+			newClient, err := wazuh.New(*dialCtx.Wazuh)
+			if err != nil {
+				return fail(err)
+			}
+			newIdx, _, err := alertsview.SearcherFor(dialCtx.Indexer)
+			if err != nil {
+				return fail(err)
 			}
 			if err := config.SetCurrent(cfgPath, name); err != nil {
-				return app.ContextSwitchedMsg{Name: name, Err: err}
+				return fail(err)
 			}
-			alertsView.Replace(newIdx, alertsSettings(name, ctx.Indexer))
-			if newIdx != nil {
+			return app.ContextSwitchedMsg{Name: name, Apply: func() {
+				live.swap(newTn)
+				alertsView.Replace(newIdx, alertsSettings(name, ctx.Indexer))
 				agentsList.SetIndexer(newIdx)
-			} else {
-				agentsList.SetIndexer(nil)
-			}
-			liveIndexer = newIdxAddr
-			cfg.Current = name
-			liveCtx = name
-			liveWazuh = fmt.Sprintf("%s:%d", ctx.Wazuh.Server, ctx.Wazuh.Port)
-			agentsList.ReplaceClient(newClient)
-			ctxView.UpdateCurrent(name)
-			return app.ContextSwitchedMsg{Name: name}
+				agentsList.ReplaceClient(newClient)
+				ctxView.UpdateCurrent(name)
+				cfg.Current = name
+				liveCtx = name
+				liveWazuh = wazuhAddr(ctx)
+				liveIndexer = indexerAddr(ctx)
+			}}
 		}
 	}
 
@@ -211,18 +267,34 @@ func run() error {
 		Version:       version,
 		HelpView:      helpview.New(),
 		SwitchContext: switchContext,
+		OnRefresh:     live.Retry,
 		Status: func() statusbar.State {
+			tl, bad := live.label()
 			return statusbar.State{
-				Context: liveCtx,
-				Wazuh:   liveWazuh,
-				Indexer: liveIndexer,
-				Refresh: cfg.UI.RefreshInterval,
+				Context:   liveCtx,
+				Wazuh:     liveWazuh,
+				Tunnel:    tl,
+				TunnelBad: bad,
+				Indexer:   liveIndexer,
+				Refresh:   cfg.UI.RefreshInterval,
 			}
 		},
 	})
 
 	prog := tea.NewProgram(root, tea.WithAltScreen())
+	// sigCtx stays registered for the whole TUI (bubbletea's own SIGINT/
+	// SIGTERM handler is installed only inside Run, and it ignores SIGHUP), so
+	// there is no window where a signal kills the process without running the
+	// deferred tunnel Close. A signal stops the program; stopSignals at return
+	// only releases this goroutine.
+	go func() {
+		<-sigCtx.Done()
+		prog.Kill()
+	}()
 	if _, err := prog.Run(); err != nil {
+		if errors.Is(err, tea.ErrProgramKilled) && sigCtx.Err() != nil {
+			return fmt.Errorf("terminated by signal")
+		}
 		return err
 	}
 	return nil

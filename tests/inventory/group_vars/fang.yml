@@ -2,5 +2,8 @@
 # Fang reputation blocklists (black-sentinel-03 is the prod model).
 fang_wan_if: eth0
 fang_mode: observe
-# black-master-00 plays the owner/admin source.
-fang_allowlist: [172.28.0.10]
+# black-master-00 plays the owner/admin source; 172.28.0.1 is the controller / Ansible path
+# (Docker gateway that every Ansible run and bw-check ssh from the Mac arrives through).
+fang_allowlist:
+  - 172.28.0.10
+  - 172.28.0.1   # controller / Ansible path

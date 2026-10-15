@@ -6,6 +6,12 @@ A Bubbletea TUI, layered as:
 - `internal/wazuh`   — Wazuh Manager API client (JWT auth, TLS-aware).
 - `internal/httpclient` — shared TLS-aware HTTP client.
 - `internal/indexer` — Wazuh indexer (OpenSearch) alert search.
+- `internal/tunnel`  — per-context ssh tunnel: runs the system `ssh -N -L`, waits for
+                       the forwarded ports, reconnects with backoff, kills the process
+                       group on close. `ForContext` rewrites a context to dial
+                       127.0.0.1:<local port> and keeps the configured server as the
+                       TLS server name. `cmd/blackwall` owns the active tunnel
+                       (`liveTunnel`) and swaps it on context switch.
 - `internal/sessions` — parser for `last` output.
 - `internal/app`     — root `tea.Model` with view router, command palette, global hotkeys.
 - `internal/views/*` — top-level views (`:contexts`, `:agents`, `:alerts`). Each implements

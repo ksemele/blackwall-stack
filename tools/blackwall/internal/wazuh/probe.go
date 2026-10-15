@@ -14,7 +14,7 @@ import (
 // short timeout and returns nil on any HTTP response (even 401/403 —
 // the manager is up). Non-nil means unreachable.
 func Probe(ctx context.Context, sub config.WazuhSubsystem) error {
-	httpc, err := buildHTTPClient(config.TLS{InsecureSkipVerify: sub.TLS.InsecureSkipVerify, CAFile: sub.TLS.CAFile})
+	httpc, err := buildHTTPClient(sub.TLS)
 	if err != nil {
 		return fmt.Errorf("probe: build client: %w", err)
 	}

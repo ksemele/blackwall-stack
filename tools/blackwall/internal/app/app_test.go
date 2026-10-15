@@ -1,13 +1,16 @@
 package app
 
 import (
+	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/greengrunt/blackwall/tools/blackwall/internal/ui/footer"
+	"github.com/greengrunt/blackwall/tools/blackwall/internal/ui/statusbar"
 	"github.com/greengrunt/blackwall/tools/blackwall/internal/views"
 )
 
@@ -209,5 +212,100 @@ func TestApp_ShowAgentAlertsActivatesAlertsView(t *testing.T) {
 	}
 	if got, ok := alerts.lastMsg.(ShowAgentAlertsMsg); !ok || got != msg {
 		t.Errorf("alerts view got %v, want %v", alerts.lastMsg, msg)
+	}
+}
+
+func TestApp_RefreshKeyCallsHookAndReachesView(t *testing.T) {
+	a := fakeView{name: ":a"}
+	calls := 0
+	m := New(Deps{Views: []views.View{&a}, InitialView: ":a", OnRefresh: func() { calls++ }})
+	m.Update(tea.KeyMsg{Type: tea.KeyCtrlR})
+	m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'r'}})
+	if calls != 2 {
+		t.Errorf("OnRefresh calls = %d, want 2", calls)
+	}
+	if k, ok := a.lastMsg.(tea.KeyMsg); !ok || k.String() != "r" {
+		t.Errorf("view lastMsg = %#v, want the r key", a.lastMsg)
+	}
+	m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'x'}})
+	if calls != 2 {
+		t.Errorf("other keys must not call OnRefresh")
+	}
+}
+
+func TestApp_PaletteAcceptsSpace(t *testing.T) {
+	a := fakeView{name: ":a"}
+	var switched string
+	m := New(Deps{Views: []views.View{&a}, InitialView: ":a",
+		SwitchContext: func(name string) tea.Cmd { switched = name; return nil }})
+	m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{':'}})
+	for _, k := range []tea.KeyMsg{
+		{Type: tea.KeyRunes, Runes: []rune("ctx")},
+		{Type: tea.KeySpace, Runes: []rune{' '}},
+		{Type: tea.KeyRunes, Runes: []rune("lab")},
+		{Type: tea.KeyEnter},
+	} {
+		m.Update(k)
+	}
+	if switched != "lab" {
+		t.Errorf("`:ctx lab` switched to %q, want lab (palette %q, err %q)", switched, m.paletteInput, m.paletteErr)
+	}
+}
+
+// Two quick switches: the second is rejected while the first is in flight,
+// and the switch's state changes (Apply) run on the UI loop, never in the
+// command goroutine, so Status/View can read them without a race.
+func TestApp_ContextSwitchesDoNotOverlap(t *testing.T) {
+	a := fakeView{name: ":agents"}
+	live := "lab" // what the status bar reads
+	started := []string{}
+	m := New(Deps{
+		Views: []views.View{&a}, InitialView: ":agents",
+		Status: func() statusbar.State { return statusbar.State{Context: live} },
+		SwitchContext: func(name string) tea.Cmd {
+			started = append(started, name)
+			return func() tea.Msg {
+				time.Sleep(20 * time.Millisecond) // tunnel/clients off the loop
+				return ContextSwitchedMsg{Name: name, Apply: func() { live = name }}
+			}
+		},
+	})
+	_, cmd1 := m.Update(ContextChangedMsg{Name: "sentinel"})
+	_, cmd2 := m.Update(ContextChangedMsg{Name: "work"})
+	if cmd2 != nil || len(started) != 1 || !strings.Contains(m.footerMsg, "still switching to sentinel") {
+		t.Fatalf("second switch must be rejected: started=%v footer=%q", started, m.footerMsg)
+	}
+	done := make(chan tea.Msg)
+	go func() { done <- cmd1() }()
+	for i := 0; i < 50; i++ {
+		_ = m.View() // renders concurrently with the command goroutine
+	}
+	msg := <-done
+	if live != "lab" {
+		t.Fatal("state changed before the switched message reached Update")
+	}
+	m.Update(msg)
+	if live != "sentinel" || m.switching != "" {
+		t.Errorf("live=%q switching=%q after apply", live, m.switching)
+	}
+	_, cmd3 := m.Update(ContextChangedMsg{Name: "lab"})
+	if cmd3 == nil {
+		t.Error("a new switch must be allowed after the first finished")
+	}
+	m.Update(cmd3())
+	if live != "lab" {
+		t.Errorf("live = %q after second switch", live)
+	}
+}
+
+func TestApp_FailedSwitchUnblocks(t *testing.T) {
+	a := fakeView{name: ":agents"}
+	m := New(Deps{Views: []views.View{&a}, InitialView: ":agents",
+		SwitchContext: func(name string) tea.Cmd { return func() tea.Msg { return nil } }})
+	m.Update(ContextChangedMsg{Name: "x"})
+	m.Update(ContextSwitchedMsg{Name: "x", Err: errors.New("ssh down"),
+		Apply: func() { t.Error("Apply must not run on error") }})
+	if m.switching != "" || !strings.Contains(m.footerMsg, "ssh down") {
+		t.Errorf("switching=%q footer=%q", m.switching, m.footerMsg)
 	}
 }
