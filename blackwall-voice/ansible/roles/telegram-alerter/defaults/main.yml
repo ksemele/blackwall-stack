@@ -2,6 +2,22 @@
 # Severity threshold: only forward alerts with rule.level >= this value
 severity_threshold: 5
 
+# Upper bound: forward only severity_threshold <= level <= voice_max_level.
+# Empty = no upper bound. Set it to Brain's analysis_threshold - 1 when Brain
+# is on, so each alert yields one message (see blackwall-voice/README.md).
+voice_max_level: ""
+
+# The upper bound only holds while this systemd unit (Brain) is enabled and
+# active: checked at deploy time and every 15 s at runtime. Both roles must run
+# on the same host (wazuh_managers).
+voice_cover_unit: brain-analyst
+# Where the covering unit's script lives; its ANALYSIS_THRESHOLD - 1 caps the bound
+voice_cover_script: /opt/brain-analyst/brain.py
+
+# Synthetic test alerts of other modules (rule.id) that are never forwarded:
+# 99998 is Brain's verify rule (verify-brain.yml)
+alerter_ignore_rule_ids: ["99998"]
+
 # Seconds between reads of the alert log tail
 poll_interval: 5
 
@@ -11,6 +27,9 @@ alerter_alert_log: /var/ossec/logs/alerts/alerts.json
 # State file: tracks sent alert IDs for deduplication across restarts
 alerter_state_dir: /var/lib/voice-alerter
 alerter_state_file: "{{ alerter_state_dir }}/sent_ids.txt"
+
+# Dedup state keeps the newest N IDs only; compacted at start and hourly
+alerter_state_max_ids: 10000
 
 # Log directory for the alerter service itself
 alerter_log_dir: /var/log/voice-alerter

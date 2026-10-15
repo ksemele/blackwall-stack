@@ -7,6 +7,10 @@ brain_enabled: true
 # Analysis threshold: only analyze alerts with rule.level >= this value
 analysis_threshold: 7
 
+# Synthetic test alerts of other modules (rule.id) that are never analyzed:
+# 99999 is Voice's verify rule (verify-voice.yml)
+brain_ignore_rule_ids: ["99999"]
+
 # Seconds between reads of the alert log tail
 poll_interval: 5
 
@@ -16,6 +20,9 @@ brain_alert_log: /var/ossec/logs/alerts/alerts.json
 # State file: tracks processed alert IDs for deduplication across restarts
 brain_state_dir: /var/lib/brain-analyst
 brain_state_file: "{{ brain_state_dir }}/sent_ids.txt"
+
+# Dedup state keeps the newest N IDs only; compacted at start and hourly
+brain_state_max_ids: 10000
 
 # Log directory for the brain-analyst service itself
 brain_log_dir: /var/log/brain-analyst
@@ -28,6 +35,8 @@ brain_install_dir: /opt/brain-analyst
 claude_api_key: ""
 # Required only when the API key is not scoped to a workspace (wrkspc_...)
 claude_workspace_id: ""
+claude_api_url: "https://api.anthropic.com/v1/messages"
+claude_timeout: 30   # seconds per request
 claude_model: "claude-haiku-5-5"
 # Thinking is on by default for this model and counts against max_tokens:
 # keep room for it, and keep it short with low effort.

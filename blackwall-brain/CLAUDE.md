@@ -27,7 +27,9 @@ A Python script deployed as a systemd service on the manager host that:
 - Receives structured AI classification: threat category, confidence, recommended action
 - Formats a "Brain analysis" Telegram message and sends via same bot as Voice
 - Deduplicates: tracks processed `id` values to avoid re-analyzing on restart (state file)
-- On Claude or Telegram failure: retries up to 3 times (the ID is written to state only after both succeed), then logs the alert as dropped
+- On Claude failure (3 attempts): sends the raw alert with an "AI analysis unavailable: <reason>" marker instead of dropping it
+- On Telegram failure: retries up to 3 times (the ID is written to state only after Telegram accepted), then logs the alert as dropped
+- Ignores `brain_ignore_rule_ids` (Voice's verify rule); state file capped at `brain_state_max_ids`
 - Restarts automatically on failure (systemd `Restart=on-failure`)
 
 ---

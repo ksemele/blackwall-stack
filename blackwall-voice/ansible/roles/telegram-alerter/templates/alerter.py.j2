@@ -10,7 +10,9 @@ Config baked in at deploy time by Ansible.
 import json
 import logging
 import os
+import subprocess
 import time
+import http.client
 import urllib.request
 import urllib.error
 
@@ -19,6 +21,15 @@ ALERT_LOG      = "{{ alerter_alert_log }}"
 STATE_FILE     = "{{ alerter_state_file }}"
 LOG_FILE       = "{{ alerter_log_file }}"
 SEVERITY_THRESHOLD = {{ severity_threshold }}
+# Upper bound: alerts above it are left to Brain (None = no upper bound)
+MAX_LEVEL      = {% if voice_max_level_effective | string | trim %}{{ voice_max_level_effective | int }}{% else %}None{% endif %}
+
+# Synthetic test alerts of other modules (rule.id), never forwarded
+IGNORE_RULE_IDS = set({{ alerter_ignore_rule_ids | map('string') | list | tojson }})
+# Runtime guard: the bound applies only while this unit is active
+COVER_UNIT     = "{{ voice_cover_unit }}"
+COVER_CHECK_INTERVAL = 15
+STATE_MAX_IDS  = {{ alerter_state_max_ids | int }}
 POLL_INTERVAL  = {{ poll_interval }}
 SEND_ATTEMPTS  = 3
 BOT_TOKEN      = "{{ telegram_bot_token }}"
@@ -47,6 +58,89 @@ def save_sent_id(alert_id: str) -> None:
         f.write(alert_id + "\n")
 
 
+STATE_COMPACT_INTERVAL = 3600
+_last_compact = 0.0
+
+
+def compact_state(sent_ids: set) -> None:
+    """Keep only the newest STATE_MAX_IDS IDs: atomic rewrite (tmp + rename).
+
+    The in-memory set is trimmed to match the file. Older IDs are useless:
+    the tail seeks to EOF at start, so they can never come back.
+    """
+    global _last_compact
+    _last_compact = time.monotonic()
+    try:
+        with open(STATE_FILE) as f:
+            lines = [line.strip() for line in f if line.strip()]
+    except FileNotFoundError:
+        return
+    except OSError as exc:
+        log.error("Cannot read state file for compaction: %s", exc)
+        return
+    # Newest last; a repeated ID counts at its latest position.
+    ordered = list(dict.fromkeys(reversed(lines)))[:STATE_MAX_IDS][::-1]
+    if len(ordered) == len(lines):
+        sent_ids.intersection_update(ordered)
+        return
+    tmp = STATE_FILE + ".tmp"
+    try:
+        with open(tmp, "w") as f:
+            f.write("".join(i + "\n" for i in ordered))
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp, STATE_FILE)
+    except OSError as exc:
+        log.error("State compaction failed: %s", exc)
+        return
+    sent_ids.intersection_update(ordered)
+    log.info("Compacted state file: %d -> %d IDs", len(lines), len(ordered))
+
+
+def maybe_compact_state(sent_ids: set) -> None:
+    if time.monotonic() - _last_compact >= STATE_COMPACT_INTERVAL:
+        compact_state(sent_ids)
+
+
+_cover = {"checked": None, "active": None}
+
+
+def current_max_level():
+    """MAX_LEVEL while the covering unit (Brain) is active, else None.
+
+    Checked at most every COVER_CHECK_INTERVAL seconds; while the unit is not
+    active Voice forwards everything >= SEVERITY_THRESHOLD, so nothing is lost
+    when Brain stops. State changes are logged once.
+    """
+    if MAX_LEVEL is None:
+        return None
+    now = time.monotonic()
+    if _cover["checked"] is None or now - _cover["checked"] >= COVER_CHECK_INTERVAL:
+        _cover["checked"] = now
+        try:
+            res = subprocess.run(["systemctl", "is-active", COVER_UNIT],
+                                 capture_output=True, text=True, timeout=5)
+            active = res.stdout.strip() == "active"
+        except (OSError, subprocess.SubprocessError):
+            active = False
+        if active != _cover["active"]:
+            if active:
+                log.info("%s is active: forwarding only levels %d..%d", COVER_UNIT,
+                         SEVERITY_THRESHOLD, MAX_LEVEL)
+            else:
+                log.warning("%s is not active: upper bound %d lifted, forwarding all levels >= %d",
+                            COVER_UNIT, MAX_LEVEL, SEVERITY_THRESHOLD)
+            _cover["active"] = active
+    return MAX_LEVEL if _cover["active"] else None
+
+
+def _md_escape(text: str) -> str:
+    """Escape characters that break Telegram Markdown v1."""
+    for ch in ("_", "*", "`", "["):
+        text = text.replace(ch, f"\\{ch}")
+    return text
+
+
 def format_message(alert: dict) -> str:
     rule   = alert.get("rule", {})
     agent  = alert.get("agent", {})
@@ -54,11 +148,11 @@ def format_message(alert: dict) -> str:
     desc   = rule.get("description", "no description")
     host   = agent.get("name", alert.get("manager", {}).get("name", "unknown"))
     ts     = alert.get("timestamp", "")[:19].replace("T", " ")
-    full   = alert.get("full_log", "")[:300]
+    full   = alert.get("full_log", "")[:300].replace("```", "` ` `")
     return (
         f"*[BLACKWALL ALERT]* level {level}\n"
-        f"Host: `{host}`\n"
-        f"Rule: {desc}\n"
+        f"Host: `{_md_escape(str(host))}`\n"
+        f"Rule: {_md_escape(str(desc))}\n"
         f"Time: {ts}\n"
         f"```\n{full}\n```"
     )
@@ -83,9 +177,55 @@ def send_telegram(text: str) -> bool:
         body = exc.read().decode(errors="replace")[:300]
         log.error("Telegram send failed: %s — %s", exc, body)
         return False
-    except urllib.error.URLError as exc:
+    except (OSError, http.client.HTTPException) as exc:
+        # URLError, timeouts, resets, malformed replies: all retryable.
         log.error("Telegram send failed: %s", exc)
         return False
+
+
+def handle_line(line: str, sent_ids: set) -> None:
+    """Filter, dedup and send one alerts.json line."""
+    try:
+        alert = json.loads(line)
+    except json.JSONDecodeError:
+        log.warning("Non-JSON line skipped: %s", line[:80])
+        return
+
+    rule = alert.get("rule", {})
+    if str(rule.get("id", "")) in IGNORE_RULE_IDS:
+        return
+    level = rule.get("level", 0)
+    if level < SEVERITY_THRESHOLD:
+        return
+    max_level = current_max_level()
+    if max_level is not None and level > max_level:
+        log.info("Skipped alert %s (level %d above voice_max_level %d, Brain covers it)",
+                 alert.get("id") or alert.get("_id", ""), level, max_level)
+        return
+
+    alert_id = alert.get("id") or alert.get("_id", "")
+    if not alert_id:
+        # Generate a rough dedup key from timestamp + rule id
+        alert_id = f"{alert.get('timestamp','')}-{alert.get('rule',{}).get('id','')}"
+
+    if alert_id in sent_ids:
+        return
+
+    msg = format_message(alert)
+    # The tail has already moved past this line, so retry here or never.
+    for attempt in range(1, SEND_ATTEMPTS + 1):
+        if send_telegram(msg):
+            sent_ids.add(alert_id)
+            save_sent_id(alert_id)
+            log.info("Sent alert %s (level %d)", alert_id, level)
+            break
+        if attempt < SEND_ATTEMPTS:
+            log.warning("Failed to send alert %s (attempt %d/%d) — retrying in %ds",
+                        alert_id, attempt, SEND_ATTEMPTS, POLL_INTERVAL)
+            time.sleep(POLL_INTERVAL)
+    else:
+        log.error("Dropped alert %s after %d failed attempts", alert_id, SEND_ATTEMPTS)
+
 
 
 def tail_alerts(sent_ids: set) -> None:
@@ -103,9 +243,13 @@ def tail_alerts(sent_ids: set) -> None:
     # Seek to end so we only process new alerts after startup
     fh.seek(0, 2)
     current_inode = os.fstat(fh.fileno()).st_ino
-    log.info("Tailing %s (severity >= %d, inode=%d)", ALERT_LOG, SEVERITY_THRESHOLD, current_inode)
+    log.info("Tailing %s (severity %d..%s, inode=%d)", ALERT_LOG, SEVERITY_THRESHOLD,
+             MAX_LEVEL if MAX_LEVEL is not None else "inf", current_inode)
 
     while True:
+        maybe_compact_state(sent_ids)
+        current_max_level()  # keeps the cover-unit state (and its log) fresh while idle
+
         # Detect file replacement (log rotation / lineinfile recreate)
         try:
             disk_inode = os.stat(ALERT_LOG).st_ino
@@ -128,42 +272,14 @@ def tail_alerts(sent_ids: set) -> None:
             continue
 
         try:
-            alert = json.loads(line)
-        except json.JSONDecodeError:
-            log.warning("Non-JSON line skipped: %s", line[:80])
-            continue
-
-        level = alert.get("rule", {}).get("level", 0)
-        if level < SEVERITY_THRESHOLD:
-            continue
-
-        alert_id = alert.get("id") or alert.get("_id", "")
-        if not alert_id:
-            # Generate a rough dedup key from timestamp + rule id
-            alert_id = f"{alert.get('timestamp','')}-{alert.get('rule',{}).get('id','')}"
-
-        if alert_id in sent_ids:
-            continue
-
-        msg = format_message(alert)
-        # The tail has already moved past this line, so retry here or never.
-        for attempt in range(1, SEND_ATTEMPTS + 1):
-            if send_telegram(msg):
-                sent_ids.add(alert_id)
-                save_sent_id(alert_id)
-                log.info("Sent alert %s (level %d)", alert_id, level)
-                break
-            if attempt < SEND_ATTEMPTS:
-                log.warning("Failed to send alert %s (attempt %d/%d) — retrying in %ds",
-                            alert_id, attempt, SEND_ATTEMPTS, POLL_INTERVAL)
-                time.sleep(POLL_INTERVAL)
-        else:
-            log.error("Dropped alert %s after %d failed attempts", alert_id, SEND_ATTEMPTS)
-
+            handle_line(line, sent_ids)
+        except Exception as exc:  # noqa: BLE001  one bad alert must not reset the tail
+            log.exception("Error handling alert line: %s", exc)
 
 def main() -> None:
     log.info("voice-alerter starting (threshold=%d, poll=%ds)", SEVERITY_THRESHOLD, POLL_INTERVAL)
     sent_ids = load_sent_ids()
+    compact_state(sent_ids)
     log.info("Loaded %d already-sent IDs from state file", len(sent_ids))
 
     while True:

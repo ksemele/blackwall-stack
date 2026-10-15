@@ -9,6 +9,7 @@ Config baked in at deploy time by Ansible.
 
 import json
 import logging
+import http.client
 import os
 import sys
 import time
@@ -20,6 +21,9 @@ ALERT_LOG          = "{{ brain_alert_log }}"
 STATE_FILE         = "{{ brain_state_file }}"
 ANALYSIS_THRESHOLD = {{ analysis_threshold }}
 POLL_INTERVAL      = {{ poll_interval }}
+# Synthetic test alerts of other modules (rule.id), never analyzed
+IGNORE_RULE_IDS    = set({{ brain_ignore_rule_ids | map('string') | list | tojson }})
+STATE_MAX_IDS      = {{ brain_state_max_ids | int }}
 SEND_ATTEMPTS      = 3
 CLAUDE_API_KEY     = "{{ claude_api_key }}"
 CLAUDE_MODEL       = "{{ claude_model }}"
@@ -29,7 +33,8 @@ CLAUDE_WORKSPACE_ID = "{{ claude_workspace_id }}"
 BOT_TOKEN          = "{{ telegram_bot_token }}"
 CHAT_ID            = "{{ telegram_chat_id }}"
 TELEGRAM_URL       = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
-CLAUDE_URL         = "https://api.anthropic.com/v1/messages"
+CLAUDE_URL         = "{{ claude_api_url }}"
+CLAUDE_TIMEOUT     = {{ claude_timeout | int }}
 
 # --- Logging ---
 logging.basicConfig(
@@ -52,8 +57,63 @@ def save_sent_id(alert_id: str) -> None:
         f.write(alert_id + "\n")
 
 
+STATE_COMPACT_INTERVAL = 3600
+_last_compact = 0.0
+
+
+def compact_state(sent_ids: set) -> None:
+    """Keep only the newest STATE_MAX_IDS IDs: atomic rewrite (tmp + rename).
+
+    The in-memory set is trimmed to match the file. Older IDs are useless:
+    the tail seeks to EOF at start, so they can never come back.
+    """
+    global _last_compact
+    _last_compact = time.monotonic()
+    try:
+        with open(STATE_FILE) as f:
+            lines = [line.strip() for line in f if line.strip()]
+    except FileNotFoundError:
+        return
+    except OSError as exc:
+        log.error("Cannot read state file for compaction: %s", exc)
+        return
+    # Newest last; a repeated ID counts at its latest position.
+    ordered = list(dict.fromkeys(reversed(lines)))[:STATE_MAX_IDS][::-1]
+    if len(ordered) == len(lines):
+        sent_ids.intersection_update(ordered)
+        return
+    tmp = STATE_FILE + ".tmp"
+    try:
+        with open(tmp, "w") as f:
+            f.write("".join(i + "\n" for i in ordered))
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp, STATE_FILE)
+    except OSError as exc:
+        log.error("State compaction failed: %s", exc)
+        return
+    sent_ids.intersection_update(ordered)
+    log.info("Compacted state file: %d -> %d IDs", len(lines), len(ordered))
+
+
+def maybe_compact_state(sent_ids: set) -> None:
+    if time.monotonic() - _last_compact >= STATE_COMPACT_INTERVAL:
+        compact_state(sent_ids)
+
+
+LAST_CLAUDE_ERROR = ""
+
+
+def _claude_failed(reason: str) -> None:
+    global LAST_CLAUDE_ERROR
+    LAST_CLAUDE_ERROR = reason
+
+
 def call_claude(alert: dict) -> str | None:
-    """Call Claude API to analyze the alert. Returns analysis string or None on failure."""
+    """Call Claude API to analyze the alert. Returns analysis string or None on failure.
+
+    On failure a short reason is left in LAST_CLAUDE_ERROR (used by the fallback message).
+    """
     rule   = alert.get("rule", {})
     agent  = alert.get("agent", {})
     level  = rule.get("level", "?")
@@ -108,22 +168,27 @@ def call_claude(alert: dict) -> str | None:
         headers["anthropic-workspace-id"] = CLAUDE_WORKSPACE_ID
     req = urllib.request.Request(CLAUDE_URL, data=payload, headers=headers)
     try:
-        with urllib.request.urlopen(req, timeout=30) as resp:
+        with urllib.request.urlopen(req, timeout=CLAUDE_TIMEOUT) as resp:
             body = json.loads(resp.read())
         # Thinking blocks come first on current models; take the text block.
         text = next((b["text"] for b in body.get("content", []) if b.get("type") == "text"), "")
         if not text.strip():
             log.error("Claude API returned no text (stop_reason=%s)", body.get("stop_reason"))
+            _claude_failed("empty response")
             return None
         return text.strip()
     except urllib.error.HTTPError as exc:
         log.error("Claude API HTTP error %d: %s", exc.code, exc.read()[:400])
+        _claude_failed(f"Claude API HTTP {exc.code}")
         return None
-    except urllib.error.URLError as exc:
+    except (OSError, http.client.HTTPException) as exc:
+        # URLError, timeouts, resets, malformed replies.
         log.error("Claude API request failed: %s", exc)
+        _claude_failed("Claude API timeout/unreachable")
         return None
     except (KeyError, IndexError, json.JSONDecodeError) as exc:
         log.error("Claude API response parse error: %s", exc)
+        _claude_failed("unparsable Claude response")
         return None
 
 
@@ -152,6 +217,25 @@ def format_brain_message(alert: dict, claude_response: str) -> str:
     )
 
 
+def format_fallback_message(alert: dict, reason: str) -> str:
+    """Raw alert plus a clear marker, used when Claude failed after all retries."""
+    rule  = alert.get("rule", {})
+    agent = alert.get("agent", {})
+    level = rule.get("level", "?")
+    desc  = rule.get("description", "no description")
+    host  = agent.get("name", alert.get("manager", {}).get("name", "unknown"))
+    ts    = alert.get("timestamp", "")[:19].replace("T", " ")
+    full  = alert.get("full_log", "")[:300].replace("```", "` ` `")
+    return (
+        f"*[BLACKWALL BRAIN]* level {level}\n"
+        f"*AI analysis unavailable: {_md_escape(reason)}*\n"
+        f"Host: `{_md_escape(host)}`\n"
+        f"Rule: {_md_escape(desc)}\n"
+        f"Time: {ts}\n"
+        f"```\n{full}\n```"
+    )
+
+
 def send_telegram(text: str) -> bool:
     payload = json.dumps({
         "chat_id": CHAT_ID,
@@ -170,9 +254,65 @@ def send_telegram(text: str) -> bool:
         body = exc.read().decode(errors="replace")[:200]
         log.error("Telegram send failed: HTTP %d — %s", exc.code, body)
         return False
-    except urllib.error.URLError as exc:
+    except (OSError, http.client.HTTPException) as exc:
         log.error("Telegram send failed: %s", exc)
         return False
+
+
+def handle_line(line: str, sent_ids: set) -> None:
+    """Filter, dedup, analyze and send one alerts.json line."""
+    try:
+        alert = json.loads(line)
+    except json.JSONDecodeError:
+        log.warning("Non-JSON line skipped: %s", line[:80])
+        return
+
+    if str(alert.get("rule", {}).get("id", "")) in IGNORE_RULE_IDS:
+        return
+    level = alert.get("rule", {}).get("level", 0)
+    if level < ANALYSIS_THRESHOLD:
+        return
+
+    alert_id = alert.get("id") or alert.get("_id", "")
+    if not alert_id:
+        alert_id = f"{alert.get('timestamp','')}-{alert.get('rule',{}).get('id','')}"
+
+    if alert_id in sent_ids:
+        return
+
+    # The tail has already moved past this line, so retry here or never.
+    # Claude is tried SEND_ATTEMPTS times; if it never answers, the raw alert
+    # goes to Telegram with an "AI analysis unavailable" marker instead of
+    # being dropped. The ID is saved only after Telegram accepted a message.
+    message = None
+    for attempt in range(1, SEND_ATTEMPTS + 1):
+        log.info("Analyzing alert %s (level %d) with Claude (attempt %d/%d)",
+                 alert_id, level, attempt, SEND_ATTEMPTS)
+        claude_response = call_claude(alert)
+        if claude_response is not None:
+            message = format_brain_message(alert, claude_response)
+            break
+        if attempt < SEND_ATTEMPTS:
+            log.warning("Claude failed for alert %s (attempt %d/%d) — retrying in %ds",
+                        alert_id, attempt, SEND_ATTEMPTS, POLL_INTERVAL)
+            time.sleep(POLL_INTERVAL)
+    if message is None:
+        log.error("Claude failed for alert %s after %d attempts — sending the raw alert",
+                  alert_id, SEND_ATTEMPTS)
+        message = format_fallback_message(alert, LAST_CLAUDE_ERROR or "unknown error")
+
+    for attempt in range(1, SEND_ATTEMPTS + 1):
+        if send_telegram(message):
+            sent_ids.add(alert_id)
+            save_sent_id(alert_id)
+            log.info("Sent brain message for alert %s (level %d)", alert_id, level)
+            break
+        if attempt < SEND_ATTEMPTS:
+            log.warning("Telegram failed for alert %s (attempt %d/%d) — retrying in %ds",
+                        alert_id, attempt, SEND_ATTEMPTS, POLL_INTERVAL)
+            time.sleep(POLL_INTERVAL)
+    else:
+        log.error("Dropped alert %s after %d failed attempts", alert_id, SEND_ATTEMPTS)
 
 
 def tail_alerts(sent_ids: set) -> None:
@@ -193,6 +333,7 @@ def tail_alerts(sent_ids: set) -> None:
         log.info("Tailing %s (threshold=%d, inode=%d)", ALERT_LOG, ANALYSIS_THRESHOLD, current_inode)
 
         while True:
+            maybe_compact_state(sent_ids)
             try:
                 disk_inode = os.stat(ALERT_LOG).st_ino
             except OSError:
@@ -213,40 +354,9 @@ def tail_alerts(sent_ids: set) -> None:
                 continue
 
             try:
-                alert = json.loads(line)
-            except json.JSONDecodeError:
-                log.warning("Non-JSON line skipped: %s", line[:80])
-                continue
-
-            level = alert.get("rule", {}).get("level", 0)
-            if level < ANALYSIS_THRESHOLD:
-                continue
-
-            alert_id = alert.get("id") or alert.get("_id", "")
-            if not alert_id:
-                alert_id = f"{alert.get('timestamp','')}-{alert.get('rule',{}).get('id','')}"
-
-            if alert_id in sent_ids:
-                continue
-
-            # The tail has already moved past this line, so retry here or never.
-            # The ID is saved only after both Claude and Telegram succeeded.
-            claude_response = None
-            for attempt in range(1, SEND_ATTEMPTS + 1):
-                if claude_response is None:
-                    log.info("Analyzing alert %s (level %d) with Claude", alert_id, level)
-                    claude_response = call_claude(alert)
-                if claude_response is not None and send_telegram(format_brain_message(alert, claude_response)):
-                    sent_ids.add(alert_id)
-                    save_sent_id(alert_id)
-                    log.info("Sent brain analysis for alert %s (level %d)", alert_id, level)
-                    break
-                if attempt < SEND_ATTEMPTS:
-                    log.warning("Alert %s failed (attempt %d/%d) — retrying in %ds",
-                                alert_id, attempt, SEND_ATTEMPTS, POLL_INTERVAL)
-                    time.sleep(POLL_INTERVAL)
-            else:
-                log.error("Dropped alert %s after %d failed attempts", alert_id, SEND_ATTEMPTS)
+                handle_line(line, sent_ids)
+            except Exception as exc:  # noqa: BLE001  one bad alert must not reset the tail
+                log.exception("Error handling alert line: %s", exc)
     finally:
         fh.close()
 
@@ -255,6 +365,7 @@ def main() -> None:
     log.info("brain-analyst starting (threshold=%d, poll=%ds, model=%s)",
              ANALYSIS_THRESHOLD, POLL_INTERVAL, CLAUDE_MODEL)
     sent_ids = load_sent_ids()
+    compact_state(sent_ids)
     log.info("Loaded %d already-processed IDs from state file", len(sent_ids))
 
     while True:
