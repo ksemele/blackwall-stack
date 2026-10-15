@@ -14,7 +14,7 @@ Two repos are involved:
 
 Positioning (agreed 2026-10-16): the bundle-of-known-tools niche is crowded
 (Security Onion, wazuh-ansible, SOCFortress). What sets Blackwall apart is
-(1) the TUI (no full-screen k9s-style Wazuh client exists) and (2) a light,
+(1) the TUI (full-screen Wazuh TUIs are rare and small, e.g. wazuh-rust-tui) and (2) a light,
 opinionated stack for 1–50 hosts with "signal over noise". Lead with the TUI;
 the stack and Brain follow.
 
@@ -57,7 +57,7 @@ C1, C2, C3, C6, C7, C9 touch different files and can run in parallel sessions.
 
 ## C1. TUI demo GIF
 
-- [ ] Status
+- [x] Status: done 2026-10-16
 
 **Repo:** tui. **Why:** the first thing a visitor sees must be the product.
 Right now the README opens with text only.
@@ -76,7 +76,7 @@ names (`black-*`), and `make demo` reproduces it.
 
 ## C2. CONTRIBUTING, SECURITY and templates
 
-- [ ] Status
+- [x] Status: done 2026-10-16
 
 **Repo:** tui first, then stack. **Why:** neither repo has contributor docs.
 
@@ -95,7 +95,7 @@ names (`black-*`), and `make demo` reproduces it.
 
 ## C3. GitHub repo settings
 
-- [ ] Status
+- [ ] Status: commands drafted (local, outside the repo), not applied
 
 **Repo:** tui, stack (settings only, via `gh`; see the gh auth note in memory).
 **Needs the user's yes before applying** — draft the exact `gh` commands first.
@@ -115,7 +115,7 @@ shows the change for both repos.
 
 ## C4. Starter issues
 
-- [ ] Status
+- [ ] Status: 18 issues drafted (local, outside the repo), not created; T3 (--version) is done in C8, drop it
 
 **Repo:** tui, stack. **Why:** newcomers need small, well-described entry points.
 
@@ -144,7 +144,7 @@ the topic in November.
 
 ## C6. Tone down "strike back"
 
-- [ ] Status
+- [x] Status: done 2026-10-16 (README quote and CLAUDE.md vision line left for the owner)
 
 **Repo:** stack. **Why:** "strike back" and "counter-attack" in public docs
 scare off companies and careful contributors; hack-back is legally toxic.
@@ -164,7 +164,7 @@ Fang in production is automated blocking, which is ordinary active response.
 
 ## C7. "Why Blackwall" section
 
-- [ ] Status
+- [x] Status: done 2026-10-16
 
 **Repo:** stack. **Why:** visitors will ask "why not Security Onion?".
 
@@ -178,7 +178,7 @@ before writing. Mention the TUI as the daily interface.
 
 ## C8. TUI release polish (v0.1.0)
 
-- [ ] Status
+- [x] Status: done 2026-10-16 (not tagged; signing and attestations verifiable only in CI)
 
 **Repo:** tui. **Why:** security people check what they install.
 
@@ -230,7 +230,7 @@ comparison into `STATUS.md` and the Brain README.
 
 ## C11. Catalog and awesome-list submissions
 
-- [ ] Status
+- [ ] Status: drafted (local); Terminal Trove and Charm in the Wild ready, awesome-tuis blocked until 2027-04-15, awesome-selfhosted does not fit
 
 **Repo:** tui. **Depends on:** C1 (GIF), ideally C8.
 **Every submission is a PR or form to someone else's project: draft, then ask.**
@@ -247,7 +247,7 @@ is added to this task.
 
 ## C12. Launch posts
 
-- [ ] Status
+- [ ] Status: drafted (local); Habr bans AI-written text, only an outline there
 
 **Repo:** none (drafts live outside the repo). **Depends on:** C1, C2, C3, ideally C8.
 **Claude drafts only; the user posts.**
