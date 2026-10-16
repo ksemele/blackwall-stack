@@ -50,6 +50,7 @@ the stack and Brain follow.
 | C10 | Brain local LLM backend | stack | low | C9 |
 | C11 | Catalog and awesome-list submissions | tui | medium | C1, C8 |
 | C12 | Launch posts | tui, stack | medium | C1, C2, C3, C8 |
+| C13 | Config: explicit `false` is ignored | tui | medium | — |
 
 C1, C2, C3, C6, C7, C9 touch different files and can run in parallel sessions.
 
@@ -262,3 +263,29 @@ is added to this task.
 
 Space the posts out over a few weeks; note which ones brought stars, issues
 and PRs here.
+
+## C13. Config: explicit `false` is ignored
+
+- [ ] Status
+
+**Repo:** tui. **Why:** found while recording the C1 demo:
+`select_context_on_start: false` in `config.yaml` still opens the context
+picker, so the documented way to skip it does not work. The demo tape works
+around it with `blackwall --context lab`.
+
+**Cause:** `ApplyDefaults` in `internal/config/load.go` treats a zero bool as
+"absent" and sets `SelectContextOnStart = true`. Its comment says `main.go`
+re-reads the raw YAML to restore an explicit `false`; nothing does that.
+`ui.vim_keys: false` is overridden to `true` the same way.
+
+**Do:**
+1. Make these fields tell "absent" from "explicit false": `*bool` in the
+   config struct (default applied only when `nil`), or a presence check on the
+   raw YAML. Keep the precedence CLI > env > file > defaults in `Resolve`.
+2. Fix or drop the misleading comment in `ApplyDefaults`.
+3. Tests in `internal/config`: absent means `true`; explicit `false` stays
+   `false` for both fields; `--select-context-on-start`, `--no-select-context`,
+   `--context` and `BW_SELECT_CONTEXT_ON_START` still win over the file.
+
+**Done when:** `select_context_on_start: false` starts on `:agents` without
+`--context`, `vim_keys: false` turns vim keys off, `make test` passes.
