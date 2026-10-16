@@ -95,7 +95,7 @@ names (`black-*`), and `make demo` reproduces it.
 
 ## C3. GitHub repo settings
 
-- [ ] Status: commands drafted (local, outside the repo), not applied
+- [x] Status: done 2026-10-16 (social preview and Discussion category cleanup are manual UI steps; hacktoberfest topic is C5)
 
 **Repo:** tui, stack (settings only, via `gh`; see the gh auth note in memory).
 **Needs the user's yes before applying** — draft the exact `gh` commands first.
@@ -115,7 +115,7 @@ shows the change for both repos.
 
 ## C4. Starter issues
 
-- [ ] Status: 18 issues drafted (local, outside the repo), not created; T3 (--version) is done in C8, drop it
+- [x] Status: done 2026-10-16: 7 TUI issues (ksemele/blackwall#2-#8), 9 stack issues (#18-#26); --version (done in C8) and PR CI (do it ourselves) left out
 
 **Repo:** tui, stack. **Why:** newcomers need small, well-described entry points.
 
