@@ -266,7 +266,7 @@ and PRs here.
 
 ## C13. Config: explicit `false` is ignored
 
-- [ ] Status
+- [x] Status: done 2026-10-17 (config keeps explicit false; vim_keys is still not wired to any view)
 
 **Repo:** tui. **Why:** found while recording the C1 demo:
 `select_context_on_start: false` in `config.yaml` still opens the context
