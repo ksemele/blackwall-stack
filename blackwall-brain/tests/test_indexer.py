@@ -146,3 +146,17 @@ def test_poll_full_page_of_seen_hits_moves_on(tmp_path):
         st.mark(d, src["timestamp"])
     out = poll(FakeIndex(docs), st, page_size=20, overlap_s=600)
     assert [d for d, _ in out] == [d for d, _ in docs[20:]]
+
+
+def test_poll_warns_when_backfill_cap_skips_alerts(tmp_path, caplog):
+    st = state(tmp_path)
+    st.mark("old", "2026-10-28T12:00:00.000+0000")   # 3 h before NOW
+    poll(FakeIndex([]), st, max_backfill_s=3600)
+    assert "skipping" in caplog.text and "2026-10-28T12:00" in caplog.text
+
+
+def test_poll_no_warning_within_backfill(tmp_path, caplog):
+    st = state(tmp_path)
+    st.mark("recent", "2026-10-28T14:59:00.000+0000")
+    poll(FakeIndex([]), st, max_backfill_s=3600)
+    assert "skipping" not in caplog.text

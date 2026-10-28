@@ -36,6 +36,17 @@ def handle(doc_id: str, alert: dict, *, settings, model, send=telegram.send,
         log.error("telegram failed, alert dropped doc=%s alert=%s", doc_id, alert.get("id"))
 
 
+def _send_internal_error(doc_id, alert, exc, settings, sleep) -> None:
+    try:
+        text = format_fallback_message(alert, doc_id, f"internal error: {type(exc).__name__}",
+                                       settings.dashboard_url, {})
+        if not telegram.send(settings.telegram_bot_token, settings.telegram_chat_id, text,
+                             sleep=sleep):
+            log.error("telegram failed, alert dropped doc=%s alert=%s", doc_id, alert.get("id"))
+    except Exception:
+        log.exception("fallback for doc=%s failed too, alert dropped", doc_id)
+
+
 def run(settings, *, model, indexer, sleep=time.sleep, iterations: int | None = None) -> None:
     state = State.load(settings.state_file, settings.state_max_ids)
     n = 0
@@ -49,9 +60,18 @@ def run(settings, *, model, indexer, sleep=time.sleep, iterations: int | None = 
             log.warning("indexer poll failed: %s", exc)
             batch = []
         for doc_id, alert in batch:
-            handle(doc_id, alert, settings=settings, model=model, sleep=sleep)
-            state.mark(doc_id, alert["timestamp"])
-            state.save(settings.state_file)
+            try:
+                handle(doc_id, alert, settings=settings, model=model, sleep=sleep)
+            except Exception as exc:
+                # A bug or bad data must not stop Brain in a restart loop on
+                # the same alert: report it, mark it, move on.
+                log.exception("unexpected error doc=%s alert=%s", doc_id, alert.get("id"))
+                _send_internal_error(doc_id, alert, exc, settings, sleep)
+            state.mark(doc_id, alert.get("timestamp", ""))
+            try:
+                state.save(settings.state_file)
+            except OSError as exc:
+                log.error("cannot save state %s: %s", settings.state_file, exc)
         sleep(settings.poll_interval)
 
 

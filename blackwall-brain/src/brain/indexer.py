@@ -63,7 +63,11 @@ def poll_once(client, state: State, *, min_level: int, ignore_rule_ids: list[str
     since = floor
     if state.cursor is not None:
         # Overlap: the indexer can show an alert a few seconds after its timestamp.
-        since = max(parse_ts(state.cursor) - timedelta(seconds=overlap_s), floor)
+        wanted = parse_ts(state.cursor) - timedelta(seconds=overlap_s)
+        if wanted < floor:
+            log.warning("skipping alerts from %s to %s: older than brain_max_backfill (%d s)",
+                        state.cursor, _fmt(floor), max_backfill_s)
+        since = max(wanted, floor)
     since_s = _fmt(since)
 
     for _ in range(MAX_PAGES):

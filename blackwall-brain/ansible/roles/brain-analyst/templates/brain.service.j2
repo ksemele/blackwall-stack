@@ -12,7 +12,7 @@ ExecStart=/usr/bin/podman run --rm --name brain-analyst --network host --log-dri
   --env-file {{ brain_config_dir }}/brain.env \
   -v {{ brain_state_dir }}:/var/lib/brain-analyst:Z \
 {% if brain_indexer_ca_file %}
-  -v {{ brain_indexer_ca_file }}:/etc/brain-analyst/indexer-ca.pem:ro,Z \
+  -v {{ brain_config_dir }}/indexer-ca.pem:/etc/brain-analyst/indexer-ca.pem:ro,Z \
 {% endif %}
   {{ brain_image }}
 ExecStop=/usr/bin/podman stop -t 10 brain-analyst

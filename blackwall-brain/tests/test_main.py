@@ -70,20 +70,44 @@ def hit(i, alert, ts):
 
 
 def test_run_marks_and_saves_after_each_alert(alert, settings, monkeypatch):
-    calls = []
+    monkeypatch.setattr(brain_main, "handle", lambda doc_id, a, **kw: None)
+    index = Index([hit("a", alert, "2026-10-28T14:00:00.000+0000"),
+                   hit("b", alert, "2026-10-28T14:00:01.000+0000")])
+    brain_main.run(settings, model=None, indexer=index, sleep=lambda s: None, iterations=1)
+    st = State.load(settings.state_file, 100)
+    assert st.seen == ["a", "b"] and st.cursor == "2026-10-28T14:00:01.000+0000"
+
+
+def test_run_survives_unexpected_error_in_handle(alert, settings, monkeypatch, caplog):
+    calls, sent = [], []
 
     def handle(doc_id, a, **kw):
         calls.append(doc_id)
-        if len(calls) == 2:
-            raise RuntimeError("crash")
+        if doc_id == "a":
+            raise KeyError("title")
 
     monkeypatch.setattr(brain_main, "handle", handle)
+    monkeypatch.setattr(brain_main.telegram, "send", lambda *a, **k: sent.append(a) or True)
     index = Index([hit("a", alert, "2026-10-28T14:00:00.000+0000"),
                    hit("b", alert, "2026-10-28T14:00:01.000+0000")])
-    with pytest.raises(RuntimeError):
-        brain_main.run(settings, model=None, indexer=index, sleep=lambda s: None, iterations=1)
-    st = State.load(settings.state_file, 100)
-    assert st.seen == ["a"] and st.cursor == "2026-10-28T14:00:00.000+0000"
+    brain_main.run(settings, model=None, indexer=index, sleep=lambda s: None, iterations=1)
+    assert calls == ["a", "b"]
+    assert State.load(settings.state_file, 100).seen == ["a", "b"]
+    assert "internal error" in sent[0][2] and "KeyError" in caplog.text
+
+
+def test_run_survives_state_save_failure(alert, settings, monkeypatch, caplog):
+    handled = []
+    monkeypatch.setattr(brain_main, "handle", lambda doc_id, a, **kw: handled.append(doc_id))
+
+    def boom(self, path):
+        raise OSError("disk full")
+
+    monkeypatch.setattr(State, "save", boom)
+    index = Index([hit("a", alert, "2026-10-28T14:00:00.000+0000"),
+                   hit("b", alert, "2026-10-28T14:00:01.000+0000")])
+    brain_main.run(settings, model=None, indexer=index, sleep=lambda s: None, iterations=1)
+    assert handled == ["a", "b"] and "disk full" in caplog.text
 
 
 def test_run_survives_indexer_error(alert, settings, monkeypatch):
@@ -115,6 +139,36 @@ def test_telegram_sends_html():
                     "disable_web_page_preview": True}
 
 
+def test_telegram_429_waits_retry_after_and_does_not_count():
+    answers = [httpx.Response(429, json={"ok": False, "parameters": {"retry_after": 7}}),
+               httpx.Response(200, json={"ok": True})]
+    slept = []
+    ok = send("tok", "42", "x", sleep=slept.append,
+              client=httpx.Client(transport=httpx.MockTransport(lambda r: answers.pop(0))))
+    assert ok is True and slept == [7]
+
+
+def test_telegram_429_retry_after_is_capped():
+    answers = [httpx.Response(429, json={"parameters": {"retry_after": 999}}),
+               httpx.Response(200, json={"ok": True})]
+    slept = []
+    send("tok", "42", "x", sleep=slept.append,
+         client=httpx.Client(transport=httpx.MockTransport(lambda r: answers.pop(0))))
+    assert slept == [60]
+
+
+def test_telegram_400_is_not_retried():
+    calls = []
+
+    def handler(req):
+        calls.append(1)
+        return httpx.Response(400, json={"ok": False, "description": "can't parse entities"})
+
+    ok = send("tok", "42", "x", sleep=lambda s: None,
+              client=httpx.Client(transport=httpx.MockTransport(handler)))
+    assert ok is False and len(calls) == 1
+
+
 def test_telegram_retries_then_false():
     calls = []
 
@@ -131,3 +185,10 @@ def test_telegram_retries_then_false():
 def test_setup_logging_quiets_http_client_per_request_lines():
     brain_main.setup_logging()
     assert logging.getLogger("httpx").getEffectiveLevel() >= logging.WARNING
+
+
+def test_telegram_endless_429_gives_up():
+    slept = []
+    ok = send("tok", "42", "x", sleep=slept.append, client=httpx.Client(
+        transport=httpx.MockTransport(lambda r: httpx.Response(429, json={"parameters": {"retry_after": 1}}))))
+    assert ok is False and len(slept) <= 10

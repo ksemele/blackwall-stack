@@ -30,8 +30,9 @@ nft_public_tcp: [22, 443, 1514, 1515, 9100, 9200, 9300, 55000]
 # with a read-only user the role creates through the admin account. The
 # indexer listens on the interface address (see above), not on loopback.
 brain_indexer_url: "https://172.28.0.10:9200"
+# Lab-only password, like the other lab credentials here.
 brain_indexer_password: "BrainRead1!"
-brain_indexer_verify_tls: false
+brain_indexer_ca_file: /etc/wazuh-indexer/certs/root-ca.pem
 brain_indexer_admin_user: "{{ wazuh_indexer_admin_user }}"
 brain_indexer_admin_password: "{{ wazuh_indexer_admin_password }}"
 brain_dashboard_url: "https://localhost:5601"

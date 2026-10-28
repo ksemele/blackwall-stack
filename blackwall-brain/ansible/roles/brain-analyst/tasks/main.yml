@@ -124,6 +124,7 @@
         password: "{{ brain_indexer_admin_password }}"
         force_basic_auth: true
         validate_certs: "{{ brain_indexer_verify_tls | bool }}"
+        ca_path: "{{ brain_indexer_ca_file if brain_indexer_ca_file else omit }}"
         body_format: json
         body:
           index_permissions:
@@ -140,6 +141,7 @@
         password: "{{ brain_indexer_admin_password }}"
         force_basic_auth: true
         validate_certs: "{{ brain_indexer_verify_tls | bool }}"
+        ca_path: "{{ brain_indexer_ca_file if brain_indexer_ca_file else omit }}"
         body_format: json
         body:
           password: "{{ brain_indexer_password }}"
@@ -148,6 +150,20 @@
       changed_when: false
       no_log: true
 
+# A copy, not the original: the :Z mount relabels the file on SELinux hosts,
+# which would cut the indexer off from its own CA.
+- name: Copy the indexer CA bundle for the container
+  ansible.builtin.copy:
+    src: "{{ brain_indexer_ca_file }}"
+    remote_src: true
+    dest: "{{ brain_config_dir }}/indexer-ca.pem"
+    owner: root
+    group: root
+    mode: "0644"
+  when: brain_indexer_ca_file | default('') | length > 0
+  notify: Restart brain-analyst service
+
+# Secrets inside: keep them out of -v output and --diff.
 - name: Render brain.env
   ansible.builtin.template:
     src: brain.env.j2
@@ -155,6 +171,8 @@
     owner: root
     group: root
     mode: "0600"
+  no_log: true
+  diff: false
   notify: Restart brain-analyst service
 
 - name: Deploy systemd unit

@@ -61,6 +61,13 @@ def load(env: Mapping[str, str] = os.environ) -> Settings:
         except KeyError as exc:
             raise ValueError(f"{name}: expected true or false") from exc
 
+    rule_links = json_object("BRAIN_RULE_LINKS", {})
+    for key, entries in rule_links.items():
+        if not isinstance(entries, list) or not all(
+                isinstance(e, dict) and isinstance(e.get("title"), str)
+                and isinstance(e.get("url"), str) for e in entries):
+            raise ValueError(f"BRAIN_RULE_LINKS: {key!r} must be a list of {{title, url}}")
+
     backend = get("BRAIN_MODEL_BACKEND", "anthropic")
     # Local OpenAI-compatible servers usually need no key.
     api_key = get("BRAIN_MODEL_API_KEY", "" if backend == "openai_compat" else None)
@@ -91,5 +98,5 @@ def load(env: Mapping[str, str] = os.environ) -> Settings:
         telegram_bot_token=get("BRAIN_TELEGRAM_BOT_TOKEN"),
         telegram_chat_id=get("BRAIN_TELEGRAM_CHAT_ID"),
         dashboard_url=get("BRAIN_DASHBOARD_URL", ""),
-        rule_links=json_object("BRAIN_RULE_LINKS", {}),
+        rule_links=rule_links,
     )

@@ -52,8 +52,13 @@ class State:
                 for old in self.seen[:-self.max_ids]:
                     self._seen_set.discard(old)
                 del self.seen[:-self.max_ids]
+        try:
+            when = parse_ts(timestamp)
+        except (TypeError, ValueError):
+            log.warning("alert %s has an unparsable timestamp %r; cursor kept", doc_id, timestamp)
+            return
         # Late alerts must not move the cursor back.
-        if self.cursor is None or parse_ts(timestamp) > parse_ts(self.cursor):
+        if self.cursor is None or when > parse_ts(self.cursor):
             self.cursor = timestamp
 
     def save(self, path: str) -> None:

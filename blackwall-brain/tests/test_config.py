@@ -56,7 +56,9 @@ def test_api_key_optional_for_openai_compat():
 @pytest.mark.parametrize("name,value", [("BRAIN_MODEL_OPTIONS", "{bad"),
                                         ("BRAIN_RULE_LINKS", "[]"),
                                         ("BRAIN_ANALYSIS_THRESHOLD", "ten"),
-                                        ("BRAIN_INDEXER_VERIFY_TLS", "maybe")])
+                                        ("BRAIN_INDEXER_VERIFY_TLS", "maybe"),
+                                        ("BRAIN_RULE_LINKS", '{"1": [{"url": "u"}]}'),
+                                        ("BRAIN_RULE_LINKS", '{"1": {"title": "t", "url": "u"}}')])
 def test_config_bad_value_named(name, value):
     with pytest.raises(ValueError, match=name):
         load({**REQUIRED, name: value})
