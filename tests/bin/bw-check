@@ -92,10 +92,10 @@ Checks:
   voice      telegram-alerter
   brain      brain-analyst (Claude analysis delivered to Telegram)
   sentinel   Wazuh server stack on black-sentinel-03 (opt-in: SKIP when not deployed)
-  sentinel-agents  throwaway agent enrolls in the sentinel (opt-in, internet, ~2-3 min; not in `all`)
-  fw-events  firewall drops become Wazuh alerts 100201/100202 (opt-in, ~1 min, up to ~3 min on failure; not in `all`)
-  fang       reputation blocklists on the sentinel: observe, enforce, junk list, restore (opt-in, ~3-5 min, re-provisions fang; not in `all`)
-  vm         auditd role on a real RHEL kernel (Lima VM, bw-lab vm up): reload, restart, broken rule, immutable + reboot (opt-in, ~5-8 min; not in `all`)
+  sentinel-agents  throwaway agent enrolls in the sentinel (opt-in, internet, ~2-3 min; not in 'all')
+  fw-events  firewall drops become Wazuh alerts 100201/100202 (opt-in, ~1 min, up to ~3 min on failure; not in 'all')
+  fang       reputation blocklists on the sentinel: observe, enforce, junk list, restore (opt-in, ~3-5 min, re-provisions fang; not in 'all')
+  vm         auditd role on a real RHEL kernel (Lima VM, bw-lab vm up): reload, restart, broken rule, immutable + reboot (opt-in, ~5-8 min; not in 'all')
 
 Exit code: 0 when nothing failed, 1 otherwise.
 USAGE
@@ -389,6 +389,10 @@ check_brain() {
     bw_skip "brain-analyst is disabled (brain_enabled=false; enable: bw-lab provision brain)"
     return
   fi
+
+  bw_run "brain-analyst image is built" \
+    bw_ansible_adhoc blackwall-brain wazuh_managers -b \
+      -m shell -a 'podman image ls -q localhost/blackwall-brain | grep -q .'
 
   bw_run "brain-analyst analysed and delivered a test alert" \
     bw_ansible blackwall-brain ansible/playbooks/verify-brain.yml

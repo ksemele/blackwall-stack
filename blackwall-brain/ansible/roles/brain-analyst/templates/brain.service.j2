@@ -1,18 +1,23 @@
+# {{ ansible_managed }}
 [Unit]
-Description=Blackwall Brain — AI alert analyst
-Documentation=https://github.com/akrugliak/blackwall
-After=network-online.target wazuh-manager.service
+Description=Blackwall Brain — AI alert analyst (container)
+Documentation=https://github.com/ksemele/blackwall-stack/tree/main/blackwall-brain
+After=network-online.target
 Wants=network-online.target
 
 [Service]
 Type=simple
-Environment=PYTHONUNBUFFERED=1
-ExecStart=/usr/bin/python3 -u {{ brain_install_dir }}/brain.py
-User=root
+ExecStartPre=-/usr/bin/podman rm -f brain-analyst
+ExecStart=/usr/bin/podman run --rm --name brain-analyst --network host \
+  --env-file {{ brain_config_dir }}/brain.env \
+  -v {{ brain_state_dir }}:/var/lib/brain-analyst:Z \
+{% if brain_indexer_ca_file %}
+  -v {{ brain_indexer_ca_file }}:/etc/brain-analyst/indexer-ca.pem:ro,Z \
+{% endif %}
+  {{ brain_image }}
+ExecStop=/usr/bin/podman stop -t 10 brain-analyst
 Restart=on-failure
 RestartSec=10s
-StandardOutput=append:{{ brain_log_file }}
-StandardError=append:{{ brain_log_file }}
 
 [Install]
 WantedBy=multi-user.target
