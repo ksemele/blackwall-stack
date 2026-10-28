@@ -315,48 +315,88 @@ def handle_line(line: str, sent_ids: set) -> None:
         log.error("Dropped alert %s after %d failed attempts", alert_id, SEND_ATTEMPTS)
 
 
-def tail_alerts(sent_ids: set) -> None:
-    """Open alert log and follow new lines, processing each JSON alert.
+def _open_alert_log(at_end: bool):
+    """Open ALERT_LOG in binary mode; (fh, inode), or (None, None) on error.
 
-    Handles log rotation / file replacement by detecting inode changes.
+    at_end is used for the first open only: alerts written while the service
+    was down are not replayed. A file reached by rotation is read from 0.
     """
     try:
-        fh = open(ALERT_LOG)
+        fh = open(ALERT_LOG, "rb")
     except OSError as exc:
         log.error("Cannot open alert log %s: %s", ALERT_LOG, exc)
+        return None, None
+    if at_end:
+        fh.seek(0, os.SEEK_END)
+    return fh, os.fstat(fh.fileno()).st_ino
+
+
+def _process_raw(raw: bytes, sent_ids: set) -> None:
+    line = raw.decode("utf-8", errors="replace").strip()
+    if not line:
+        return
+    try:
+        handle_line(line, sent_ids)
+    except Exception as exc:  # noqa: BLE001  one bad alert must not reset the tail
+        log.exception("Error handling alert line: %s", exc)
+
+
+def tail_alerts(sent_ids: set) -> None:
+    """Follow ALERT_LOG without losing lines around rotation.
+
+    Wazuh rotates alerts.json by renaming it and creating a new file. The path
+    is only checked at EOF of the open file, so the old file is always drained
+    first (it stays readable through the open handle); then the new file is
+    read from its start, not its end. A file that shrank (copytruncate) is
+    reread from 0. A line whose newline has not been written yet is held until
+    the rest arrives instead of being parsed half-written.
+    """
+    fh, inode = _open_alert_log(at_end=True)
+    if fh is None:
         time.sleep(POLL_INTERVAL)
         return
-
+    log.info("Tailing %s (threshold=%d, inode=%d)", ALERT_LOG, ANALYSIS_THRESHOLD, inode)
+    partial = b""
     try:
-        fh.seek(0, 2)
-        current_inode = os.fstat(fh.fileno()).st_ino
-        log.info("Tailing %s (threshold=%d, inode=%d)", ALERT_LOG, ANALYSIS_THRESHOLD, current_inode)
-
         while True:
             maybe_compact_state(sent_ids)
+            chunk = fh.readline()
+            if chunk:
+                if not chunk.endswith(b"\n"):
+                    partial += chunk  # writer is mid-line; wait for the rest
+                    continue
+                _process_raw(partial + chunk, sent_ids)
+                partial = b""
+                continue
+
+            # EOF of the open file: has the path moved on?
             try:
-                disk_inode = os.stat(ALERT_LOG).st_ino
+                st = os.stat(ALERT_LOG)
             except OSError:
-                disk_inode = current_inode
+                st = None  # between rename and create: keep the old file
 
-            if disk_inode != current_inode:
-                log.info("Alert log replaced (old inode=%d, new inode=%d) — reopening",
-                         current_inode, disk_inode)
-                return
-
-            line = fh.readline()
-            if not line:
-                time.sleep(POLL_INTERVAL)
+            if st is not None and st.st_ino != inode:
+                new_fh, new_inode = _open_alert_log(at_end=False)
+                if new_fh is None:
+                    time.sleep(POLL_INTERVAL)
+                    continue
+                # Last writes to the old file, then its unterminated tail:
+                # nothing will be appended to it any more.
+                for raw in (partial + fh.read()).split(b"\n"):
+                    _process_raw(raw, sent_ids)
+                fh.close()
+                log.info("Alert log rotated (old inode=%d, new inode=%d): old file drained, "
+                         "reading the new one from its start", inode, new_inode)
+                fh, inode, partial = new_fh, new_inode, b""
                 continue
 
-            line = line.strip()
-            if not line:
+            if st is not None and st.st_size < fh.tell():
+                log.warning("Alert log shrank to %d bytes: rereading from its start", st.st_size)
+                fh.seek(0)
+                partial = b""
                 continue
 
-            try:
-                handle_line(line, sent_ids)
-            except Exception as exc:  # noqa: BLE001  one bad alert must not reset the tail
-                log.exception("Error handling alert line: %s", exc)
+            time.sleep(POLL_INTERVAL)
     finally:
         fh.close()
 

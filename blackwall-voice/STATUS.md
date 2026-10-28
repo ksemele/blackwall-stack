@@ -2,13 +2,25 @@
 module: blackwall-voice
 status: in_progress
 stage: 2
-last_updated: 2026-10-15
-last_task: "Noise: bounded dedup state, ignored verify rules, voice_max_level upper bound (one message per alert with Brain)"
+last_updated: 2026-10-28
+last_task: "No alerts lost around alerts.json rotation (#23): drain the old file, read the new one from its start"
 next_task: "Dashboard (OpenSearch) is deferred; next Voice work is channel routing (Slack/webhook)"
 blockers: []
 ---
 
 ## Done
+
+### 2026-10-28 — no alerts lost around rotation (#23)
+
+- The tail checks the path only at EOF of the open file: on a new inode it
+  drains the old file (still open), then reads the new one from its start
+  instead of its end. A shrunk file is reread from 0; a line whose newline is
+  not written yet is held instead of parsed half-written (it used to be dropped
+  as non-JSON).
+- `tests/unit/alerts_tail_test.py` covers rotation, truncation and split lines
+  for Voice and Brain; the previous loop fails it.
+- Still by design: alerts written while the service is down are not replayed
+  (the first open seeks to EOF).
 
 ### 2026-10-15 — less noise
 
@@ -97,8 +109,6 @@ blockers: []
 
 ## Open questions
 
-- Log rotation of `alerts.json` loses the unread tail (the alerter reopens at EOF); pre-existing, not addressed.
-
 - `telegram_bot_token` and `telegram_chat_id`: in the lab they come from env (`BW_TELEGRAM_*` in `.envrc`, direnv); scrubbed from git history on 2026-10-12. For prod — supplied from the owner's secret management (no ansible-vault).
 - `voice_max_level` is ignored when `brain-analyst` is not active: at deploy time (warning, clamp to the deployed analysis_threshold - 1) and at runtime (15 s check). `bw-lab provision brain` re-runs Voice (first when disabling Brain).
 
@@ -113,6 +123,6 @@ blockers: []
 - `bw-check voice` gives SKIP when the alerter is not deployed: `bw-lab provision all`
   deliberately leaves voice out — it needs a real Telegram token.
 - Dedup: `id` → `sent_ids.txt` (persistent across restarts)
-- Inode rotation detection: the service reopens the file when it is replaced (linear file vs log rotate)
+- Rotation: on a new inode the old file is drained, the new one is read from its start (2026-10-28)
 - Logging: Python → stdout → systemd `StandardOutput=append:` (one path, no duplication)
 - Dashboard (OpenSearch) deferred — not part of Stage 2
