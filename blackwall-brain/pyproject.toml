@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "blackwall-brain"
+version = "2.0.0"
+description = "Blackwall Brain: AI triage of Wazuh alerts"
+license = "MIT"
+requires-python = ">=3.12"
+dependencies = ["anthropic", "openai", "httpx"]
+
+[project.optional-dependencies]
+dev = ["pytest"]
+
+[project.scripts]
+brain = "brain.main:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

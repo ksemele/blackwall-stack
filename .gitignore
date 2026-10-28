@@ -16,3 +16,8 @@ hosts/
 # Python bytecode (unit checks import scripts from role directories)
 __pycache__/
 *.pyc
+.superpowers/
+
+# Python venvs and build metadata
+.venv/
+*.egg-info/
