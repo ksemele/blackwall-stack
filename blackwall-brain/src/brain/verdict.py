@@ -24,7 +24,6 @@ _TEXT = ("summary", "action")
 _FIELDS = ("verdict", "severity", "category", "summary", "action", "confidence", "needs")
 
 VERDICT_SCHEMA = {
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
     "type": "object",
     "properties": {
         **{k: {"type": "string", "enum": list(v)} for k, v in _ENUMS.items()},
