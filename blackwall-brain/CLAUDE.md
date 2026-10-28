@@ -1,7 +1,7 @@
 # blackwall-brain — Brain
 
 **Role:** AI analysis layer.
-Brain receives Wazuh alerts that pass the severity threshold, calls the Claude API to classify
+Brain receives Wazuh alerts that pass the severity threshold, asks a model (Claude by default) to classify
 and explain them, then forwards enriched analysis to Telegram.
 It does NOT route alerts to humans (that is Voice) and does NOT perform detection (that is Eye).
 
@@ -11,99 +11,53 @@ It does NOT route alerts to humans (that is Voice) and does NOT perform detectio
 
 Eye sees. Voice speaks. Brain thinks. When a high-severity alert fires, Brain interrogates it:
 What kind of attack is this? How confident are we? What should the operator do next?
-One Claude API call per alert — structured output, actionable signal.
+One model call per alert — a validated structured verdict, actionable signal.
 
 ---
 
-## Stage 3 Scope
+## Brain v2 (current)
 
-### 1. Brain Analyst (primary deliverable)
+Design: `../docs/superpowers/specs/2026-10-28-brain-v2-eval-design.md`.
+Step 1 (this code): verdict, model interface, message, container, intake.
+Step 2: eval set and harness. Step 3: context sources (mode 1).
 
-A Python script deployed as a systemd service on the manager host that:
-
-- Reads from `/var/ossec/logs/alerts/alerts.json` (tail-follows the live log, inode-rotation-aware)
-- Filters by severity: only analyzes alerts with `rule.level >= analysis_threshold` (default 7)
-- Calls Claude API with a structured prompt containing alert context (host, level, description, MITRE, full_log)
-- Receives structured AI classification: threat category, confidence, recommended action
-- Formats a "Brain analysis" Telegram message and sends via same bot as Voice
-- Deduplicates: tracks processed `id` values to avoid re-analyzing on restart (state file)
-- On Claude failure (3 attempts): sends the raw alert with an "AI analysis unavailable: <reason>" marker instead of dropping it
-- On Telegram failure: retries up to 3 times (the ID is written to state only after Telegram accepted), then logs the alert as dropped
-- Ignores `brain_ignore_rule_ids` (Voice's verify rule); state file capped at `brain_state_max_ids`
-- Restarts automatically on failure (systemd `Restart=on-failure`)
-
----
+- Package `src/brain/`: `verdict` (schema, parsing), `models/` (interface +
+  `anthropic_model`, `openai_compat` adapters), `analysis` (prompt,
+  `PROMPT_VERSION`, retries), `message` (Telegram HTML), `indexer` + `state`
+  (polling intake), `telegram`, `config` (BRAIN_* env), `main` (loop).
+- Container built on the target by role `brain-analyst` (Containerfile,
+  hash-pinned `requirements.lock`), run by `brain-analyst.service`
+  (`podman run --network host`), config in `/etc/brain-analyst/brain.env`,
+  state in `/var/lib/brain-analyst/state.json`, logs in journald.
+- Intake polls `wazuh-alerts-*` in the indexer; no file tailing.
 
 ## Design Principles
 
-- **Zero pip dependencies:** uses only Python 3 stdlib (`urllib.request`, `json`, `logging`, `os`, `time`)
-- **Config as code:** all settings live in Ansible vars and templates; no manual edits on hosts
-- **Fail loud on errors:** a failed alert is retried, and a drop is logged at ERROR — never silent
-- **Signal over noise:** `analysis_threshold` default 7 (higher than Voice's 5) — only high-confidence events get AI analysis
-- **Resilient:** systemd `Restart=on-failure`; script catches all errors and sleeps, never crashes
-
----
-
-## Stack
-
-| Component | Detail |
-|---|---|
-| Language | Python 3 stdlib only (no external deps) |
-| Alert source | `/var/ossec/logs/alerts/alerts.json` (line-buffered JSON, one event per line) |
-| AI backend | Claude API (`https://api.anthropic.com/v1/messages`) via `urllib.request` |
-| Notification sink | Telegram Bot API (same bot as Voice) |
-| Secrets | `claude_api_key`, `telegram_bot_token`, `telegram_chat_id` — passed as Ansible vars (vault-encrypted in production) |
-| Service manager | systemd on manager host |
-| Deployment | Ansible role `brain-analyst`, playbook `brain.yml` |
-| Target host group | `wazuh_managers` (shared inventory at `../tests/inventory/hosts.yml`) |
-
----
+- **No vendor lock-in:** only `models/anthropic_model.py` imports `anthropic`
+  and only `models/openai_compat.py` imports `openai` (a test enforces it).
+- **Read-only:** indexer user can only search `wazuh-alerts-*`.
+- **Validate, don't trust:** every model answer is checked against the verdict
+  schema; invalid → one retry → fallback message.
+- **Config as code:** all settings are Ansible vars rendered into `brain.env`.
+- **Fail loud:** model failure → fallback message with the reason; Telegram
+  failure → retried, then logged at ERROR as dropped.
+- **Signal over noise:** `analysis_threshold` default 7 (higher than Voice's 5).
 
 ## Repository Layout
 
 ```
 blackwall-brain/
-├── CLAUDE.md                         # this file
-├── README.md                         # operator quick-start
-├── STATUS.md                         # current module state
+├── CLAUDE.md, README.md, STATUS.md
+├── pyproject.toml, requirements.lock, Containerfile, .containerignore
+├── src/brain/                 # the package (see above)
+├── tests/                     # pytest, no network
 └── ansible/
-    ├── ansible.cfg                   # roles_path, inventory pointer → shared tests inventory
-    ├── playbooks/
-    │   ├── brain.yml                 # deploy brain-analyst to wazuh_managers
-    │   └── verify-brain.yml          # check service running, inject test alert, verify pickup
-    └── roles/
-        └── brain-analyst/
-            ├── defaults/
-            │   └── main.yml          # analysis_threshold, claude_model, state_file path, etc.
-            ├── tasks/
-            │   └── main.yml          # create dirs, deploy script + unit, enable service
-            ├── handlers/
-            │   └── main.yml          # Reload systemd daemon, Restart brain-analyst service
-            └── templates/
-                ├── brain.py.j2       # the analyst script (Jinja2 → Python)
-                └── brain.service.j2  # systemd unit file
+    ├── ansible.cfg
+    ├── playbooks/brain.yml, verify-brain.yml
+    └── roles/brain-analyst/   # podman, image build, indexer RO user, env, unit
 ```
 
----
-
-## Key Variables (defaults)
-
-| Variable | Default | Description |
-|---|---|---|
-| `brain_enabled` | `true` | `false` stops and disables the service (files stay) — AI analysis off |
-| `analysis_threshold` | `7` | Minimum `rule.level` to trigger AI analysis |
-| `poll_interval` | `5` | Seconds between log tail reads |
-| `claude_api_key` | `""` | Anthropic API key — must be set |
-| `claude_model` | `claude-haiku-5-5` | Claude model for analysis |
-| `claude_effort` | `low` | Effort (thinking depth) for the one-line classification |
-| `max_tokens` | `2048` | Max tokens in Claude response, thinking included |
-| `brain_state_file` | `/var/lib/brain-analyst/sent_ids.txt` | Dedup state |
-| `brain_log_file` | `/var/log/brain-analyst/analyst.log` | Service log |
-| `brain_alert_log` | `/var/ossec/logs/alerts/alerts.json` | Alert source |
-| `telegram_bot_token` | `""` | Same bot as Voice — must be set |
-| `telegram_chat_id` | `""` | Same chat as Voice — must be set |
-
----
+Key variables: see README.md (Configure).
 
 ## Inventory
 
@@ -113,42 +67,17 @@ Brain shares the inventory with blackwall-eye and blackwall-voice. The `ansible.
 inventory = ../tests/inventory/hosts.yml
 ```
 
-Do NOT duplicate inventory files. Brain deploys to `wazuh_managers` group (same as Voice).
-
----
-
-## Claude API Response Format
-
-Brain instructs Claude to respond in a single structured line:
-
-```
-CATEGORY: <threat_category> | CONFIDENCE: <high/medium/low> | ACTION: <recommended_action>
-```
-
-Valid categories: `lateral_movement`, `privilege_escalation`, `persistence`, `credential_access`,
-`defense_evasion`, `discovery`, `collection`, `exfiltration`, `command_and_control`, `impact`,
-`false_positive`, `unknown`.
+Do NOT duplicate inventory files. Brain deploys to `wazuh_managers` group (same as Voice: Voice checks Brain's unit on its own host).
 
 ---
 
 ## Agent Rules
 
-1. **Read STATUS.md before starting any work.** If status is `pending`, nothing has been implemented.
+1. **Read STATUS.md before starting any work.**
 2. **Update STATUS.md after completing each task** — `last_task`, `next_task`, `last_updated`.
-3. **Test against the shared Docker test environment** defined in `tests/inventory/hosts.yml`.
+3. **TDD:** `.venv/bin/pytest` in this directory; lab checks via `tests/bin/bw-check brain`.
 4. **Keep Brain independently deployable** — no imports or hard path dependencies on other modules.
-5. **Secrets via Ansible vault** — never commit `claude_api_key` or `telegram_bot_token` in plaintext.
-6. **Keep docs in sync** — if playbooks, roles, or CLI commands change, update README.md in the same commit.
-7. **Do not suppress alerts on Claude failure** — only write to state file after both Claude + Telegram succeed.
-
----
-
-## Testing Checklist
-
-- [ ] `ansible-playbook ansible/playbooks/brain.yml` completes without errors on test host
-- [ ] `systemctl is-active brain-analyst` returns `active` on manager host
-- [ ] Injecting a level-9+ alert into `alerts.json` triggers brain-analyst to attempt Claude analysis
-- [ ] With real API key: Claude response appears in log and Telegram message is sent
-- [ ] With placeholder API key: Claude failure is logged gracefully, alert ID not written to state file
-- [ ] Restarting the service does not re-analyze already-processed alerts (dedup state persists)
-- [ ] Alerts below `analysis_threshold` are silently dropped
+5. **Secrets** never in the repo; lab values come from `.envrc`.
+6. **Keep docs in sync** — if playbooks, roles, env vars or CLI commands change, update README.md in the same commit.
+7. **Never drop an alert silently** — model failure sends the fallback; a Telegram failure after retries is logged at ERROR. An alert is marked processed after handling (the cursor would skip it anyway).
+8. **Bump `PROMPT_VERSION`** in `analysis.py` whenever the prompt or the verdict schema changes.

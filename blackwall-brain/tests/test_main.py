@@ -126,3 +126,8 @@ def test_telegram_retries_then_false():
     ok = send("tok", "42", "x", client=httpx.Client(transport=httpx.MockTransport(handler)),
               sleep=slept.append)
     assert ok is False and len(calls) == 3 and slept == [2, 4]
+
+
+def test_setup_logging_quiets_http_client_per_request_lines():
+    brain_main.setup_logging()
+    assert logging.getLogger("httpx").getEffectiveLevel() >= logging.WARNING

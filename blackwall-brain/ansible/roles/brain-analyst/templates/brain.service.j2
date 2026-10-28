@@ -8,7 +8,7 @@ Wants=network-online.target
 [Service]
 Type=simple
 ExecStartPre=-/usr/bin/podman rm -f brain-analyst
-ExecStart=/usr/bin/podman run --rm --name brain-analyst --network host \
+ExecStart=/usr/bin/podman run --rm --name brain-analyst --network host --log-driver none \
   --env-file {{ brain_config_dir }}/brain.env \
   -v {{ brain_state_dir }}:/var/lib/brain-analyst:Z \
 {% if brain_indexer_ca_file %}

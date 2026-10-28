@@ -394,7 +394,7 @@ check_brain() {
     bw_ansible_adhoc blackwall-brain wazuh_managers -b \
       -m shell -a 'podman image ls -q localhost/blackwall-brain | grep -q .'
 
-  bw_run "brain-analyst analysed and delivered a test alert" \
+  bw_run "brain-analyst handled a test alert (delivered, with credentials)" \
     bw_ansible blackwall-brain ansible/playbooks/verify-brain.yml
 }
 

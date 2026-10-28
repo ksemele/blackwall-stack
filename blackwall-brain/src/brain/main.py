@@ -55,9 +55,16 @@ def run(settings, *, model, indexer, sleep=time.sleep, iterations: int | None = 
         sleep(settings.poll_interval)
 
 
-def main() -> None:
+def setup_logging() -> None:
     logging.basicConfig(level=logging.INFO, stream=sys.stdout,
                         format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+    # One INFO line per HTTP request (every poll) would drown the journal.
+    for name in ("httpx", "httpcore", "httpx2", "httpcore2"):
+        logging.getLogger(name).setLevel(logging.WARNING)
+
+
+def main() -> None:
+    setup_logging()
     try:
         settings = config.load()
     except ValueError as exc:
