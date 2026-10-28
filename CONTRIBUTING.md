@@ -54,16 +54,19 @@ tests/bin/bw-lab ssh black-host-01      # shell into a node
 ```
 
 `tests/bin/bw-check --help` lists every check group. Some groups (`sentinel`,
-`sentinel-agents`, `fw-events`, `fang`) are opt-in: they are not part of `all`
+`sentinel-agents`, `fw-events`, `fang`, `vm`) are opt-in: they are not part of `all`
 and SKIP until their target is provisioned. Every line prints `PASS`, `FAIL` or
 `SKIP`, and the exit code is 0 only when nothing failed.
 
-Unit checks for scripts run without the lab:
+Unit checks for scripts run without the lab. The Voice and Brain checks render
+the role templates and need `jinja2` and `pyyaml`; the Python that runs Ansible
+already has both, a bare system `python3` may not:
 
 ```bash
-python3 tests/unit/voice_format_test.py
-python3 tests/unit/alerts_tail_test.py
-python3 tests/unit/fang_refresh_test.py
+PY="$(brew --prefix ansible)/libexec/bin/python"   # Homebrew Ansible; pipx: ~/.local/pipx/venvs/ansible/bin/python
+"$PY" tests/unit/voice_format_test.py
+"$PY" tests/unit/alerts_tail_test.py
+"$PY" tests/unit/fang_refresh_test.py
 ```
 
 Full lab documentation (containers, ports, credentials, manual debugging, known

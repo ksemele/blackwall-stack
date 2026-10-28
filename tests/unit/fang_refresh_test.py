@@ -2,7 +2,8 @@
 
     python3 tests/unit/fang_refresh_test.py
 """
-import importlib.machinery, importlib.util, ipaddress, os
+import importlib.machinery, importlib.util, ipaddress, os, sys
+sys.dont_write_bytecode = True  # no __pycache__ inside the role's files/
 
 root = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..")
 path = os.path.join(root, "blackwall-fang/ansible/roles/fang-reputation/files/blackwall-fang-refresh")
