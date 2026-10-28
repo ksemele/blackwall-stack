@@ -12,3 +12,7 @@ tests/.wazuh-certs/*
 
 # Per-host prod configs (kept local, never committed)
 hosts/
+
+# Python bytecode (unit checks import scripts from role directories)
+__pycache__/
+*.pyc
