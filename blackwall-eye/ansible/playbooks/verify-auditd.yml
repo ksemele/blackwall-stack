@@ -2,6 +2,13 @@
 # verify-auditd.yml — Verify auditd role deployment on monitored hosts.
 # Usage (from blackwall-eye/):
 #   ansible-playbook ansible/playbooks/verify-auditd.yml
+#
+# On a real kernel (no /.dockerenv) it also checks what the kernel loaded
+# (auditctl -l / -s). Optional extra vars, used by `bw-check vm`:
+#   expect_key=<key>          a rule with this key is loaded
+#   expect_no_key=<key>       no rule with this key is loaded
+#   expect_immutable=true     the kernel reports `enabled 2`
+#   expect_log_format=RAW     log_format in auditd.conf (default ENRICHED)
 
 - name: Verify auditd role deployment
   hosts: wazuh_agents
@@ -56,11 +63,11 @@
       register: log_format_line
       changed_when: false
 
-    - name: Assert log_format is ENRICHED
+    - name: Assert log_format
       assert:
-        that: "'ENRICHED' in log_format_line.stdout"
-        success_msg: "log_format = ENRICHED confirmed"
-        fail_msg: "log_format is not ENRICHED in auditd.conf"
+        that: log_format_line.stdout is search('=\\s*' ~ (expect_log_format | default('ENRICHED')) ~ '\\s*$')
+        success_msg: "log_format = {{ expect_log_format | default('ENRICHED') }} confirmed"
+        fail_msg: "auditd.conf has '{{ log_format_line.stdout }}', expected {{ expect_log_format | default('ENRICHED') }}"
 
     - name: Show auditd service status
       command: systemctl status auditd --no-pager
@@ -77,4 +84,50 @@
         that: "'active (running)' in auditd_status.stdout"
         success_msg: "auditd service is active"
         fail_msg: "auditd service is not running (expected on real hosts)"
+      when: not _dockerenv.stat.exists
+
+    # --- what the kernel actually loaded (real kernels only) ---
+
+    - name: List loaded audit rules
+      command: auditctl -l
+      register: auditctl_rules
+      changed_when: false
+      when: not _dockerenv.stat.exists
+
+    - name: Read kernel audit state
+      command: auditctl -s
+      register: auditctl_state
+      changed_when: false
+      when: not _dockerenv.stat.exists
+
+    - name: Assert blackwall rules are loaded in the kernel
+      assert:
+        that:
+          - auditctl_rules.stdout is search('key=exec')
+          - auditctl_rules.stdout is search('-k shadow')
+        fail_msg: "blackwall rules are on disk but not loaded: {{ auditctl_rules.stdout_lines }}"
+        success_msg: "blackwall rules loaded in the kernel"
+      when: not _dockerenv.stat.exists
+
+    - name: Assert the expected extra rule is loaded
+      assert:
+        that: auditctl_rules.stdout is search('(key=|-k )' ~ expect_key ~ '(\\s|$)', multiline=True)
+        fail_msg: "no loaded rule with key {{ expect_key }}: {{ auditctl_rules.stdout_lines }}"
+        success_msg: "rule with key {{ expect_key }} is loaded"
+      when: not _dockerenv.stat.exists and (expect_key | default('')) | length > 0
+
+    - name: Assert a rule is not loaded
+      assert:
+        that: auditctl_rules.stdout is not search('(key=|-k )' ~ expect_no_key ~ '(\\s|$)', multiline=True)
+        fail_msg: "rule with key {{ expect_no_key }} is loaded but should not be"
+        success_msg: "rule with key {{ expect_no_key }} is not loaded"
+      when: not _dockerenv.stat.exists and (expect_no_key | default('')) | length > 0
+
+    - name: Assert immutable state
+      assert:
+        that: >-
+          (auditctl_state.stdout is search('^enabled 2', multiline=True))
+          == (expect_immutable | default(false) | bool)
+        fail_msg: "auditctl -s: {{ auditctl_state.stdout_lines | select('match', '^enabled') | list }}, expect_immutable={{ expect_immutable | default(false) }}"
+        success_msg: "audit immutable = {{ expect_immutable | default(false) | bool }}"
       when: not _dockerenv.stat.exists

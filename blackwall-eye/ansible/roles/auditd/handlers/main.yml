@@ -1,18 +1,24 @@
 ---
 # Same-named handlers collapse into one, so each family gets a unique name and
-# listens on the shared notify topic.
+# listens on the shared notify topic. With immutable rules (`enabled 2`, see
+# tasks) nothing can be reloaded or restarted: the change is on disk and takes
+# effect at the next boot, which the last handler reports.
 - name: Reload audit rules (Debian)
   listen: Reload audit rules
   ansible.builtin.systemd:
     name: auditd
     state: restarted
-  when: ansible_facts['os_family'] == 'Debian'
+  when:
+    - ansible_facts['os_family'] == 'Debian'
+    - not (_audit_immutable | default(false) | bool)
   ignore_errors: "{{ _dockerenv.stat.exists | default(false) }}"
 
 - name: Reload audit rules (RedHat)
   listen: Reload audit rules
   ansible.builtin.command: augenrules --load
-  when: ansible_facts['os_family'] == 'RedHat'
+  when:
+    - ansible_facts['os_family'] == 'RedHat'
+    - not (_audit_immutable | default(false) | bool)
   ignore_errors: "{{ _dockerenv.stat.exists | default(false) }}"
 
 - name: Restart auditd (Debian)
@@ -20,12 +26,24 @@
   ansible.builtin.systemd:
     name: auditd
     state: restarted
-  when: ansible_facts['os_family'] == 'Debian'
+  when:
+    - ansible_facts['os_family'] == 'Debian'
+    - not (_audit_immutable | default(false) | bool)
   ignore_errors: "{{ _dockerenv.stat.exists | default(false) }}"
 
 # RHEL refuses `systemctl restart auditd`; the service wrapper is the supported path.
 - name: Restart auditd (RedHat)
   listen: Restart auditd
   ansible.builtin.command: service auditd restart
-  when: ansible_facts['os_family'] == 'RedHat'
+  when:
+    - ansible_facts['os_family'] == 'RedHat'
+    - not (_audit_immutable | default(false) | bool)
   ignore_errors: "{{ _dockerenv.stat.exists | default(false) }}"
+
+- name: Report that audit changes wait for a reboot
+  listen: [Reload audit rules, Restart auditd]
+  ansible.builtin.debug:
+    msg: >-
+      REBOOT REQUIRED: audit rules are immutable (auditctl -s: enabled 2).
+      The new rules/auditd.conf are on disk and take effect at the next boot.
+  when: _audit_immutable | default(false) | bool

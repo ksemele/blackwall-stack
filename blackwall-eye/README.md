@@ -188,9 +188,25 @@ stderr when running the exporter by hand.
 # Agent registration (checks Active status)
 ansible-playbook ansible/playbooks/verify-agents.yml
 
-# auditd rules and config (service check skipped in Docker — expected)
+# auditd rules and config (service check skipped in Docker — expected);
+# on a real kernel it also checks auditctl -l / -s
 ansible-playbook ansible/playbooks/verify-auditd.yml
 ```
+
+### auditd role
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `auditd_log_format` | `ENRICHED` | `log_format` in `auditd.conf`; a change restarts auditd (`service auditd restart` on RHEL) |
+| `auditd_extra_rules` | `[]` | lines appended to `/etc/audit/rules.d/blackwall.rules`; a change reloads rules (`augenrules --load` on RHEL) without a restart |
+| `auditd_immutable` | `false` | end the rules with `-e 2` (CIS/STIG): after the next load the kernel refuses rule and config changes until a reboot |
+
+With immutable rules loaded (`auditctl -s` shows `enabled 2`) the role still
+writes the new rules and `auditd.conf`, skips the reload and restart, and prints
+`REBOOT REQUIRED` instead of failing the play; the change takes effect at the
+next boot. On a real kernel a rule auditctl rejects fails the play; only in
+containers (`/.dockerenv`) are the auditd handlers allowed to fail. Tested on a
+Rocky 9 VM with `tests/bin/bw-check vm` (see `tests/README.md`).
 
 ## Firewall (nftables)
 

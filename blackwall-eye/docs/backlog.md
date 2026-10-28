@@ -13,6 +13,12 @@ real behaviour is unproven.
 **Due.** Before the `monitored-host.yml` / `auditd` role is applied to any real
 RHEL-family host (in particular the prod host when it becomes the Wazuh manager).
 
+**How.** Automated as `tests/bin/bw-check vm` on the Lima VM `black-vm-05`
+(`tests/bin/bw-lab vm up`, see `tests/README.md`). Step 4's behaviour is
+implemented: with `enabled 2` the role skips the handlers and prints
+`REBOOT REQUIRED` (`auditd_immutable` sets `-e 2`). Open until `bw-check vm`
+passes on the VM; then move this item to `STATUS.md`.
+
 **Steps** (on a disposable RHEL 9 / Rocky 9 VM with kernel audit, not a container):
 
 1. Apply `monitored-host.yml` to the VM; `systemctl is-active auditd` is

@@ -95,6 +95,7 @@ Checks:
   sentinel-agents  throwaway agent enrolls in the sentinel (opt-in, internet, ~2-3 min; not in `all`)
   fw-events  firewall drops become Wazuh alerts 100201/100202 (opt-in, ~1 min, up to ~3 min on failure; not in `all`)
   fang       reputation blocklists on the sentinel: observe, enforce, junk list, restore (opt-in, ~3-5 min, re-provisions fang; not in `all`)
+  vm         auditd role on a real RHEL kernel (Lima VM, bw-lab vm up): reload, restart, broken rule, immutable + reboot (opt-in, ~5-8 min; not in `all`)
 
 Exit code: 0 when nothing failed, 1 otherwise.
 USAGE
@@ -1166,6 +1167,118 @@ check_fang() {
   fi
 }
 
+# --- vm: auditd role on a real RHEL kernel (blackwall-eye/docs/backlog.md) ---
+
+_vm_prov()      { bw_vm_ansible blackwall-eye ansible/playbooks/monitored-host.yml --tags auditd "$@"; }
+_vm_verify()    { bw_vm_ansible blackwall-eye ansible/playbooks/verify-auditd.yml "$@"; }
+_vm_apply()     { _vm_prov "$@" >/dev/null 2>&1; }
+_vm_started()   { limactl shell "$BW_VM" systemctl show auditd -p ExecMainStartTimestampMonotonic --value 2>/dev/null; }
+_vm_immutable() { limactl shell "$BW_VM" sudo auditctl -s 2>/dev/null | grep -q '^enabled 2'; }
+_vm_reboot()    { limactl stop "$BW_VM" >/dev/null 2>&1 && limactl start --tty=false "$BW_VM" >/dev/null 2>&1; }
+# _vm_rules <json list items> — extra vars for auditd_extra_rules
+_vm_rules()     { printf '{"auditd_extra_rules": [%s]}' "$1"; }
+
+# Back to role defaults with a mutable kernel. Immutable rules can only be
+# dropped by writing the default rules and rebooting.
+_vm_restore() {
+  _vm_apply
+  if _vm_immutable; then _vm_reboot; fi
+}
+
+check_vm() {
+  bw_info "vm (auditd on a real RHEL kernel: $BW_VM)"
+  if ! command -v limactl >/dev/null 2>&1; then
+    bw_skip "limactl not installed (brew install lima)"; return
+  fi
+  if [[ "$(bw_vm_status)" != Running ]]; then
+    bw_skip "$BW_VM is not running (run: bw-lab vm up)"; return
+  fi
+  bw_require_ansible
+
+  local hosts='"-w /etc/hosts -p wa -k bw_vm_hosts"'
+  local hostname='"-w /etc/hostname -p wa -k bw_vm_hostname"'
+  local bad='"-w /etc/hosts -p zz -k bw_vm_bad"'
+  local before after out
+
+  # Role defaults, mutable kernel: a run stopped half way may have left -e 2.
+  _vm_restore
+
+  # 1. Defaults: package, config, rules on disk and in the kernel, service up.
+  bw_run "1. defaults: auditd active, blackwall rules loaded in the kernel" _vm_verify
+
+  # 2. A rule change is a reload (augenrules --load), not a restart.
+  before="$(_vm_started)"
+  bw_run "2. changed rule: play passes, the new rule is loaded" \
+    _vm_step "$(_vm_rules "$hosts")" -- -e expect_key=bw_vm_hosts
+  after="$(_vm_started)"
+  if [[ -n "$before" && "$before" == "$after" ]]; then
+    bw_pass "2. rule change reloaded rules without restarting auditd"
+  else
+    bw_fail "2. rule change restarted auditd (start time $before -> $after)"
+  fi
+
+  # 3. A config change restarts auditd (service auditd restart on RHEL).
+  before="$after"
+  bw_run "3. changed log_format: play passes, RAW in auditd.conf, rule still loaded" \
+    _vm_step "$(_vm_rules "$hosts")" -e auditd_log_format=RAW \
+      -- -e expect_log_format=RAW -e expect_key=bw_vm_hosts
+  after="$(_vm_started)"
+  if [[ -n "$after" && "$before" != "$after" ]]; then
+    bw_pass "3. log_format change restarted auditd"
+  else
+    bw_fail "3. log_format change did not restart auditd (start time $before -> $after)"
+  fi
+
+  # 5 (before 4: on an immutable kernel nothing is loaded, so nothing can fail).
+  # A broken rule must fail the play: there is no /.dockerenv to ignore it.
+  if _vm_apply -e "$(_vm_rules "$bad")"; then
+    bw_fail "5. broken rule (-p zz) did not fail the play"
+  else
+    bw_pass "5. broken rule (-p zz) fails the play"
+  fi
+  bw_run "5. valid rules load again after the broken one" \
+    _vm_step "$(_vm_rules "$hosts")" -- -e expect_key=bw_vm_hosts -e expect_no_key=bw_vm_bad
+
+  # 4. Immutable rules (-e 2, as CIS/STIG profiles do).
+  bw_run "4. auditd_immutable: kernel reports enabled 2" \
+    _vm_step "$(_vm_rules "$hosts")" -e auditd_immutable=true \
+      -- -e expect_immutable=true -e expect_key=bw_vm_hosts
+  _vm_reboot
+  bw_run "4. still immutable after reboot (rules from disk at boot)" \
+    _vm_verify -e expect_immutable=true -e expect_key=bw_vm_hosts
+  if out="$(_vm_prov -e "$(_vm_rules "$hosts,$hostname")" -e auditd_immutable=true 2>&1)"; then
+    if grep -q 'REBOOT REQUIRED' <<<"$out"; then
+      bw_pass "4. rule change on an immutable kernel: play passes, reports REBOOT REQUIRED"
+    else
+      bw_fail "4. rule change on an immutable kernel: no REBOOT REQUIRED in the output"
+    fi
+  else
+    bw_fail "4. rule change on an immutable kernel failed the play"
+    printf '%s\n' "$out" | tail -25 | sed 's/^/      /'
+  fi
+  bw_run "4. the new rule waits for the reboot (not loaded yet)" \
+    _vm_verify -e expect_immutable=true -e expect_key=bw_vm_hosts -e expect_no_key=bw_vm_hostname
+  _vm_reboot
+  bw_run "4. after reboot the new rule is loaded" \
+    _vm_verify -e expect_immutable=true -e expect_key=bw_vm_hostname
+
+  # Back to defaults (one more reboot to drop -e 2).
+  _vm_restore
+  bw_run "cleanup: role defaults, kernel mutable, test rules gone" \
+    _vm_verify -e expect_no_key=bw_vm_hosts
+}
+
+# _vm_step <auditd_extra_rules json> [provision args...] -- [verify args...]
+_vm_step() {
+  local rules="$1"; shift
+  local prov=() ver=()
+  while [[ $# -gt 0 && "$1" != -- ]]; do prov+=("$1"); shift; done
+  [[ "${1:-}" == -- ]] && shift
+  ver=("$@")
+  # ${a[@]+"${a[@]}"}: an empty array under set -u on bash 3.2 (macOS /bin/bash)
+  _vm_prov -e "$rules" ${prov[@]+"${prov[@]}"} && _vm_verify ${ver[@]+"${ver[@]}"}
+}
+
 main() {
   case "${1:-all}" in
     all)
@@ -1186,6 +1299,7 @@ main() {
     sentinel-agents) check_sentinel_agents ;;
     fw-events) check_fw_events ;;
     fang) check_fang ;;
+    vm) check_vm ;;
     -h|--help|help) usage; exit 0 ;;
     *) printf 'unknown check: %s\n\n' "$1" >&2; usage >&2; exit 2 ;;
   esac

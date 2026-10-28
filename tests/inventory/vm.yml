@@ -1,0 +1,19 @@
+# RHEL VM for tests the container lab cannot run (kernel audit).
+# Created by `tests/bin/bw-lab vm up` with Lima; ssh goes through the config
+# Lima writes for the instance (user, key and port are Lima's own).
+# Separate from hosts.yml: the VM is not part of the container lab and is
+# never touched by `bw-lab provision all`.
+all:
+  vars:
+    ansible_ssh_common_args: >-
+      -F {{ lookup('env', 'HOME') }}/.lima/black-vm-05/ssh.config
+    ansible_python_interpreter: auto_silent
+  children:
+    rhel_vm:
+      hosts:
+        black-vm-05: {ansible_host: lima-black-vm-05}
+    # monitored-host.yml and verify-auditd.yml target wazuh_agents; only the
+    # auditd role is applied to the VM (--tags auditd), there is no manager.
+    wazuh_agents:
+      children:
+        rhel_vm:

@@ -80,6 +80,7 @@ tests/bin/bw-lab reset
 | `bw-lab ssh <host> [cmd...]` | shell into a container (root password `blackwall`) |
 | `bw-lab logs <service> [-f]` | compose logs for one service |
 | `bw-lab open <target>` | open `dashboard`, `grafana` or `prometheus` in a browser |
+| `bw-lab vm <up\|down\|reboot\|provision\|ssh\|status>` | RHEL VM `black-vm-05` on Lima with its own kernel, for auditd (see [RHEL VM](#rhel-vm-lima--a-real-kernel-for-auditd)); not part of `up`, `down` or `provision all` |
 
 `bw-lab provision all` runs, in this order:
 
@@ -135,6 +136,7 @@ tests/bin/bw-check metrics    # just one group
 | `metrics` | node_exporter serves metrics, Prometheus targets are `up`, `node_load1` returns data, Grafana is healthy with its datasource and dashboard |
 | `voice` | `telegram-alerter` is running and Telegram accepted a synthetic alert; when the deployed `voice_max_level` leaves no room for it (Brain on in the lab), it asserts Voice skipped the alert instead |
 | `brain` | `brain-analyst` is running; a synthetic level-10 alert was analysed by Claude and delivered to Telegram |
+| `vm` | auditd role on a real RHEL kernel (`black-vm-05`, opt-in, ~5-8 min, not in `all`; SKIP until `bw-lab vm up`): defaults loaded in the kernel (`auditctl -l`) and auditd active; a changed rule is loaded by `augenrules --load` without restarting auditd (`ExecMainStartTimestampMonotonic` unchanged); a changed `log_format` restarts it; a broken rule (`-p zz`) fails the play; `auditd_immutable` gives `enabled 2`, survives a reboot, a further rule change passes with `REBOOT REQUIRED` and the new rule loads only after the next reboot; ends on role defaults with a mutable kernel (one more reboot) |
 | (unit) | `tests/unit/alerts_tail_test.py` (run with the ansible venv python): Voice and Brain lose no `alerts.json` line around rotation, truncation or a line written in two parts |
 | (unit) | `tests/unit/voice_format_test.py` (run with the ansible venv python): Voice's message formatter Markdown-escapes `_ * [ `` ` ``` in dynamic fields |
 | `sentinel` | Wazuh stack on `black-sentinel-03`: services active, indexer/API/dashboard answer on 127.0.0.1 but not on 172.28.0.16 (probed from master), agent 000 active, packages excluded, podman nginx on 443, `inet netavark` and container DNS survive `systemctl reload nftables` (opt-in: SKIP until `bw-lab provision sentinel`) |
@@ -241,6 +243,30 @@ du -sh tests/.apt-cache        # what is cached
 rm -rf tests/.apt-cache        # start cold (e.g. to test a fresh download)
 ```
 
+### RHEL VM (Lima) — a real kernel for auditd
+
+The containers share the Docker VM kernel, which has no audit support. For the
+auditd role there is one Lima VM, `black-vm-05` (Rocky Linux 9, its own kernel,
+2 CPU / 4 GiB / 20 GiB). It is not part of the container lab: `bw-lab up`,
+`down` and `provision all` never touch it, and it has its own inventory,
+`tests/inventory/vm.yml`.
+
+```bash
+brew install lima
+tests/bin/bw-lab vm up          # create or start; fails if the kernel has no audit
+tests/bin/bw-lab vm provision   # auditd role only (monitored-host.yml --tags auditd)
+tests/bin/bw-check vm           # reload / restart / broken rule / immutable + reboot
+tests/bin/bw-lab vm ssh         # shell (Lima's user, passwordless sudo)
+tests/bin/bw-lab vm down        # delete the VM
+```
+
+Ansible reaches it through the ssh config Lima writes,
+`~/.lima/black-vm-05/ssh.config` (host `lima-black-vm-05`). The image comes from
+Lima's `template://rocky-9`; on Apple Silicon the VM is aarch64, while prod
+hosts are usually x86_64, so the `arch=b32` rules are exercised on a different
+32-bit ABI. `bw-check vm` reboots the VM up to three times (immutable rules can
+only be dropped by a reboot) and leaves it on role defaults.
+
 ### Container limitations
 
 The nodes are containers, so they share the kernel of the Docker VM (OrbStack,
@@ -253,7 +279,8 @@ Docker Desktop). What that kernel lacks, the lab cannot test:
 | FIM, rootcheck, SCA, syscollector | work | user-space only |
 
 So auditd-based detections (`exec`, `priv_esc`, `sudo`, `shadow` keys) never fire
-here — verify them on a real host. To keep this visible, the `wazuh-agent` role
+here. The auditd role itself is tested on a VM with its own kernel, see
+[RHEL VM](#rhel-vm-lima--a-real-kernel-for-auditd). To keep this visible, the `wazuh-agent` role
 enrolls containerised agents into the Wazuh group **`docker`**, and the
 `blackwall` TUI marks them with a red `[docker]` tag and a warning in agent detail.
 
@@ -746,13 +773,16 @@ pipx inject ansible 'passlib' 'bcrypt<5.0.0'
 
 (bcrypt 5.0 has a known incompatibility with passlib 1.7.4; pin until upstream fixes.)
 
+`bw-lab vm` / `bw-check vm` need [Lima](https://lima-vm.io) (`brew install lima`);
+the rest of the lab does not.
+
 ---
 
 ---
 
 ## 20. Known limitations
 
-**auditd:** kernel audit netlink is not accessible inside Docker. The role installs rules correctly, but the service won't start in containers (detected via `/.dockerenv`). On real hosts auditd starts normally.
+**auditd:** kernel audit netlink is not accessible inside Docker. The role installs rules correctly, but the service won't start in containers (detected via `/.dockerenv`). The role is tested on the Lima VM instead (`bw-lab vm`, `bw-check vm`).
 
 **Dashboard cert:** self-signed; browsers show "Not Secure". Acceptable for `localhost` only. Never expose port 5601 beyond `localhost`.
 
@@ -777,7 +807,7 @@ blackwall/                                  # repo root
 │   ├── bin/
 │   │   ├── bw-lab                          # environment lifecycle
 │   │   ├── bw-check                        # verification
-│   │   └── _bw-common.sh                   # shared helpers (sourced)
+│   │   └── _bw-common.sh                   # shared helpers (sourced), incl. the Lima VM
 │   ├── docker/
 │   │   ├── docker-compose.yml
 │   │   ├── images/ubuntu2204/Dockerfile    # nodes; apt goes through the cache
@@ -790,6 +820,7 @@ blackwall/                                  # repo root
 │   │       └── dashboards/blackwall-hosts.json
 │   ├── inventory/
 │   │   ├── hosts.yml
+│   │   ├── vm.yml                          # black-vm-05 (Lima), bw-lab vm / bw-check vm
 │   │   └── group_vars/                     # loaded because it sits next to the inventory
 │   │       ├── all.yml                     # lab: wazuh_apt_repo_url via the apt cache
 │   │       ├── wazuh_managers.yml

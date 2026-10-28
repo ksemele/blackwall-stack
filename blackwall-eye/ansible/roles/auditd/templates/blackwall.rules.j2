@@ -19,3 +19,15 @@
 
 # SSH config changes
 -w /etc/ssh/sshd_config -p wa -k sshd_config
+{% if auditd_extra_rules %}
+
+# extra rules (auditd_extra_rules)
+{% for rule in auditd_extra_rules %}
+{{ rule }}
+{% endfor %}
+{% endif %}
+{% if auditd_immutable | bool %}
+
+# immutable: no rule or config changes until reboot (auditd_immutable)
+-e 2
+{% endif %}

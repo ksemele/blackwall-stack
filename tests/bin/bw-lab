@@ -7,6 +7,7 @@
 #          tests/bin/bw-lab reset                 # down + wipe certs + up
 #          tests/bin/bw-lab status                # containers, ports, monitoring health
 #          tests/bin/bw-lab provision nftables    # re-run one playbook
+#          tests/bin/bw-lab vm up                 # RHEL VM (Lima) for auditd
 #
 # Full documentation: tests/README.md
 set -euo pipefail
@@ -28,10 +29,14 @@ Commands:
   provision <target> [ansible args]   ansible only: eye|nftables|metrics|voice|cf-wall|brain|sentinel|fang|fixtures|all
                                       (voice and brain take extra args, e.g. -e brain_enabled=false;
                                       brain also re-runs voice with them when voice is deployed;
-                                      fang takes extra args too, e.g. -e fang_mode=enforce, and is not in `all`)
+                                      fang takes extra args too, e.g. -e fang_mode=enforce, and is not in "all")
   ssh <host> [command...]             shell into a test container
   logs <service> [-f]                 compose logs for one service
   open <target>                       open in a browser: dashboard|grafana|prometheus
+  vm <up|down|reboot|provision|ssh|status> [args]
+                                      RHEL VM $BW_VM (Lima, real kernel) for auditd;
+                                      provision applies the auditd role (extra args go
+                                      to ansible); not part of up/down/all
 
 Environment:
   BW_PROFILE        compose profile (default: ubuntu2204)
@@ -244,6 +249,58 @@ cmd_open() {
   fi
 }
 
+# RHEL VM: containers share the Docker VM kernel, which has no audit support;
+# this VM has its own (Rocky Linux 9) kernel. See tests/README.md.
+cmd_vm() {
+  bw_require_lima
+  local action="${1:-}"
+  shift || true
+  case "$action" in
+    up)
+      case "$(bw_vm_status)" in
+        Running) bw_info "$BW_VM is already running" ;;
+        "")
+          bw_info "creating $BW_VM from $BW_VM_TEMPLATE (first boot downloads the image)"
+          limactl start --name="$BW_VM" --cpus=2 --memory=4 --disk=20 --tty=false "$BW_VM_TEMPLATE"
+          ;;
+        *)
+          bw_info "starting $BW_VM"
+          limactl start --tty=false "$BW_VM"
+          ;;
+      esac
+      limactl shell "$BW_VM" sudo auditctl -s | grep -q '^enabled' \
+        || bw_die "$BW_VM has no kernel audit (auditctl -s failed)"
+      bw_info "$BW_VM is up — next: bw-lab vm provision, bw-check vm"
+      ;;
+    down)
+      [[ -z "$(bw_vm_status)" ]] && { bw_info "$BW_VM does not exist"; return; }
+      bw_info "deleting $BW_VM"
+      limactl delete --force "$BW_VM"
+      ;;
+    reboot)
+      # A real reboot, not `limactl shell ... reboot`: start waits until ssh is back.
+      bw_info "rebooting $BW_VM"
+      limactl stop "$BW_VM"
+      limactl start --tty=false "$BW_VM"
+      ;;
+    provision)
+      bw_require_ansible
+      [[ "$(bw_vm_status)" == Running ]] || bw_die "$BW_VM is not running (bw-lab vm up)"
+      bw_info "provision: auditd on $BW_VM"
+      bw_vm_ansible blackwall-eye ansible/playbooks/monitored-host.yml --tags auditd "$@"
+      ;;
+    ssh)
+      limactl shell "$BW_VM" "$@"
+      ;;
+    status)
+      limactl list "$BW_VM"
+      ;;
+    *)
+      bw_die "usage: bw-lab vm <up|down|reboot|provision|ssh|status>"
+      ;;
+  esac
+}
+
 main() {
   local cmd="${1:-}"
   [[ $# -gt 0 ]] && shift
@@ -256,6 +313,7 @@ main() {
     ssh)       cmd_ssh "$@" ;;
     logs)      cmd_logs "$@" ;;
     open)      cmd_open "$@" ;;
+    vm)        cmd_vm "$@" ;;
     -h|--help|help) usage ;;
     "")        usage; exit 2 ;;
     *)         printf 'unknown command: %s\n\n' "$cmd" >&2; usage >&2; exit 2 ;;

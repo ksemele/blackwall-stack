@@ -63,3 +63,27 @@ bw_ansible_adhoc() {
   shift 2
   ( cd "$BW_ROOT/$module" && ansible "$pattern" -i "$BW_INVENTORY" "$@" )
 }
+
+# --- RHEL VM (Lima): a real kernel for what containers cannot test (auditd) ---
+# Lima writes the instance's ssh config to ~/.lima/<name>/ssh.config, host
+# alias lima-<name>; tests/inventory/vm.yml points ansible at it.
+BW_VM="black-vm-05"   # also named in tests/inventory/vm.yml
+BW_VM_TEMPLATE="${BW_VM_TEMPLATE:-template://rocky-9}"
+BW_VM_INVENTORY="$BW_ROOT/tests/inventory/vm.yml"
+
+bw_require_lima() {
+  command -v limactl >/dev/null 2>&1 \
+    || bw_die "limactl not found in PATH (brew install lima, see tests/README.md)"
+}
+
+# Prints Running, Stopped, or nothing when the instance does not exist.
+bw_vm_status() {
+  limactl list --format '{{.Status}}' "$BW_VM" 2>/dev/null || true
+}
+
+# bw_vm_ansible <module-dir> <playbook-relative-path> [extra args...]
+bw_vm_ansible() {
+  local module="$1" playbook="$2"
+  shift 2
+  ( cd "$BW_ROOT/$module" && ansible-playbook -i "$BW_VM_INVENTORY" "$playbook" "$@" )
+}
