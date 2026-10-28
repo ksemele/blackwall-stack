@@ -3,15 +3,15 @@ module: blackwall-eye
 status: in_progress
 stage: 1
 last_updated: 2026-10-28
-last_task: "Firewall drop events as Wazuh alerts (exporter, rules 100200-100205, bw-check fw-events)"
-next_task: "Run bw-check vm on the Lima VM to close the auditd backlog item, then the prod inventory for the stack (loopback binds, heap) — owner decides when"
+last_task: "auditd role verified on a real RHEL kernel (Lima VM, bw-check vm 13/13)"
+next_task: "Prod inventory for the stack (backlog: Wazuh server stack prod readiness) — owner decides when"
 blockers: []
 ---
 
 ## Done
 
-- 2026-10-28: auditd on a real RHEL kernel, tooling (backlog item; closes when
-  `bw-check vm` passes).
+- 2026-10-28: auditd role verified on a real RHEL kernel (backlog item
+  closed): `bw-check vm` 13/13 on Rocky 9 (5.14.0-687.10.1.el9_8, aarch64).
   - Lima VM `black-vm-05` (Rocky 9, own kernel): `bw-lab vm
     up|down|reboot|provision|ssh|status`, inventory `tests/inventory/vm.yml`,
     not part of the container lab.
@@ -61,6 +61,7 @@ blockers: []
     reaches the indexer.
   - Carried into sub-project B (before the prod host is provisioned): smoke
     test auditd handlers on a real RHEL host, incl. immutable rules (`-e 2`).
+    Done 2026-10-28 (`bw-check vm`).
 - 2026-10-15: Wazuh packages pinned against unattended upgrades (apt hold on
   Debian, yum repo `exclude` + `disable_excludes` on RedHat).
 - 2026-10-15: prod firewall as code (spec `docs/superpowers/specs/2026-10-14-nftables-prod-port-design.md`).
