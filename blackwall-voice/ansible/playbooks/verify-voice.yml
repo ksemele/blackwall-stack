@@ -88,13 +88,21 @@
       # Without a token there is nothing to deliver; only the pickup is checked below.
       ignore_errors: "{{ (telegram_bot_token | default('')) | length == 0 }}"
 
-    - name: Check Voice skipped the alert above voice_max_level (Brain covers it)
+    # A fresh lab has no state file until Voice sends something: with Brain on
+    # it may never send, so a missing file means "not sent" too.
+    - name: Check Voice did not send the alert above voice_max_level (Brain covers it)
       when: not (expect_delivery | bool)
       ansible.builtin.assert:
         that:
-          - state_file_content.content is defined
-          - synthetic_alert_id not in (state_file_content.content | b64decode)
-        success_msg: "Alert above voice_max_level ({{ verify_max }}) was skipped, as intended"
+          - synthetic_alert_id not in (state_file_content.content | default('') | b64decode)
+        fail_msg: "Voice sent alert '{{ synthetic_alert_id }}' although Brain covers levels above {{ verify_max }}"
+        success_msg: "Alert above voice_max_level ({{ verify_max }}) was not sent by Voice"
+
+    - name: Check Voice logged the skip
+      when: not (expect_delivery | bool)
+      ansible.builtin.command:
+        cmd: "grep -q 'Skipped alert {{ synthetic_alert_id }} ' /var/log/voice-alerter/alerter.log"
+      changed_when: false
 
     - name: Show state file contents
       ansible.builtin.debug:
