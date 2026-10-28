@@ -159,8 +159,9 @@ Rule 100xxx (level 10): <rule description> · 2026-10-28 14:02 UTC
   creates them; for production the README documents how. Which role creates
   them in the lab is left to the builder.
 - Deployment: the `brain-analyst` Ansible role builds or pulls the image and
-  runs it under systemd **[call: podman with a quadlet unit; podman is
-  already used in the stack]**. It removes the old systemd Python service
+  runs it under systemd **[call: a plain systemd unit running `podman run`;
+  podman is already used in the stack. Not a quadlet: Ubuntu 22.04, the lab
+  manager's OS, ships podman 3.4, and quadlets need 4.4+]**. It removes the old systemd Python service
   if present. `brain_enabled: false` keeps working (stop and disable,
   files stay). Production host: any host that reaches the API and the
   indexer, by default the manager host. Which lab node runs it, and whether
