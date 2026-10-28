@@ -2,13 +2,18 @@
 module: blackwall-brain
 status: in_progress
 stage: 3
-last_updated: 2026-10-15
-last_task: "Noise: bounded state, ignored Voice verify rule, raw-alert fallback when Claude fails"
+last_updated: 2026-10-28
+last_task: "No alerts lost around alerts.json rotation (#23), same tail as Voice"
 next_task: "Trap integration (Stage 4) or workload identity federation (see Plans)"
 blockers: []
 ---
 
 ## Done
+
+- 2026-10-28: no alerts lost around `alerts.json` rotation (#23): same tail
+  loop as Voice (drain the old file, read the new one from its start, hold a
+  half-written line, reread a shrunk file). Covered by
+  `tests/unit/alerts_tail_test.py`.
 
 - 2026-10-15: less noise. State file capped at `brain_state_max_ids` (10000,
   compacted at startup and hourly, atomic). `brain_ignore_rule_ids`
@@ -40,8 +45,6 @@ blockers: []
 - 2026-05-10: bootstrap — `brain-analyst` role, `brain.yml`, `verify-brain.yml`.
 
 ## Plans
-
-- Backlog: log rotation of `alerts.json` loses the unread tail (reopen at EOF); pre-existing.
 
 - **Workload identity federation instead of a static API key.** Short-lived
   tokens exchanged from an OIDC JWT, no long-lived secret on the host. Worth it

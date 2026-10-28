@@ -62,6 +62,7 @@ Unit checks for scripts run without the lab:
 
 ```bash
 python3 tests/unit/voice_format_test.py
+python3 tests/unit/alerts_tail_test.py
 python3 tests/unit/fang_refresh_test.py
 ```
 
