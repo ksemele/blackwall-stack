@@ -134,7 +134,7 @@ shows the change for both repos.
 
 ## C5. Hacktoberfest (time-boxed, ends 2026-10-31)
 
-- [ ] Status
+- [x] Status: done 2026-10-28 (topic added to both repos; remove it on 2026-11-01)
 
 **Repo:** tui, stack. **Why:** the cheapest way to get the first outside PRs.
 Skip the task if C2–C4 can't land before ~2026-10-25.
@@ -231,7 +231,7 @@ comparison into `STATUS.md` and the Brain README.
 
 ## C11. Catalog and awesome-list submissions
 
-- [ ] Status: drafted (local); Terminal Trove and Charm in the Wild ready, awesome-tuis blocked until 2027-04-15, awesome-selfhosted does not fit
+- [ ] Status: submitted 2026-10-28 (v0.1.0 tagged first); waiting on reviews
 
 **Repo:** tui. **Depends on:** C1 (GIF), ideally C8.
 **Every submission is a PR or form to someone else's project: draft, then ask.**
@@ -245,6 +245,13 @@ comparison into `STATUS.md` and the Brain README.
 
 **Done when:** a table of submissions with status (drafted, submitted, merged)
 is added to this task.
+
+| Where | How | Status |
+|---|---|---|
+| Terminal Trove | form, terminaltrove.com/submit | submitted 2026-10-28 |
+| Charm in the Wild | PR to charm-and-friends/charm-in-the-wild (Cyber Security) | submitted 2026-10-28 |
+| rothgar/awesome-tuis | PR | blocked until 2027-04-15 (project age rule) |
+| awesome-selfhosted | PR | does not fit (a client, not a self-hosted service) |
 
 ## C12. Launch posts
 
