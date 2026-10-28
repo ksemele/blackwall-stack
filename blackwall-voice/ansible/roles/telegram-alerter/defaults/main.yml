@@ -11,8 +11,8 @@ voice_max_level: ""
 # active: checked at deploy time and every 15 s at runtime. Both roles must run
 # on the same host (wazuh_managers).
 voice_cover_unit: brain-analyst
-# Where the covering unit's script lives; its ANALYSIS_THRESHOLD - 1 caps the bound
-voice_cover_script: /opt/brain-analyst/brain.py
+# Brain's rendered config; its BRAIN_ANALYSIS_THRESHOLD - 1 caps the bound
+voice_cover_script: /etc/brain-analyst/brain.env
 
 # Synthetic test alerts of other modules (rule.id) that are never forwarded:
 # 99998 is Brain's verify rule (verify-brain.yml)
