@@ -1,7 +1,12 @@
 ---
+- name: Detect container environment (/.dockerenv)
+  ansible.builtin.stat:
+    path: /.dockerenv
+  register: _dockerenv
+
 - name: Wait for dpkg lock to be released
   when: ansible_facts['os_family'] == 'Debian'
-  shell: while fuser /var/lib/dpkg/lock-frontend /var/lib/dpkg/lock >/dev/null 2>&1; do sleep 2; done
+  ansible.builtin.shell: while fuser /var/lib/dpkg/lock-frontend /var/lib/dpkg/lock >/dev/null 2>&1; do sleep 2; done
   changed_when: false
 
 - name: Refresh apt cache
@@ -15,8 +20,8 @@
     name: "{{ auditd_packages[ansible_facts['os_family']] }}"
     state: present
 
-- name: Set log_format to ENRICHED in auditd.conf
-  lineinfile:
+- name: Set log_format in auditd.conf
+  ansible.builtin.lineinfile:
     path: /etc/audit/auditd.conf
     regexp: '^\s*log_format\s*='
     line: "log_format = {{ auditd_log_format }}"
@@ -24,7 +29,7 @@
   notify: Restart auditd
 
 - name: Deploy blackwall audit rules
-  template:
+  ansible.builtin.template:
     src: blackwall.rules.j2
     dest: /etc/audit/rules.d/blackwall.rules
     owner: root
@@ -32,15 +37,24 @@
     mode: "0640"
   notify: Reload audit rules
 
-- name: Detect container environment (/.dockerenv)
-  stat:
-    path: /.dockerenv
-  register: _dockerenv
+# `enabled 2` = rules were loaded with `-e 2`: the kernel refuses any change
+# until a reboot, so reloading or restarting would only fail. The handlers
+# read this fact and report "reboot required" instead.
+- name: Read kernel audit state
+  ansible.builtin.command: auditctl -s
+  register: _auditctl_status
+  changed_when: false
+  failed_when: false
+  when: not _dockerenv.stat.exists
+
+- name: Note whether audit rules are immutable
+  ansible.builtin.set_fact:
+    _audit_immutable: "{{ _auditctl_status.stdout | default('') is search('^enabled 2', multiline=True) }}"
 
 # auditd requires kernel audit netlink socket — unavailable in Docker containers.
 # On real hosts this will fail (correctly) if auditd can't start.
 - name: Enable and start auditd service
-  systemd:
+  ansible.builtin.systemd:
     name: auditd
     enabled: true
     state: started

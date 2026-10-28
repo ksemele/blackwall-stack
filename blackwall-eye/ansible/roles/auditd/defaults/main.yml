@@ -3,3 +3,12 @@ auditd_log_format: ENRICHED
 auditd_packages:
   Debian: [auditd, audispd-plugins]
   RedHat: [audit]
+
+# Extra lines appended to blackwall.rules, e.g.
+#   ["-w /etc/hosts -p wa -k hosts"]
+auditd_extra_rules: []
+
+# Ends blackwall.rules with `-e 2` (CIS/STIG): after the next rule load the
+# kernel rejects rule and config changes until a reboot. The role then skips
+# the reload/restart handlers and reports "REBOOT REQUIRED" instead of failing.
+auditd_immutable: false

@@ -2,13 +2,26 @@
 module: blackwall-eye
 status: in_progress
 stage: 1
-last_updated: 2026-10-16
-last_task: "Firewall drop events as Wazuh alerts (exporter, rules 100200-100205, bw-check fw-events)"
-next_task: "Before the prod host becomes the manager: backlog item (auditd on real RHEL), then a prod inventory for the stack (loopback binds, heap) — owner decides when"
+last_updated: 2026-10-28
+last_task: "auditd role verified on a real RHEL kernel (Lima VM, bw-check vm 13/13)"
+next_task: "Prod inventory for the stack (backlog: Wazuh server stack prod readiness) — owner decides when"
 blockers: []
 ---
 
 ## Done
+
+- 2026-10-28: auditd role verified on a real RHEL kernel (backlog item
+  closed): `bw-check vm` 13/13 on Rocky 9 (5.14.0-687.10.1.el9_8, aarch64).
+  - Lima VM `black-vm-05` (Rocky 9, own kernel): `bw-lab vm
+    up|down|reboot|provision|ssh|status`, inventory `tests/inventory/vm.yml`,
+    not part of the container lab.
+  - `bw-check vm` (opt-in): defaults loaded in the kernel; rule change reloads
+    without a restart; `log_format` change restarts; broken rule fails the play;
+    immutable `-e 2` survives a reboot, a further change reports `REBOOT
+    REQUIRED` and loads after the next reboot; ends on defaults.
+  - Role: `auditd_extra_rules`, `auditd_immutable`; on `enabled 2` the handlers
+    are skipped and the play reports `REBOOT REQUIRED` instead of failing.
+    `verify-auditd.yml` checks `auditctl -l` / `-s` on real kernels.
 
 - 2026-10-15: firewall drop events (spec
   `docs/superpowers/specs/2026-10-15-firewall-events-design.md`).
@@ -48,6 +61,7 @@ blockers: []
     reaches the indexer.
   - Carried into sub-project B (before the prod host is provisioned): smoke
     test auditd handlers on a real RHEL host, incl. immutable rules (`-e 2`).
+    Done 2026-10-28 (`bw-check vm`).
 - 2026-10-15: Wazuh packages pinned against unattended upgrades (apt hold on
   Debian, yum repo `exclude` + `disable_excludes` on RedHat).
 - 2026-10-15: prod firewall as code (spec `docs/superpowers/specs/2026-10-14-nftables-prod-port-design.md`).
