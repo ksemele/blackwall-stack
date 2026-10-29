@@ -28,13 +28,17 @@ Design: [Brain v2 spec](../docs/superpowers/specs/2026-10-28-brain-v2-eval-desig
 
 ```
 🔴 HIGH · black-host-01 · true positive
-New sudoers drop-in outside config management
-Category: privilege_escalation · confidence: medium
-Action: Check who wrote /etc/sudoers.d/90-app and revert it if unknown
+┌─────────────────────────────────────────────────────────────── copy ┐
+│ New sudoers drop-in outside config management                       │
+│ Category: privilege_escalation · confidence: medium                 │
+│ Action: Check who wrote /etc/sudoers.d/90-app and revert it if unknown│
+└─────────────────────────────────────────────────────────────────────┘
 Rule 100120 (level 10): Sudoers file changed · 2026-10-28 14:02 UTC
 🔗 Alert in dashboard · Runbook
 ```
 
+- The model's answer (summary, category, action, `Missing:`) is one `<pre>`
+  block, so Telegram shows a copy button for pasting it into a reply.
 - 🟥 critical, 🔴 high, 🟠 medium, 🟢 low. **🟡 "needs a look"** when the
   model is unsure, whatever the severity: an unsure verdict never reads as calm.
 - `Missing:` lists what the model lacked (`needs`), when it says so.

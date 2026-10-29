@@ -20,9 +20,9 @@ def test_true_positive_layout(alert):
     msg = format_verdict_message(alert, "doc1", verdict(), "", {})
     assert msg == (
         "🔴 <b>HIGH</b> · <code>black-host-01</code> · true positive\n"
-        "New sudoers drop-in\n"
+        "<pre>New sudoers drop-in\n"
         "Category: privilege_escalation · confidence: medium\n"
-        "Action: Revert it if unknown\n"
+        "Action: Revert it if unknown</pre>\n"
         "Rule 100120 (level 10): Sudoers file changed · 2026-10-28 14:02 UTC"
     )
 
@@ -46,7 +46,7 @@ def test_uncertain_is_yellow_even_when_critical(alert):
 
 def test_missing_line_only_with_needs(alert):
     msg = format_verdict_message(alert, "d", verdict(needs=["admin list", "deploy log"]), "", {})
-    assert "Missing: admin list; deploy log" in msg.splitlines()
+    assert "Action: Revert it if unknown\nMissing: admin list; deploy log</pre>" in msg
     assert "Missing" not in format_verdict_message(alert, "d", verdict(), "", {})
 
 
@@ -111,3 +111,11 @@ def test_alert_link_contains_doc_id_and_time_range():
     assert "AbC-12_x" in url and "wazuh-alerts-*" in url
     assert "2026-10-28T13:47:03" in url and "2026-10-28T14:17:03" in url
     assert " " not in url and '"' not in url
+
+
+def test_model_answer_is_one_copyable_block(alert):
+    msg = format_verdict_message(alert, "d", verdict(summary="a <b>", needs=["x"]), DASH, {})
+    assert msg.count("<pre>") == 1 and msg.count("</pre>") == 1
+    block = msg[msg.index("<pre>") + 5:msg.index("</pre>")]
+    assert block.startswith("a &lt;b&gt;\n") and block.endswith("Missing: x")
+    assert "<b>" not in block and "<a " not in block

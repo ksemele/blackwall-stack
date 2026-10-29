@@ -21,8 +21,10 @@ blockers: []
   black-master-00, image build, read-only user, pickup of the synthetic alert
   in ~12 s, 3 model attempts → fallback → 3 Telegram attempts → "dropped"
   logged; restart re-sends nothing; `brain_enabled=false` → SKIP; Voice clamps
-  to 9 and passes. **Not verified yet (needs real keys):** a real verdict
-  message in Telegram and the dashboard link opening that one alert.
+  to 9 and passes. 2026-10-29 with real keys: a real verdict arrived in
+  Telegram (Haiku 5.5 accepts effort + JSON schema). The dashboard link is a
+  placeholder for now: its URL shape is not verified against the dashboard.
+- 2026-10-29: the model's answer is one `<pre>` block (Telegram copy button).
 
 - 2026-10-28: no alerts lost around `alerts.json` rotation (#23): same tail
   loop as Voice (drain the old file, read the new one from its start, hold a

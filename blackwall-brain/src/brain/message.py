@@ -102,16 +102,20 @@ def format_verdict_message(alert: dict, doc_id: str, v: Verdict, dashboard_url: 
     icon = UNCERTAIN_ICON if v.verdict == "uncertain" else ICONS[v.severity]
 
     def render(limit):
-        lines = [
-            f"{icon} <b>{v.severity.upper()}</b> · <code>{escape(_cut(_host(alert), limit))}</code>"
-            f" · {VERDICT_TEXT[v.verdict]}",
+        # The model's answer as one <pre> block: Telegram shows a copy button.
+        answer = [
             escape(_cut(v.summary, limit)),
             f"Category: {v.category} · confidence: {v.confidence}",
             f"Action: {escape(_cut(v.action, limit))}",
         ]
         if v.needs:
-            lines.append("Missing: " + escape(_cut("; ".join(v.needs), limit)))
-        lines.append(_rule_line(alert, limit))
+            answer.append("Missing: " + escape(_cut("; ".join(v.needs), limit)))
+        lines = [
+            f"{icon} <b>{v.severity.upper()}</b> · <code>{escape(_cut(_host(alert), limit))}</code>"
+            f" · {VERDICT_TEXT[v.verdict]}",
+            "<pre>" + "\n".join(answer) + "</pre>",
+            _rule_line(alert, limit),
+        ]
         lines += _links_line(alert, doc_id, dashboard_url, links)
         return "\n".join(lines)
 
