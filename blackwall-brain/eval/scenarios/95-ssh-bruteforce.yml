@@ -1,0 +1,16 @@
+name: ssh-bruteforce
+description: Many SSH logins with common non-existent user names, from one source.
+agent: black-host-01
+wait_s: 90
+steps:
+- host: black-master-00
+  user: root
+  run: for u in admin oracle test guest ubuntu pi user ftp postgres git; do ssh -o BatchMode=yes -o StrictHostKeyChecking=no
+    -o ConnectTimeout=3 $u@172.28.0.11 true 2>/dev/null; done; true
+cleanup: []
+expected:
+- rule_id: '5712'
+  verdict: true_positive
+  severity: high
+  category: credential_access
+  why: Ten dictionary user names in seconds from one source is SSH brute force.

@@ -1,0 +1,116 @@
+{
+  "captured_at": "2026-10-29T09:58:20Z",
+  "cases": [
+    {
+      "alert": {
+        "@timestamp": "2026-10-29T09:57:40.419Z",
+        "agent": {
+          "id": "002",
+          "ip": "172.28.0.11",
+          "name": "black-host-01"
+        },
+        "decoder": {
+          "name": "syscheck_integrity_changed"
+        },
+        "full_log": "File '/etc/sudoers' modified\nMode: realtime\nChanged attributes: size,mtime,md5,sha1,sha256\nSize changed from '1671' to '1690'\nOld modification time was: '1793264734', now it is '1793267860'\nOld md5sum was: '791aa979aa5e859f9ba0112a9512158c'\nNew md5sum is : '23ee7b929e3fd8563023d947730fd1d5'\nOld sha1sum was: 'b3d869971836a061841e6382aaf4d23a9d958dcc'\nNew sha1sum is : '17efb42f030940c9647932f49a001269f214d3c3'\nOld sha256sum was: '5ae1d5673f987e403c3d08a209798e737169f5f89286862963b6b28d09fb619c'\nNew sha256sum is : 'd9a4eba26cc63de4b4ea5d96fd68122f3f75f1f1157ecea2f86b026118493cec'\n",
+        "id": "1793267860.267859",
+        "input": {
+          "type": "log"
+        },
+        "location": "syscheck",
+        "manager": {
+          "name": "black-master-00"
+        },
+        "rule": {
+          "description": "Integrity checksum changed.",
+          "firedtimes": 27,
+          "gdpr": [
+            "II_5.1.f"
+          ],
+          "gpg13": [
+            "4.11"
+          ],
+          "groups": [
+            "ossec",
+            "syscheck",
+            "syscheck_entry_modified",
+            "syscheck_file"
+          ],
+          "hipaa": [
+            "164.312.c.1",
+            "164.312.c.2"
+          ],
+          "id": "550",
+          "level": 7,
+          "mail": false,
+          "mitre": {
+            "id": [
+              "T1565.001"
+            ],
+            "tactic": [
+              "Impact"
+            ],
+            "technique": [
+              "Stored Data Manipulation"
+            ]
+          },
+          "nist_800_53": [
+            "SI.7"
+          ],
+          "pci_dss": [
+            "11.5"
+          ],
+          "tsc": [
+            "PI1.4",
+            "PI1.5",
+            "CC6.1",
+            "CC6.8",
+            "CC7.2",
+            "CC7.3"
+          ]
+        },
+        "syscheck": {
+          "changed_attributes": [
+            "size",
+            "mtime",
+            "md5",
+            "sha1",
+            "sha256"
+          ],
+          "event": "modified",
+          "gid_after": "0",
+          "gname_after": "root",
+          "inode_after": 4122508,
+          "md5_after": "23ee7b929e3fd8563023d947730fd1d5",
+          "md5_before": "791aa979aa5e859f9ba0112a9512158c",
+          "mode": "realtime",
+          "mtime_after": "2026-10-29T09:57:40",
+          "mtime_before": "2026-10-29T09:05:34",
+          "path": "/etc/sudoers",
+          "perm_after": "r--r-----",
+          "sha1_after": "17efb42f030940c9647932f49a001269f214d3c3",
+          "sha1_before": "b3d869971836a061841e6382aaf4d23a9d958dcc",
+          "sha256_after": "d9a4eba26cc63de4b4ea5d96fd68122f3f75f1f1157ecea2f86b026118493cec",
+          "sha256_before": "5ae1d5673f987e403c3d08a209798e737169f5f89286862963b6b28d09fb619c",
+          "size_after": "1690",
+          "size_before": "1671",
+          "uid_after": "0",
+          "uname_after": "root"
+        },
+        "timestamp": "2026-10-29T09:57:40.419+0000"
+      },
+      "context": {},
+      "doc_id": "XEwYh6EBjm0FRj8CLrgt",
+      "expected": {
+        "category": "false_positive",
+        "min_count": 1,
+        "rule_id": "550",
+        "severity": "low",
+        "verdict": "false_positive",
+        "why": "Granting an admin group password-protected sudo is routine access management."
+      }
+    }
+  ],
+  "eval_set_version": "2026-10-29.1",
+  "scenario": "sudoers-ops-group"
+}

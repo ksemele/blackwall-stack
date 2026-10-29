@@ -1,0 +1,93 @@
+{
+  "captured_at": "2026-10-29T09:59:36Z",
+  "cases": [
+    {
+      "alert": {
+        "@timestamp": "2026-10-29T09:59:00.951Z",
+        "agent": {
+          "id": "002",
+          "ip": "172.28.0.11",
+          "name": "black-host-01"
+        },
+        "decoder": {
+          "name": "syscheck_new_entry"
+        },
+        "full_log": "File '/etc/sudoers.d/91-ops' added\nMode: realtime\n",
+        "id": "1793267940.271701",
+        "input": {
+          "type": "log"
+        },
+        "location": "syscheck",
+        "manager": {
+          "name": "black-master-00"
+        },
+        "rule": {
+          "description": "File added to the system.",
+          "firedtimes": 11,
+          "gdpr": [
+            "II_5.1.f"
+          ],
+          "gpg13": [
+            "4.11"
+          ],
+          "groups": [
+            "ossec",
+            "syscheck",
+            "syscheck_entry_added",
+            "syscheck_file"
+          ],
+          "hipaa": [
+            "164.312.c.1",
+            "164.312.c.2"
+          ],
+          "id": "554",
+          "level": 5,
+          "mail": false,
+          "nist_800_53": [
+            "SI.7"
+          ],
+          "pci_dss": [
+            "11.5"
+          ],
+          "tsc": [
+            "PI1.4",
+            "PI1.5",
+            "CC6.1",
+            "CC6.8",
+            "CC7.2",
+            "CC7.3"
+          ]
+        },
+        "syscheck": {
+          "event": "added",
+          "gid_after": "0",
+          "gname_after": "root",
+          "inode_after": 5504186,
+          "md5_after": "cd3a8a6f0c9ba7cd0cf9a92b6a8a74cc",
+          "mode": "realtime",
+          "mtime_after": "2026-10-29T09:59:00",
+          "path": "/etc/sudoers.d/91-ops",
+          "perm_after": "r--r-----",
+          "sha1_after": "3c4207c4dd337a62cad9729ee153af44cdb3a336",
+          "sha256_after": "71cd29b1b7fbe4f9d5e6935038fb606c26326356b22e61644e31d5740a199d3a",
+          "size_after": "19",
+          "uid_after": "0",
+          "uname_after": "root"
+        },
+        "timestamp": "2026-10-29T09:59:00.951+0000"
+      },
+      "context": {},
+      "doc_id": "YEwZh6EBjm0FRj8CZrj_",
+      "expected": {
+        "category": "false_positive",
+        "min_count": 1,
+        "rule_id": "554",
+        "severity": "low",
+        "verdict": "false_positive",
+        "why": "A drop-in for the ops group with password-required sudo is the normal way to grant admin rights."
+      }
+    }
+  ],
+  "eval_set_version": "2026-10-29.1",
+  "scenario": "sudoersd-ops"
+}

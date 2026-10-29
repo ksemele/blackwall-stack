@@ -1,0 +1,85 @@
+{
+  "captured_at": "2026-10-29T10:09:51Z",
+  "cases": [
+    {
+      "alert": {
+        "@timestamp": "2026-10-29T10:09:17.172Z",
+        "agent": {
+          "id": "002",
+          "ip": "172.28.0.11",
+          "name": "black-host-01"
+        },
+        "decoder": {
+          "name": "ossec"
+        },
+        "full_log": "ossec: File size reduced (inode remained): '/var/log/syslog'.",
+        "id": "1793268557.305273",
+        "input": {
+          "type": "log"
+        },
+        "location": "logcollector",
+        "manager": {
+          "name": "black-master-00"
+        },
+        "rule": {
+          "description": "Log file size reduced.",
+          "firedtimes": 1,
+          "gdpr": [
+            "IV_35.7.d"
+          ],
+          "gpg13": [
+            "10.1"
+          ],
+          "groups": [
+            "ossec",
+            "attacks"
+          ],
+          "hipaa": [
+            "164.312.b"
+          ],
+          "id": "592",
+          "level": 8,
+          "mail": false,
+          "mitre": {
+            "id": [
+              "T1565.001"
+            ],
+            "tactic": [
+              "Impact"
+            ],
+            "technique": [
+              "Stored Data Manipulation"
+            ]
+          },
+          "nist_800_53": [
+            "AU.9",
+            "SI.4"
+          ],
+          "pci_dss": [
+            "10.5.2",
+            "11.4"
+          ],
+          "tsc": [
+            "CC6.1",
+            "CC7.2",
+            "CC7.3",
+            "CC6.8"
+          ]
+        },
+        "timestamp": "2026-10-29T10:09:17.172+0000"
+      },
+      "context": {},
+      "doc_id": "kEwih6EBjm0FRj8CuLhB",
+      "expected": {
+        "category": "false_positive",
+        "min_count": 1,
+        "rule_id": "592",
+        "severity": "low",
+        "verdict": "false_positive",
+        "why": "copytruncate rotation keeps the old content in syslog.1; a size drop is expected."
+      }
+    }
+  ],
+  "eval_set_version": "2026-10-29.1",
+  "scenario": "logs-rotated"
+}

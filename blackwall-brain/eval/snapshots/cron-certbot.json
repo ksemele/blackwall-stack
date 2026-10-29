@@ -1,0 +1,93 @@
+{
+  "captured_at": "2026-10-29T10:03:47Z",
+  "cases": [
+    {
+      "alert": {
+        "@timestamp": "2026-10-29T10:03:17.778Z",
+        "agent": {
+          "id": "002",
+          "ip": "172.28.0.11",
+          "name": "black-host-01"
+        },
+        "decoder": {
+          "name": "syscheck_new_entry"
+        },
+        "full_log": "File '/etc/cron.d/certbot' added\nMode: realtime\n",
+        "id": "1793268197.287149",
+        "input": {
+          "type": "log"
+        },
+        "location": "syscheck",
+        "manager": {
+          "name": "black-master-00"
+        },
+        "rule": {
+          "description": "File added to the system.",
+          "firedtimes": 4,
+          "gdpr": [
+            "II_5.1.f"
+          ],
+          "gpg13": [
+            "4.11"
+          ],
+          "groups": [
+            "ossec",
+            "syscheck",
+            "syscheck_entry_added",
+            "syscheck_file"
+          ],
+          "hipaa": [
+            "164.312.c.1",
+            "164.312.c.2"
+          ],
+          "id": "554",
+          "level": 5,
+          "mail": false,
+          "nist_800_53": [
+            "SI.7"
+          ],
+          "pci_dss": [
+            "11.5"
+          ],
+          "tsc": [
+            "PI1.4",
+            "PI1.5",
+            "CC6.1",
+            "CC6.8",
+            "CC7.2",
+            "CC7.3"
+          ]
+        },
+        "syscheck": {
+          "event": "added",
+          "gid_after": "0",
+          "gname_after": "root",
+          "inode_after": 5504965,
+          "md5_after": "9446298717b356035e230ca857459048",
+          "mode": "realtime",
+          "mtime_after": "2026-10-29T10:03:17",
+          "path": "/etc/cron.d/certbot",
+          "perm_after": "rw-rw-rw-",
+          "sha1_after": "afc432aa36863f56779f3a991ae2f59c72885296",
+          "sha256_after": "31b755be06234c876064888beeeb6a89cb148036899cf72e5bd5f3c658673ac2",
+          "size_after": "99",
+          "uid_after": "0",
+          "uname_after": "root"
+        },
+        "timestamp": "2026-10-29T10:03:17.778+0000"
+      },
+      "context": {},
+      "doc_id": "dUwdh6EBjm0FRj8COLi8",
+      "expected": {
+        "category": "false_positive",
+        "min_count": 1,
+        "rule_id": "554",
+        "severity": "low",
+        "verdict": "false_positive",
+        "why": "The stock certbot renewal job, exactly as the package ships it."
+      }
+    }
+  ],
+  "eval_set_version": "2026-10-29.1",
+  "scenario": "cron-certbot"
+}

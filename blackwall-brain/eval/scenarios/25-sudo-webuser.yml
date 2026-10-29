@@ -1,0 +1,16 @@
+name: sudo-webuser
+description: The web server account tries sudo several times with wrong passwords.
+agent: black-host-01
+wait_s: 90
+steps:
+- host: black-host-01
+  user: www-data
+  run: for i in 1 2 3; do echo 'admin123' | sudo -S -k id 2>/dev/null; done; true
+cleanup: []
+expected:
+- rule_id: '5405'
+  verdict: true_positive
+  severity: high
+  category: privilege_escalation
+  why: www-data never needs sudo; repeated tries from it mean a compromised web app probing for root.
+  min_count: 3

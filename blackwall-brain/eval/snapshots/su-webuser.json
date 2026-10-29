@@ -1,0 +1,82 @@
+{
+  "captured_at": "2026-10-29T09:53:06Z",
+  "cases": [
+    {
+      "alert": {
+        "@timestamp": "2026-10-29T09:52:35.493Z",
+        "agent": {
+          "id": "002",
+          "ip": "172.28.0.11",
+          "name": "black-host-01"
+        },
+        "decoder": {
+          "name": "su",
+          "parent": "su"
+        },
+        "full_log": "Oct 29 09:52:35 black-host-01 su: FAILED SU (to root) www-data on none",
+        "id": "1793267555.261564",
+        "input": {
+          "type": "log"
+        },
+        "location": "/var/log/auth.log",
+        "manager": {
+          "name": "black-master-00"
+        },
+        "predecoder": {
+          "hostname": "black-host-01",
+          "program_name": "su",
+          "timestamp": "Oct 29 09:52:35"
+        },
+        "rule": {
+          "description": "User missed the password to change UID (user id).",
+          "firedtimes": 4,
+          "gdpr": [
+            "IV_35.7.d",
+            "IV_32.2"
+          ],
+          "gpg13": [
+            "7.8"
+          ],
+          "groups": [
+            "syslog",
+            "su",
+            "authentication_failed"
+          ],
+          "hipaa": [
+            "164.312.b"
+          ],
+          "id": "5301",
+          "level": 5,
+          "mail": false,
+          "nist_800_53": [
+            "AU.14",
+            "AC.7"
+          ],
+          "pci_dss": [
+            "10.2.4",
+            "10.2.5"
+          ],
+          "tsc": [
+            "CC6.1",
+            "CC6.8",
+            "CC7.2",
+            "CC7.3"
+          ]
+        },
+        "timestamp": "2026-10-29T09:52:35.493+0000"
+      },
+      "context": {},
+      "doc_id": "T0wTh6EBjm0FRj8Ccrid",
+      "expected": {
+        "category": "privilege_escalation",
+        "min_count": 1,
+        "rule_id": "5301",
+        "severity": "high",
+        "verdict": "true_positive",
+        "why": "su to root from the web server account is privilege escalation from a web shell."
+      }
+    }
+  ],
+  "eval_set_version": "2026-10-29.1",
+  "scenario": "su-webuser"
+}

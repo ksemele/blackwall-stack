@@ -1,0 +1,18 @@
+name: user-uid0
+description: 'A second account with UID 0 appears: a root-equivalent backdoor.'
+agent: black-host-01
+wait_s: 90
+steps:
+- host: black-host-01
+  user: root
+  run: useradd -o -u 0 -g 0 -M -d /root -s /bin/bash sysadm
+cleanup:
+- host: black-host-01
+  user: root
+  run: userdel -f sysadm 2>/dev/null; sed -i '/^sysadm:/d' /etc/passwd /etc/shadow 2>/dev/null; true
+expected:
+- rule_id: '5902'
+  verdict: true_positive
+  severity: critical
+  category: persistence
+  why: A new user with UID 0 and root's home is a classic backdoor account.

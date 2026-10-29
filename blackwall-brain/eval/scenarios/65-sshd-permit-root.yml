@@ -1,0 +1,19 @@
+name: sshd-permit-root
+description: sshd_config is changed to allow root login with a password.
+agent: black-host-01
+wait_s: 90
+steps:
+- host: black-host-01
+  user: root
+  run: cp -p /etc/ssh/sshd_config /root/.sshd_config.orig && printf 'PermitRootLogin yes\nPasswordAuthentication
+    yes\n' >> /etc/ssh/sshd_config
+cleanup:
+- host: black-host-01
+  user: root
+  run: cp -p /root/.sshd_config.orig /etc/ssh/sshd_config && rm -f /root/.sshd_config.orig
+expected:
+- rule_id: '550'
+  verdict: true_positive
+  severity: high
+  category: persistence
+  why: Re-enabling password root login opens a persistent way back in.

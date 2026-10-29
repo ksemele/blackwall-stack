@@ -1,0 +1,18 @@
+name: sudoersd-ops
+description: Config management installs a sudoers drop-in for the ops group.
+agent: black-host-01
+wait_s: 90
+steps:
+- host: black-host-01
+  user: root
+  run: echo '%ops ALL=(ALL) ALL' > /etc/sudoers.d/91-ops && chmod 440 /etc/sudoers.d/91-ops
+cleanup:
+- host: black-host-01
+  user: root
+  run: rm -f /etc/sudoers.d/91-ops
+expected:
+- rule_id: '554'
+  verdict: false_positive
+  severity: low
+  category: false_positive
+  why: A drop-in for the ops group with password-required sudo is the normal way to grant admin rights.

@@ -1,0 +1,15 @@
+name: su-webuser
+description: The web server account tries to su to root.
+agent: black-host-01
+wait_s: 90
+steps:
+- host: black-host-01
+  user: www-data
+  run: echo 'toor' | su - root -c id 2>/dev/null; true
+cleanup: []
+expected:
+- rule_id: '5301'
+  verdict: true_positive
+  severity: high
+  category: privilege_escalation
+  why: su to root from the web server account is privilege escalation from a web shell.

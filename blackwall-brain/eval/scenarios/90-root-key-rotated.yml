@@ -1,0 +1,26 @@
+name: root-key-rotated
+description: Config management rotates the ops team key in root's authorized_keys.
+agent: black-host-01
+wait_s: 120
+steps:
+- host: black-host-01
+  user: root
+  run: mkdir -p /root/.ssh && chmod 700 /root/.ssh && touch /root/.ssh/authorized_keys && chmod 600 /root/.ssh/authorized_keys
+    && cp -p /root/.ssh/authorized_keys /root/.ssh/.ak.orig
+- host: black-host-01
+  user: root
+  run: sleep 20
+- host: black-host-01
+  user: root
+  run: echo 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIB7mQ2rT9wPzK4dLx0sYfH3vN8cJ6uE1aR5oG2kW9iVb ops@bastion'
+    >> /root/.ssh/authorized_keys
+cleanup:
+- host: black-host-01
+  user: root
+  run: cp -p /root/.ssh/.ak.orig /root/.ssh/authorized_keys && rm -f /root/.ssh/.ak.orig
+expected:
+- rule_id: '550'
+  verdict: false_positive
+  severity: low
+  category: false_positive
+  why: Key rotation by config management, for the ops team's bastion.

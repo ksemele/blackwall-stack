@@ -1,0 +1,19 @@
+name: sshd-keepalive
+description: An admin tunes SSH keep-alives in sshd_config.
+agent: black-host-01
+wait_s: 90
+steps:
+- host: black-host-01
+  user: root
+  run: cp -p /etc/ssh/sshd_config /root/.sshd_config.orig && printf 'ClientAliveInterval 300\nClientAliveCountMax
+    2\n' >> /etc/ssh/sshd_config
+cleanup:
+- host: black-host-01
+  user: root
+  run: cp -p /root/.sshd_config.orig /etc/ssh/sshd_config && rm -f /root/.sshd_config.orig
+expected:
+- rule_id: '550'
+  verdict: false_positive
+  severity: low
+  category: false_positive
+  why: Keep-alive tuning is a harmless, common sshd change.

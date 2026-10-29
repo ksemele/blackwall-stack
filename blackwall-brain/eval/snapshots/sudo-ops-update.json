@@ -1,0 +1,101 @@
+{
+  "captured_at": "2026-10-29T09:51:57Z",
+  "cases": [
+    {
+      "alert": {
+        "@timestamp": "2026-10-29T09:51:31.367Z",
+        "agent": {
+          "id": "002",
+          "ip": "172.28.0.11",
+          "name": "black-host-01"
+        },
+        "data": {
+          "command": "/usr/bin/apt-get -qq update",
+          "dstuser": "root",
+          "pwd": "/home/ops",
+          "srcuser": "ops"
+        },
+        "decoder": {
+          "ftscomment": "First time user executed the sudo command",
+          "name": "sudo",
+          "parent": "sudo"
+        },
+        "full_log": "Oct 29 09:51:31 black-host-01 sudo:      ops : PWD=/home/ops ; USER=root ; COMMAND=/usr/bin/apt-get -qq update",
+        "id": "1793267491.255915",
+        "input": {
+          "type": "log"
+        },
+        "location": "/var/log/auth.log",
+        "manager": {
+          "name": "black-master-00"
+        },
+        "predecoder": {
+          "hostname": "black-host-01",
+          "program_name": "sudo",
+          "timestamp": "Oct 29 09:51:31"
+        },
+        "rule": {
+          "description": "Successful sudo to ROOT executed.",
+          "firedtimes": 2,
+          "gdpr": [
+            "IV_32.2"
+          ],
+          "gpg13": [
+            "7.6",
+            "7.8",
+            "7.13"
+          ],
+          "groups": [
+            "syslog",
+            "sudo"
+          ],
+          "hipaa": [
+            "164.312.b"
+          ],
+          "id": "5402",
+          "level": 3,
+          "mail": false,
+          "mitre": {
+            "id": [
+              "T1548.003"
+            ],
+            "tactic": [
+              "Privilege Escalation",
+              "Defense Evasion"
+            ],
+            "technique": [
+              "Sudo and Sudo Caching"
+            ]
+          },
+          "nist_800_53": [
+            "AU.14",
+            "AC.7",
+            "AC.6"
+          ],
+          "pci_dss": [
+            "10.2.5",
+            "10.2.2"
+          ],
+          "tsc": [
+            "CC6.8",
+            "CC7.2",
+            "CC7.3"
+          ]
+        },
+        "timestamp": "2026-10-29T09:51:31.367+0000"
+      },
+      "context": {},
+      "doc_id": "Q0wSh6EBjm0FRj8CcLif",
+      "expected": {
+        "category": "false_positive",
+        "min_count": 1,
+        "rule_id": "5402",
+        "severity": "low",
+        "verdict": "false_positive",
+        "why": "An admin in the sudo group running apt-get update with sudo is routine."
+      }
+    }
+  ],
+  "eval_set_version": "2026-10-29.1",
+  "scenario": "sudo-ops-update"
+}

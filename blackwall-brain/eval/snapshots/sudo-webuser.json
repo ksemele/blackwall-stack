@@ -1,0 +1,286 @@
+{
+  "captured_at": "2026-10-29T09:52:33Z",
+  "cases": [
+    {
+      "alert": {
+        "@timestamp": "2026-10-29T09:51:59.451Z",
+        "agent": {
+          "id": "002",
+          "ip": "172.28.0.11",
+          "name": "black-host-01"
+        },
+        "data": {
+          "command": "/usr/bin/id",
+          "dstuser": "root",
+          "pwd": "/",
+          "srcuser": "www-data"
+        },
+        "decoder": {
+          "ftscomment": "First time user executed the sudo command",
+          "name": "sudo",
+          "parent": "sudo"
+        },
+        "full_log": "Oct 29 09:51:59 black-host-01 sudo: www-data : user NOT in sudoers ; PWD=/ ; USER=root ; COMMAND=/usr/bin/id",
+        "id": "1793267519.258586",
+        "input": {
+          "type": "log"
+        },
+        "location": "/var/log/auth.log",
+        "manager": {
+          "name": "black-master-00"
+        },
+        "predecoder": {
+          "hostname": "black-host-01",
+          "program_name": "sudo",
+          "timestamp": "Oct 29 09:51:59"
+        },
+        "rule": {
+          "description": "Unauthorized user attempted to use sudo.",
+          "firedtimes": 7,
+          "gdpr": [
+            "IV_35.7.d",
+            "IV_32.2"
+          ],
+          "gpg13": [
+            "7.8"
+          ],
+          "groups": [
+            "syslog",
+            "sudo"
+          ],
+          "hipaa": [
+            "164.312.b"
+          ],
+          "id": "5405",
+          "level": 5,
+          "mail": false,
+          "mitre": {
+            "id": [
+              "T1548.003"
+            ],
+            "tactic": [
+              "Privilege Escalation",
+              "Defense Evasion"
+            ],
+            "technique": [
+              "Sudo and Sudo Caching"
+            ]
+          },
+          "nist_800_53": [
+            "AU.14",
+            "AC.6",
+            "AC.7"
+          ],
+          "pci_dss": [
+            "10.2.2",
+            "10.2.5"
+          ],
+          "tsc": [
+            "CC6.8",
+            "CC7.2",
+            "CC7.3"
+          ]
+        },
+        "timestamp": "2026-10-29T09:51:59.451+0000"
+      },
+      "context": {},
+      "doc_id": "SUwSh6EBjm0FRj8C2rgh",
+      "expected": {
+        "category": "privilege_escalation",
+        "min_count": 3,
+        "rule_id": "5405",
+        "severity": "high",
+        "verdict": "true_positive",
+        "why": "www-data never needs sudo; repeated tries from it mean a compromised web app probing for root."
+      }
+    },
+    {
+      "alert": {
+        "@timestamp": "2026-10-29T09:52:01.421Z",
+        "agent": {
+          "id": "002",
+          "ip": "172.28.0.11",
+          "name": "black-host-01"
+        },
+        "data": {
+          "command": "/usr/bin/id",
+          "dstuser": "root",
+          "pwd": "/",
+          "srcuser": "www-data"
+        },
+        "decoder": {
+          "ftscomment": "First time user executed the sudo command",
+          "name": "sudo",
+          "parent": "sudo"
+        },
+        "full_log": "Oct 29 09:52:01 black-host-01 sudo: www-data : user NOT in sudoers ; PWD=/ ; USER=root ; COMMAND=/usr/bin/id",
+        "id": "1793267521.259582",
+        "input": {
+          "type": "log"
+        },
+        "location": "/var/log/auth.log",
+        "manager": {
+          "name": "black-master-00"
+        },
+        "predecoder": {
+          "hostname": "black-host-01",
+          "program_name": "sudo",
+          "timestamp": "Oct 29 09:52:01"
+        },
+        "rule": {
+          "description": "Unauthorized user attempted to use sudo.",
+          "firedtimes": 8,
+          "gdpr": [
+            "IV_35.7.d",
+            "IV_32.2"
+          ],
+          "gpg13": [
+            "7.8"
+          ],
+          "groups": [
+            "syslog",
+            "sudo"
+          ],
+          "hipaa": [
+            "164.312.b"
+          ],
+          "id": "5405",
+          "level": 5,
+          "mail": false,
+          "mitre": {
+            "id": [
+              "T1548.003"
+            ],
+            "tactic": [
+              "Privilege Escalation",
+              "Defense Evasion"
+            ],
+            "technique": [
+              "Sudo and Sudo Caching"
+            ]
+          },
+          "nist_800_53": [
+            "AU.14",
+            "AC.6",
+            "AC.7"
+          ],
+          "pci_dss": [
+            "10.2.2",
+            "10.2.5"
+          ],
+          "tsc": [
+            "CC6.8",
+            "CC7.2",
+            "CC7.3"
+          ]
+        },
+        "timestamp": "2026-10-29T09:52:01.421+0000"
+      },
+      "context": {},
+      "doc_id": "S0wSh6EBjm0FRj8C5bjh",
+      "expected": {
+        "category": "privilege_escalation",
+        "min_count": 3,
+        "rule_id": "5405",
+        "severity": "high",
+        "verdict": "true_positive",
+        "why": "www-data never needs sudo; repeated tries from it mean a compromised web app probing for root."
+      }
+    },
+    {
+      "alert": {
+        "@timestamp": "2026-10-29T09:52:03.422Z",
+        "agent": {
+          "id": "002",
+          "ip": "172.28.0.11",
+          "name": "black-host-01"
+        },
+        "data": {
+          "command": "/usr/bin/id",
+          "dstuser": "root",
+          "pwd": "/",
+          "srcuser": "www-data"
+        },
+        "decoder": {
+          "ftscomment": "First time user executed the sudo command",
+          "name": "sudo",
+          "parent": "sudo"
+        },
+        "full_log": "Oct 29 09:52:03 black-host-01 sudo: www-data : user NOT in sudoers ; PWD=/ ; USER=root ; COMMAND=/usr/bin/id",
+        "id": "1793267523.260578",
+        "input": {
+          "type": "log"
+        },
+        "location": "/var/log/auth.log",
+        "manager": {
+          "name": "black-master-00"
+        },
+        "predecoder": {
+          "hostname": "black-host-01",
+          "program_name": "sudo",
+          "timestamp": "Oct 29 09:52:03"
+        },
+        "rule": {
+          "description": "Unauthorized user attempted to use sudo.",
+          "firedtimes": 9,
+          "gdpr": [
+            "IV_35.7.d",
+            "IV_32.2"
+          ],
+          "gpg13": [
+            "7.8"
+          ],
+          "groups": [
+            "syslog",
+            "sudo"
+          ],
+          "hipaa": [
+            "164.312.b"
+          ],
+          "id": "5405",
+          "level": 5,
+          "mail": false,
+          "mitre": {
+            "id": [
+              "T1548.003"
+            ],
+            "tactic": [
+              "Privilege Escalation",
+              "Defense Evasion"
+            ],
+            "technique": [
+              "Sudo and Sudo Caching"
+            ]
+          },
+          "nist_800_53": [
+            "AU.14",
+            "AC.6",
+            "AC.7"
+          ],
+          "pci_dss": [
+            "10.2.2",
+            "10.2.5"
+          ],
+          "tsc": [
+            "CC6.8",
+            "CC7.2",
+            "CC7.3"
+          ]
+        },
+        "timestamp": "2026-10-29T09:52:03.422+0000"
+      },
+      "context": {},
+      "doc_id": "TUwSh6EBjm0FRj8C6bjQ",
+      "expected": {
+        "category": "privilege_escalation",
+        "min_count": 3,
+        "rule_id": "5405",
+        "severity": "high",
+        "verdict": "true_positive",
+        "why": "www-data never needs sudo; repeated tries from it mean a compromised web app probing for root."
+      }
+    }
+  ],
+  "eval_set_version": "2026-10-29.1",
+  "scenario": "sudo-webuser"
+}

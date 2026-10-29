@@ -1,0 +1,108 @@
+{
+  "captured_at": "2026-10-29T10:04:28Z",
+  "cases": [
+    {
+      "alert": {
+        "@timestamp": "2026-10-29T10:03:48.021Z",
+        "agent": {
+          "id": "002",
+          "ip": "172.28.0.11",
+          "name": "black-host-01"
+        },
+        "decoder": {
+          "name": "syscheck_new_entry"
+        },
+        "full_log": "File '/root/.ssh/authorized_keys' modified\nMode: realtime\nChanged attributes: mtime\nOld modification time was: '1793266486', now it is '1793268228'\n",
+        "id": "1793268228.288521",
+        "input": {
+          "type": "log"
+        },
+        "location": "syscheck",
+        "manager": {
+          "name": "black-master-00"
+        },
+        "rule": {
+          "description": "Integrity checksum changed.",
+          "firedtimes": 7,
+          "gdpr": [
+            "II_5.1.f"
+          ],
+          "gpg13": [
+            "4.11"
+          ],
+          "groups": [
+            "ossec",
+            "syscheck",
+            "syscheck_entry_modified",
+            "syscheck_file"
+          ],
+          "hipaa": [
+            "164.312.c.1",
+            "164.312.c.2"
+          ],
+          "id": "550",
+          "level": 7,
+          "mail": false,
+          "mitre": {
+            "id": [
+              "T1565.001"
+            ],
+            "tactic": [
+              "Impact"
+            ],
+            "technique": [
+              "Stored Data Manipulation"
+            ]
+          },
+          "nist_800_53": [
+            "SI.7"
+          ],
+          "pci_dss": [
+            "11.5"
+          ],
+          "tsc": [
+            "PI1.4",
+            "PI1.5",
+            "CC6.1",
+            "CC6.8",
+            "CC7.2",
+            "CC7.3"
+          ]
+        },
+        "syscheck": {
+          "changed_attributes": [
+            "mtime"
+          ],
+          "event": "modified",
+          "gid_after": "0",
+          "gname_after": "root",
+          "inode_after": 5495261,
+          "md5_after": "d41d8cd98f00b204e9800998ecf8427e",
+          "mode": "realtime",
+          "mtime_after": "2026-10-29T10:03:48",
+          "mtime_before": "2026-10-29T09:34:46",
+          "path": "/root/.ssh/authorized_keys",
+          "perm_after": "rw-------",
+          "sha1_after": "da39a3ee5e6b4b0d3255bfef95601890afd80709",
+          "sha256_after": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "size_after": "0",
+          "uid_after": "0",
+          "uname_after": "root"
+        },
+        "timestamp": "2026-10-29T10:03:48.021+0000"
+      },
+      "context": {},
+      "doc_id": "d0wdh6EBjm0FRj8CrrgL",
+      "expected": {
+        "category": "persistence",
+        "min_count": 1,
+        "rule_id": "550",
+        "severity": "high",
+        "verdict": "true_positive",
+        "why": "A new key for root from an unknown machine is a persistent backdoor."
+      }
+    }
+  ],
+  "eval_set_version": "2026-10-29.1",
+  "scenario": "root-key-added"
+}

@@ -1,0 +1,18 @@
+name: sudoers-ops-group
+description: An admin adds the ops group to /etc/sudoers with password-required sudo.
+agent: black-host-01
+wait_s: 90
+steps:
+- host: black-host-01
+  user: root
+  run: cp -p /etc/sudoers /root/.sudoers.orig && echo '%ops ALL=(ALL) ALL' >> /etc/sudoers
+cleanup:
+- host: black-host-01
+  user: root
+  run: cp -p /root/.sudoers.orig /etc/sudoers && rm -f /root/.sudoers.orig
+expected:
+- rule_id: '550'
+  verdict: false_positive
+  severity: low
+  category: false_positive
+  why: Granting an admin group password-protected sudo is routine access management.

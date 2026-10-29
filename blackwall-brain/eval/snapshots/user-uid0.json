@@ -1,0 +1,103 @@
+{
+  "captured_at": "2026-10-29T09:51:10Z",
+  "cases": [
+    {
+      "alert": {
+        "@timestamp": "2026-10-29T09:50:41.242Z",
+        "agent": {
+          "id": "002",
+          "ip": "172.28.0.11",
+          "name": "black-host-01"
+        },
+        "data": {
+          "dstuser": "sysadm",
+          "gid": "0",
+          "home": "/root",
+          "shell": "/bin/bash,",
+          "uid": "0"
+        },
+        "decoder": {
+          "name": "useradd",
+          "parent": "useradd"
+        },
+        "full_log": "Oct 29 09:50:40 black-host-01 useradd[14450]: new user: name=sysadm, UID=0, GID=0, home=/root, shell=/bin/bash, from=none",
+        "id": "1793267441.253918",
+        "input": {
+          "type": "log"
+        },
+        "location": "/var/log/auth.log",
+        "manager": {
+          "name": "black-master-00"
+        },
+        "predecoder": {
+          "hostname": "black-host-01",
+          "program_name": "useradd",
+          "timestamp": "Oct 29 09:50:40"
+        },
+        "rule": {
+          "description": "New user added to the system.",
+          "firedtimes": 10,
+          "gdpr": [
+            "IV_35.7.d",
+            "IV_32.2"
+          ],
+          "gpg13": [
+            "4.13"
+          ],
+          "groups": [
+            "syslog",
+            "adduser"
+          ],
+          "hipaa": [
+            "164.312.b",
+            "164.312.a.2.I",
+            "164.312.a.2.II"
+          ],
+          "id": "5902",
+          "level": 8,
+          "mail": false,
+          "mitre": {
+            "id": [
+              "T1136"
+            ],
+            "tactic": [
+              "Persistence"
+            ],
+            "technique": [
+              "Create Account"
+            ]
+          },
+          "nist_800_53": [
+            "AU.14",
+            "AC.7",
+            "AC.2",
+            "IA.4"
+          ],
+          "pci_dss": [
+            "10.2.7",
+            "10.2.5",
+            "8.1.2"
+          ],
+          "tsc": [
+            "CC6.8",
+            "CC7.2",
+            "CC7.3"
+          ]
+        },
+        "timestamp": "2026-10-29T09:50:41.242+0000"
+      },
+      "context": {},
+      "doc_id": "P0wRh6EBjm0FRj8CuLjn",
+      "expected": {
+        "category": "persistence",
+        "min_count": 1,
+        "rule_id": "5902",
+        "severity": "critical",
+        "verdict": "true_positive",
+        "why": "A new user with UID 0 and root's home is a classic backdoor account."
+      }
+    }
+  ],
+  "eval_set_version": "2026-10-29.1",
+  "scenario": "user-uid0"
+}

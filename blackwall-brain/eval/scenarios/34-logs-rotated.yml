@@ -1,0 +1,16 @@
+name: logs-rotated
+description: 'syslog is rotated with copytruncate: copied to syslog.1, then truncated.'
+agent: black-host-01
+wait_s: 90
+steps:
+- host: black-host-01
+  user: root
+  run: 'for i in $(seq 1 200); do logger -t cron ''CRON[4242]: (root) CMD (run-parts /etc/cron.hourly)'';
+    done; sleep 15; cp /var/log/syslog /var/log/syslog.1 && : > /var/log/syslog'
+cleanup: []
+expected:
+- rule_id: '592'
+  verdict: false_positive
+  severity: low
+  category: false_positive
+  why: copytruncate rotation keeps the old content in syslog.1; a size drop is expected.

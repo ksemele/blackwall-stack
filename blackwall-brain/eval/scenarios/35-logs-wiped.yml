@@ -1,0 +1,16 @@
+name: logs-wiped
+description: auth.log and syslog are emptied in place, without rotation.
+agent: black-host-01
+wait_s: 90
+steps:
+- host: black-host-01
+  user: root
+  run: 'sleep 5; : > /var/log/auth.log; : > /var/log/syslog'
+cleanup: []
+expected:
+- rule_id: '592'
+  verdict: true_positive
+  severity: high
+  category: defense_evasion
+  why: Emptying auth.log and syslog at once, with no rotated copy, hides tracks.
+  min_count: 2

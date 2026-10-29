@@ -1,0 +1,19 @@
+name: cron-certbot
+description: The certbot package installs its renewal job in /etc/cron.d.
+agent: black-host-01
+wait_s: 90
+steps:
+- host: black-host-01
+  user: root
+  run: echo '0 */12 * * * root test -x /usr/bin/certbot && perl -e "sleep int(rand(43200))" && certbot
+    -q renew' > /etc/cron.d/certbot
+cleanup:
+- host: black-host-01
+  user: root
+  run: rm -f /etc/cron.d/certbot
+expected:
+- rule_id: '554'
+  verdict: false_positive
+  severity: low
+  category: false_positive
+  why: The stock certbot renewal job, exactly as the package ships it.
