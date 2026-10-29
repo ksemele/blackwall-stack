@@ -1,0 +1,108 @@
+{
+  "captured_at": "2026-10-29T10:20:50Z",
+  "cases": [
+    {
+      "alert": {
+        "@timestamp": "2026-10-29T10:20:16.198Z",
+        "agent": {
+          "id": "002",
+          "ip": "172.28.0.11",
+          "name": "black-host-01"
+        },
+        "data": {
+          "srcip": "172.28.0.10",
+          "srcport": "50178",
+          "srcuser": "opss"
+        },
+        "decoder": {
+          "name": "sshd",
+          "parent": "sshd"
+        },
+        "full_log": "Oct 29 10:20:15 black-host-01 sshd[16749]: Invalid user opss from 172.28.0.10 port 50178",
+        "id": "1793269216.308901",
+        "input": {
+          "type": "log"
+        },
+        "location": "/var/log/auth.log",
+        "manager": {
+          "name": "black-master-00"
+        },
+        "predecoder": {
+          "hostname": "black-host-01",
+          "program_name": "sshd",
+          "timestamp": "Oct 29 10:20:15"
+        },
+        "rule": {
+          "description": "sshd: Attempt to login using a non-existent user",
+          "firedtimes": 10,
+          "gdpr": [
+            "IV_35.7.d",
+            "IV_32.2"
+          ],
+          "gpg13": [
+            "7.1"
+          ],
+          "groups": [
+            "syslog",
+            "sshd",
+            "authentication_failed",
+            "invalid_login"
+          ],
+          "hipaa": [
+            "164.312.b"
+          ],
+          "id": "5710",
+          "level": 5,
+          "mail": false,
+          "mitre": {
+            "id": [
+              "T1110.001",
+              "T1021.004"
+            ],
+            "tactic": [
+              "Credential Access",
+              "Lateral Movement"
+            ],
+            "technique": [
+              "Password Guessing",
+              "SSH"
+            ]
+          },
+          "nist_800_53": [
+            "AU.14",
+            "AC.7",
+            "AU.6"
+          ],
+          "pci_dss": [
+            "10.2.4",
+            "10.2.5",
+            "10.6.1"
+          ],
+          "tsc": [
+            "CC6.1",
+            "CC6.8",
+            "CC7.2",
+            "CC7.3"
+          ]
+        },
+        "timestamp": "2026-10-29T10:20:16.198+0000"
+      },
+      "context": {},
+      "doc_id": "nUwsh6EBjm0FRj8C1rhu",
+      "expected": {
+        "category": "false_positive",
+        "match": {
+          "full_log": "opss"
+        },
+        "min_count": 1,
+        "needs_context": false,
+        "rule_id": "5710",
+        "severity": "low",
+        "verdict": "false_positive",
+        "why": "A single failed login with a near-miss of a real admin name (opss vs ops), from the internal management host."
+      }
+    }
+  ],
+  "eval_set_version": "2026-10-29.2",
+  "scenario": "ssh-admin-typo"
+}

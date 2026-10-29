@@ -198,7 +198,7 @@ artifacts, and the README documents them.
 
 ## C9. Brain eval set and harness
 
-- [ ] Status
+- [x] Status: done 2026-10-29 (26 scenarios, 30 alerts, baseline results in blackwall-brain/STATUS.md; grew into Brain v2, spec 2026-10-28)
 
 **Repo:** stack (`blackwall-brain/`). Read its `STATUS.md` first.
 **Why:** many projects add an LLM to Wazuh triage; almost none publish how

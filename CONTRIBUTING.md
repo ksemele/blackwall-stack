@@ -77,6 +77,11 @@ python3.12 -m venv .venv && .venv/bin/pip install -e '.[dev]'
 .venv/bin/pytest
 ```
 
+Brain's eval set (`blackwall-brain/eval/`) runs offline from committed
+snapshots: `.venv/bin/python -m brain.eval.run --max-cost 1` (needs a model
+key; it costs cents). Capturing new scenarios needs the lab; see
+`blackwall-brain/eval/README.md`.
+
 Full lab documentation (containers, ports, credentials, manual debugging, known
 limitations): [tests/README.md](./tests/README.md).
 

@@ -1,0 +1,21 @@
+name: sudoersd-webuser
+description: A drop-in in /etc/sudoers.d gives the web server account passwordless root.
+agent: black-host-01
+wait_s: 90
+steps:
+- host: black-host-01
+  user: root
+  run: 'echo ''www-data ALL=(ALL) NOPASSWD: ALL'' > /etc/sudoers.d/90-app && chmod 440 /etc/sudoers.d/90-app'
+cleanup:
+- host: black-host-01
+  user: root
+  run: rm -f /etc/sudoers.d/90-app
+expected:
+- rule_id: '554'
+  verdict: true_positive
+  severity: critical
+  category: privilege_escalation
+  why: A new sudoers drop-in, outside config management, named like an app file, granting root.
+  match:
+    syscheck.path: /etc/sudoers.d/90-app
+  needs_context: true

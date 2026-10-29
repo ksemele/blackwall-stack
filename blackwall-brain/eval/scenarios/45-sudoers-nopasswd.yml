@@ -1,0 +1,21 @@
+name: sudoers-nopasswd
+description: /etc/sudoers gains a NOPASSWD ALL rule for the web server account.
+agent: black-host-01
+wait_s: 90
+steps:
+- host: black-host-01
+  user: root
+  run: 'cp -p /etc/sudoers /root/.sudoers.orig && echo ''www-data ALL=(ALL) NOPASSWD: ALL'' >> /etc/sudoers'
+cleanup:
+- host: black-host-01
+  user: root
+  run: cp -p /root/.sudoers.orig /etc/sudoers && rm -f /root/.sudoers.orig
+expected:
+- rule_id: '550'
+  verdict: true_positive
+  severity: critical
+  category: privilege_escalation
+  why: Giving www-data passwordless root is privilege escalation and persistence.
+  match:
+    syscheck.path: /etc/sudoers
+  needs_context: true

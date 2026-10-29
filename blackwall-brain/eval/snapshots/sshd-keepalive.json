@@ -1,0 +1,120 @@
+{
+  "captured_at": "2026-10-29T10:31:41Z",
+  "cases": [
+    {
+      "alert": {
+        "@timestamp": "2026-10-29T10:31:11.284Z",
+        "agent": {
+          "id": "002",
+          "ip": "172.28.0.11",
+          "name": "black-host-01"
+        },
+        "decoder": {
+          "name": "syscheck_integrity_changed"
+        },
+        "full_log": "File '/etc/ssh/sshd_config' modified\nMode: realtime\nChanged attributes: size,mtime,md5,sha1,sha256\nSize changed from '3301' to '3347'\nOld modification time was: '1793265066', now it is '1793269871'\nOld md5sum was: '90c85d4c3138c8a425bc5d3f09dfeb2f'\nNew md5sum is : '8412603f08139d24c86c95a6ed577e52'\nOld sha1sum was: '8ee9380bb4117ec726dae1e77d804e5320e0057b'\nNew sha1sum is : '25da53ac43cbc325ea650261c2975f8b43dd4e52'\nOld sha256sum was: 'df516d4064d242efe7735080a9d282f30384d1c8ec088a4bccd3917c1ff83bdb'\nNew sha256sum is : '2cbca7522abc0635741cfcf25c61cd8784194d9a3bd1ac2ad44d789c0536e269'\n",
+        "id": "1793269871.335507",
+        "input": {
+          "type": "log"
+        },
+        "location": "syscheck",
+        "manager": {
+          "name": "black-master-00"
+        },
+        "rule": {
+          "description": "Integrity checksum changed.",
+          "firedtimes": 24,
+          "gdpr": [
+            "II_5.1.f"
+          ],
+          "gpg13": [
+            "4.11"
+          ],
+          "groups": [
+            "ossec",
+            "syscheck",
+            "syscheck_entry_modified",
+            "syscheck_file"
+          ],
+          "hipaa": [
+            "164.312.c.1",
+            "164.312.c.2"
+          ],
+          "id": "550",
+          "level": 7,
+          "mail": false,
+          "mitre": {
+            "id": [
+              "T1565.001"
+            ],
+            "tactic": [
+              "Impact"
+            ],
+            "technique": [
+              "Stored Data Manipulation"
+            ]
+          },
+          "nist_800_53": [
+            "SI.7"
+          ],
+          "pci_dss": [
+            "11.5"
+          ],
+          "tsc": [
+            "PI1.4",
+            "PI1.5",
+            "CC6.1",
+            "CC6.8",
+            "CC7.2",
+            "CC7.3"
+          ]
+        },
+        "syscheck": {
+          "changed_attributes": [
+            "size",
+            "mtime",
+            "md5",
+            "sha1",
+            "sha256"
+          ],
+          "event": "modified",
+          "gid_after": "0",
+          "gname_after": "root",
+          "inode_after": 4290661,
+          "md5_after": "8412603f08139d24c86c95a6ed577e52",
+          "md5_before": "90c85d4c3138c8a425bc5d3f09dfeb2f",
+          "mode": "realtime",
+          "mtime_after": "2026-10-29T10:31:11",
+          "mtime_before": "2026-10-29T09:11:06",
+          "path": "/etc/ssh/sshd_config",
+          "perm_after": "rw-r--r--",
+          "sha1_after": "25da53ac43cbc325ea650261c2975f8b43dd4e52",
+          "sha1_before": "8ee9380bb4117ec726dae1e77d804e5320e0057b",
+          "sha256_after": "2cbca7522abc0635741cfcf25c61cd8784194d9a3bd1ac2ad44d789c0536e269",
+          "sha256_before": "df516d4064d242efe7735080a9d282f30384d1c8ec088a4bccd3917c1ff83bdb",
+          "size_after": "3347",
+          "size_before": "3301",
+          "uid_after": "0",
+          "uname_after": "root"
+        },
+        "timestamp": "2026-10-29T10:31:11.284+0000"
+      },
+      "context": {},
+      "doc_id": "zkw2h6EBjm0FRj8CvLgR",
+      "expected": {
+        "category": "false_positive",
+        "match": {
+          "syscheck.path": "/etc/ssh/sshd_config"
+        },
+        "min_count": 1,
+        "needs_context": true,
+        "rule_id": "550",
+        "severity": "low",
+        "verdict": "false_positive",
+        "why": "Keep-alive tuning is a harmless, common sshd change."
+      }
+    }
+  ],
+  "eval_set_version": "2026-10-29.2",
+  "scenario": "sshd-keepalive"
+}

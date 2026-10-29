@@ -1,0 +1,97 @@
+{
+  "captured_at": "2026-10-29T10:32:41Z",
+  "cases": [
+    {
+      "alert": {
+        "@timestamp": "2026-10-29T10:32:11.704Z",
+        "agent": {
+          "id": "002",
+          "ip": "172.28.0.11",
+          "name": "black-host-01"
+        },
+        "decoder": {
+          "name": "syscheck_new_entry"
+        },
+        "full_log": "File '/etc/cron.d/sysupdate' added\nMode: realtime\n",
+        "id": "1793269931.340471",
+        "input": {
+          "type": "log"
+        },
+        "location": "syscheck",
+        "manager": {
+          "name": "black-master-00"
+        },
+        "rule": {
+          "description": "File added to the system.",
+          "firedtimes": 9,
+          "gdpr": [
+            "II_5.1.f"
+          ],
+          "gpg13": [
+            "4.11"
+          ],
+          "groups": [
+            "ossec",
+            "syscheck",
+            "syscheck_entry_added",
+            "syscheck_file"
+          ],
+          "hipaa": [
+            "164.312.c.1",
+            "164.312.c.2"
+          ],
+          "id": "554",
+          "level": 5,
+          "mail": false,
+          "nist_800_53": [
+            "SI.7"
+          ],
+          "pci_dss": [
+            "11.5"
+          ],
+          "tsc": [
+            "PI1.4",
+            "PI1.5",
+            "CC6.1",
+            "CC6.8",
+            "CC7.2",
+            "CC7.3"
+          ]
+        },
+        "syscheck": {
+          "event": "added",
+          "gid_after": "0",
+          "gname_after": "root",
+          "inode_after": 5508835,
+          "md5_after": "fc87b235dc425855997926ee0117c213",
+          "mode": "realtime",
+          "mtime_after": "2026-10-29T10:32:11",
+          "path": "/etc/cron.d/sysupdate",
+          "perm_after": "rw-rw-rw-",
+          "sha1_after": "4fc520c5dff85aaa3157966447d88658bfa576dd",
+          "sha256_after": "c430fc4a85ecd701bf3755edc7b311d9a91dab15a90f185914419cdf7868b33e",
+          "size_after": "59",
+          "uid_after": "0",
+          "uname_after": "root"
+        },
+        "timestamp": "2026-10-29T10:32:11.704+0000"
+      },
+      "context": {},
+      "doc_id": "0kw3h6EBjm0FRj8CpriU",
+      "expected": {
+        "category": "persistence",
+        "match": {
+          "syscheck.path": "/etc/cron.d/sysupdate"
+        },
+        "min_count": 1,
+        "needs_context": true,
+        "rule_id": "554",
+        "severity": "high",
+        "verdict": "true_positive",
+        "why": "A root cron job piping a remote script to sh is a persistence and C2 pattern."
+      }
+    }
+  ],
+  "eval_set_version": "2026-10-29.2",
+  "scenario": "cron-download-exec"
+}

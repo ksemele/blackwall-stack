@@ -1,0 +1,22 @@
+name: su-ops-typo
+description: The ops admin mistypes the root password once with su.
+agent: black-host-01
+wait_s: 90
+setup:
+- host: black-host-01
+  user: root
+  run: id ops >/dev/null 2>&1 || (useradd -m -s /bin/bash -c 'Ops admin' ops && usermod -aG sudo ops &&
+    echo 'ops:Op5-Rotate-77' | chpasswd); echo 'ops:Op5-Rotate-77' | chpasswd
+steps:
+- host: black-host-01
+  user: root
+  run: su - ops -c "echo 'blackwal' | su - root -c id" 2>/dev/null; true
+cleanup: []
+expected:
+- rule_id: '5301'
+  verdict: false_positive
+  severity: low
+  category: false_positive
+  why: One failed su by a known admin account, a likely typo; no repeated attempts.
+  match:
+    full_log: ops

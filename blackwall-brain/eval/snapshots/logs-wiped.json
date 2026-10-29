@@ -1,0 +1,171 @@
+{
+  "captured_at": "2026-10-29T10:39:46Z",
+  "cases": [
+    {
+      "alert": {
+        "@timestamp": "2026-10-29T10:39:16.822Z",
+        "agent": {
+          "id": "002",
+          "ip": "172.28.0.11",
+          "name": "black-host-01"
+        },
+        "decoder": {
+          "name": "ossec"
+        },
+        "full_log": "ossec: File size reduced (inode remained): '/var/log/auth.log'.",
+        "id": "1793270356.363122",
+        "input": {
+          "type": "log"
+        },
+        "location": "logcollector",
+        "manager": {
+          "name": "black-master-00"
+        },
+        "rule": {
+          "description": "Log file size reduced.",
+          "firedtimes": 4,
+          "gdpr": [
+            "IV_35.7.d"
+          ],
+          "gpg13": [
+            "10.1"
+          ],
+          "groups": [
+            "ossec",
+            "attacks"
+          ],
+          "hipaa": [
+            "164.312.b"
+          ],
+          "id": "592",
+          "level": 8,
+          "mail": false,
+          "mitre": {
+            "id": [
+              "T1565.001"
+            ],
+            "tactic": [
+              "Impact"
+            ],
+            "technique": [
+              "Stored Data Manipulation"
+            ]
+          },
+          "nist_800_53": [
+            "AU.9",
+            "SI.4"
+          ],
+          "pci_dss": [
+            "10.5.2",
+            "11.4"
+          ],
+          "tsc": [
+            "CC6.1",
+            "CC7.2",
+            "CC7.3",
+            "CC6.8"
+          ]
+        },
+        "timestamp": "2026-10-29T10:39:16.822+0000"
+      },
+      "context": {},
+      "doc_id": "9Ew-h6EBjm0FRj8CK7i_",
+      "expected": {
+        "category": "defense_evasion",
+        "match": {
+          "full_log": "/var/log/auth.log"
+        },
+        "min_count": 1,
+        "needs_context": true,
+        "rule_id": "592",
+        "severity": "high",
+        "verdict": "true_positive",
+        "why": "auth.log emptied in place, with syslog at the same moment and no rotated copy: hiding tracks."
+      }
+    },
+    {
+      "alert": {
+        "@timestamp": "2026-10-29T10:39:16.863Z",
+        "agent": {
+          "id": "002",
+          "ip": "172.28.0.11",
+          "name": "black-host-01"
+        },
+        "decoder": {
+          "name": "ossec"
+        },
+        "full_log": "ossec: File size reduced (inode remained): '/var/log/syslog'.",
+        "id": "1793270356.363479",
+        "input": {
+          "type": "log"
+        },
+        "location": "logcollector",
+        "manager": {
+          "name": "black-master-00"
+        },
+        "rule": {
+          "description": "Log file size reduced.",
+          "firedtimes": 5,
+          "gdpr": [
+            "IV_35.7.d"
+          ],
+          "gpg13": [
+            "10.1"
+          ],
+          "groups": [
+            "ossec",
+            "attacks"
+          ],
+          "hipaa": [
+            "164.312.b"
+          ],
+          "id": "592",
+          "level": 8,
+          "mail": false,
+          "mitre": {
+            "id": [
+              "T1565.001"
+            ],
+            "tactic": [
+              "Impact"
+            ],
+            "technique": [
+              "Stored Data Manipulation"
+            ]
+          },
+          "nist_800_53": [
+            "AU.9",
+            "SI.4"
+          ],
+          "pci_dss": [
+            "10.5.2",
+            "11.4"
+          ],
+          "tsc": [
+            "CC6.1",
+            "CC7.2",
+            "CC7.3",
+            "CC6.8"
+          ]
+        },
+        "timestamp": "2026-10-29T10:39:16.863+0000"
+      },
+      "context": {},
+      "doc_id": "9Uw-h6EBjm0FRj8CK7i_",
+      "expected": {
+        "category": "defense_evasion",
+        "match": {
+          "full_log": "/var/log/syslog"
+        },
+        "min_count": 1,
+        "needs_context": true,
+        "rule_id": "592",
+        "severity": "high",
+        "verdict": "true_positive",
+        "why": "syslog emptied together with auth.log, with no rotated copy."
+      }
+    }
+  ],
+  "eval_set_version": "2026-10-29.2",
+  "scenario": "logs-wiped"
+}

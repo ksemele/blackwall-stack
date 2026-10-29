@@ -1,0 +1,21 @@
+name: cron-backup
+description: A nightly backup job is installed in /etc/cron.d.
+agent: black-host-01
+wait_s: 90
+steps:
+- host: black-host-01
+  user: root
+  run: echo '30 2 * * * root /usr/local/bin/backup.sh >/var/log/backup.log 2>&1' > /etc/cron.d/nightly-backup
+cleanup:
+- host: black-host-01
+  user: root
+  run: rm -f /etc/cron.d/nightly-backup
+expected:
+- rule_id: '554'
+  verdict: false_positive
+  severity: low
+  category: false_positive
+  why: A nightly backup job is routine scheduled maintenance.
+  match:
+    syscheck.path: /etc/cron.d/nightly-backup
+  needs_context: true

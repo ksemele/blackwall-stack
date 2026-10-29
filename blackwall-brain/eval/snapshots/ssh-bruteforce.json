@@ -1,0 +1,101 @@
+{
+  "captured_at": "2026-10-29T10:38:14Z",
+  "cases": [
+    {
+      "alert": {
+        "@timestamp": "2026-10-29T10:37:45.249Z",
+        "agent": {
+          "id": "002",
+          "ip": "172.28.0.11",
+          "name": "black-host-01"
+        },
+        "data": {
+          "srcip": "172.28.0.10",
+          "srcport": "44844",
+          "srcuser": "ftp"
+        },
+        "decoder": {
+          "name": "sshd",
+          "parent": "sshd"
+        },
+        "full_log": "Oct 29 10:37:44 black-host-01 sshd[18586]: Invalid user ftp from 172.28.0.10 port 44844",
+        "id": "1793270265.360516",
+        "input": {
+          "type": "log"
+        },
+        "location": "/var/log/auth.log",
+        "manager": {
+          "name": "black-master-00"
+        },
+        "predecoder": {
+          "hostname": "black-host-01",
+          "program_name": "sshd",
+          "timestamp": "Oct 29 10:37:44"
+        },
+        "previous_output": "Oct 29 10:37:44 black-host-01 sshd[18588]: Invalid user postgres from 172.28.0.10 port 44856\nOct 29 10:37:44 black-host-01 sshd[18584]: Invalid user user from 172.28.0.10 port 44838\nOct 29 10:37:44 black-host-01 sshd[18576]: Invalid user test from 172.28.0.10 port 44800\nOct 29 10:37:44 black-host-01 sshd[18580]: Invalid user ubuntu from 172.28.0.10 port 44824\nOct 29 10:37:44 black-host-01 sshd[18578]: Invalid user guest from 172.28.0.10 port 44816\nOct 29 10:37:44 black-host-01 sshd[18574]: Invalid user oracle from 172.28.0.10 port 44796\nOct 29 10:37:43 black-host-01 sshd[18572]: Invalid user admin from 172.28.0.10 port 44792",
+        "rule": {
+          "description": "sshd: brute force trying to get access to the system. Non existent user.",
+          "firedtimes": 2,
+          "frequency": 8,
+          "gdpr": [
+            "IV_35.7.d",
+            "IV_32.2"
+          ],
+          "groups": [
+            "syslog",
+            "sshd",
+            "authentication_failures"
+          ],
+          "hipaa": [
+            "164.312.b"
+          ],
+          "id": "5712",
+          "level": 10,
+          "mail": false,
+          "mitre": {
+            "id": [
+              "T1110"
+            ],
+            "tactic": [
+              "Credential Access"
+            ],
+            "technique": [
+              "Brute Force"
+            ]
+          },
+          "nist_800_53": [
+            "SI.4",
+            "AU.14",
+            "AC.7"
+          ],
+          "pci_dss": [
+            "11.4",
+            "10.2.4",
+            "10.2.5"
+          ],
+          "tsc": [
+            "CC6.1",
+            "CC6.8",
+            "CC7.2",
+            "CC7.3"
+          ]
+        },
+        "timestamp": "2026-10-29T10:37:45.249+0000"
+      },
+      "context": {},
+      "doc_id": "8Ew8h6EBjm0FRj8Cy7j5",
+      "expected": {
+        "category": "credential_access",
+        "match": {},
+        "min_count": 1,
+        "needs_context": false,
+        "rule_id": "5712",
+        "severity": "high",
+        "verdict": "true_positive",
+        "why": "Ten dictionary user names in seconds from one source is SSH brute force, even from an internal host."
+      }
+    }
+  ],
+  "eval_set_version": "2026-10-29.2",
+  "scenario": "ssh-bruteforce"
+}

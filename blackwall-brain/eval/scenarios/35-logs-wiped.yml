@@ -1,0 +1,31 @@
+name: logs-wiped
+description: auth.log and syslog are emptied in place, without rotation.
+agent: black-host-01
+wait_s: 90
+setup:
+- host: black-host-01
+  user: root
+  run: 'for i in $(seq 1 200); do logger -p auth.info -t sshd ''pam_unix(sshd:session): session closed
+    for user ops''; done'
+steps:
+- host: black-host-01
+  user: root
+  run: ': > /var/log/auth.log; : > /var/log/syslog'
+cleanup: []
+expected:
+- rule_id: '592'
+  verdict: true_positive
+  severity: high
+  category: defense_evasion
+  why: 'auth.log emptied in place, with syslog at the same moment and no rotated copy: hiding tracks.'
+  match:
+    full_log: /var/log/auth.log
+  needs_context: true
+- rule_id: '592'
+  verdict: true_positive
+  severity: high
+  category: defense_evasion
+  why: syslog emptied together with auth.log, with no rotated copy.
+  match:
+    full_log: /var/log/syslog
+  needs_context: true

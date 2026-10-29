@@ -1,0 +1,22 @@
+name: sshd-authkeys-tmp
+description: sshd_config is pointed at an extra authorized keys file under /tmp.
+agent: black-host-01
+wait_s: 90
+steps:
+- host: black-host-01
+  user: root
+  run: cp -p /etc/ssh/sshd_config /root/.sshd_config.orig && printf 'AuthorizedKeysFile .ssh/authorized_keys
+    /tmp/.k\n' >> /etc/ssh/sshd_config
+cleanup:
+- host: black-host-01
+  user: root
+  run: cp -p /root/.sshd_config.orig /etc/ssh/sshd_config && rm -f /root/.sshd_config.orig
+expected:
+- rule_id: '550'
+  verdict: true_positive
+  severity: high
+  category: persistence
+  why: An extra key file in a world-writable directory lets anyone add a login key.
+  match:
+    syscheck.path: /etc/ssh/sshd_config
+  needs_context: true

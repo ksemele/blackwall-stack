@@ -123,6 +123,13 @@ by Voice) into `alerts.json`; it reaches the indexer through filebeat. With
 credentials Brain must deliver it to Telegram within 120 s; without, it must
 at least pick it up.
 
+## Eval
+
+`eval/` holds an open, labelled set of lab alerts and a harness that scores
+Brain's verdicts per field, with cost and latency, for any backend:
+`.venv/bin/python -m brain.eval.run --max-cost 1`. Results so far are in
+`STATUS.md`; how to run, score and add scenarios: [eval/README.md](eval/README.md).
+
 ## Develop
 
 ```bash

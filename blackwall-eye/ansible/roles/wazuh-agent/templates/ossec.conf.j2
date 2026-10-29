@@ -75,6 +75,10 @@
     <directories realtime="yes">/etc/shadow</directories>
     <directories realtime="yes">/etc/sudoers</directories>
     <directories realtime="yes">/etc/ssh/sshd_config</directories>
+    <!-- Common persistence paths: privilege grants, scheduled jobs, root's keys -->
+    <directories realtime="yes">/etc/sudoers.d</directories>
+    <directories realtime="yes">/etc/cron.d</directories>
+    <directories realtime="yes">/root/.ssh</directories>
   </syscheck>
 
   <!-- Rootkit and system anomaly detection -->

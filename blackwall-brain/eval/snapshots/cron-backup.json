@@ -1,0 +1,97 @@
+{
+  "captured_at": "2026-10-29T10:33:37Z",
+  "cases": [
+    {
+      "alert": {
+        "@timestamp": "2026-10-29T10:33:12.138Z",
+        "agent": {
+          "id": "002",
+          "ip": "172.28.0.11",
+          "name": "black-host-01"
+        },
+        "decoder": {
+          "name": "syscheck_new_entry"
+        },
+        "full_log": "File '/etc/cron.d/nightly-backup' added\nMode: realtime\n",
+        "id": "1793269992.343229",
+        "input": {
+          "type": "log"
+        },
+        "location": "syscheck",
+        "manager": {
+          "name": "black-master-00"
+        },
+        "rule": {
+          "description": "File added to the system.",
+          "firedtimes": 11,
+          "gdpr": [
+            "II_5.1.f"
+          ],
+          "gpg13": [
+            "4.11"
+          ],
+          "groups": [
+            "ossec",
+            "syscheck",
+            "syscheck_entry_added",
+            "syscheck_file"
+          ],
+          "hipaa": [
+            "164.312.c.1",
+            "164.312.c.2"
+          ],
+          "id": "554",
+          "level": 5,
+          "mail": false,
+          "nist_800_53": [
+            "SI.7"
+          ],
+          "pci_dss": [
+            "11.5"
+          ],
+          "tsc": [
+            "PI1.4",
+            "PI1.5",
+            "CC6.1",
+            "CC6.8",
+            "CC7.2",
+            "CC7.3"
+          ]
+        },
+        "syscheck": {
+          "event": "added",
+          "gid_after": "0",
+          "gname_after": "root",
+          "inode_after": 5509025,
+          "md5_after": "bd7e9c8b3e94511f60b50d443717e2e9",
+          "mode": "realtime",
+          "mtime_after": "2026-10-29T10:33:12",
+          "path": "/etc/cron.d/nightly-backup",
+          "perm_after": "rw-rw-rw-",
+          "sha1_after": "db6e75db923a5efa7c20da410ffcfe114a4b0a64",
+          "sha256_after": "d2ea3fcaac99c3bc166d0ac642e31b40f69842acd37bf9f39d1b5dba281a52db",
+          "size_after": "67",
+          "uid_after": "0",
+          "uname_after": "root"
+        },
+        "timestamp": "2026-10-29T10:33:12.138+0000"
+      },
+      "context": {},
+      "doc_id": "1kw4h6EBjm0FRj8Ckbgk",
+      "expected": {
+        "category": "false_positive",
+        "match": {
+          "syscheck.path": "/etc/cron.d/nightly-backup"
+        },
+        "min_count": 1,
+        "needs_context": true,
+        "rule_id": "554",
+        "severity": "low",
+        "verdict": "false_positive",
+        "why": "A nightly backup job is routine scheduled maintenance."
+      }
+    }
+  ],
+  "eval_set_version": "2026-10-29.2",
+  "scenario": "cron-backup"
+}

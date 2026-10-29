@@ -1,0 +1,27 @@
+name: user-deploy
+description: Provisioning creates a regular deploy account with a home directory and no extra groups.
+agent: black-host-01
+wait_s: 90
+steps:
+- host: black-host-01
+  user: root
+  run: useradd -m -s /bin/bash -c 'Deploy account' deploy
+cleanup:
+- host: black-host-01
+  user: root
+  run: userdel -r deploy 2>/dev/null; true
+expected:
+- rule_id: '5902'
+  verdict: false_positive
+  severity: low
+  category: false_positive
+  why: A normal unprivileged account (UID above 1000) named for its job, created during provisioning.
+  match:
+    full_log: name=deploy
+- rule_id: '5901'
+  verdict: false_positive
+  severity: low
+  category: false_positive
+  why: Its own primary group, created together with the user.
+  match:
+    full_log: name=deploy

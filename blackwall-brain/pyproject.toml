@@ -11,7 +11,8 @@ requires-python = ">=3.12"
 dependencies = ["anthropic", "openai", "httpx"]
 
 [project.optional-dependencies]
-dev = ["pytest"]
+eval = ["pyyaml"]
+dev = ["pytest", "pyyaml"]
 
 [project.scripts]
 brain = "brain.main:main"

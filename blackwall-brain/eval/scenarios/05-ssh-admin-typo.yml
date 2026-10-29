@@ -1,0 +1,20 @@
+name: ssh-admin-typo
+description: An admin mistypes their own user name once when connecting over SSH, from the management
+  host.
+agent: black-host-01
+wait_s: 90
+steps:
+- host: black-master-00
+  user: root
+  run: ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=3 opss@172.28.0.11 true 2>/dev/null;
+    true
+cleanup: []
+expected:
+- rule_id: '5710'
+  verdict: false_positive
+  severity: low
+  category: false_positive
+  why: A single failed login with a near-miss of a real admin name (opss vs ops), from the internal management
+    host.
+  match:
+    full_log: opss

@@ -1,0 +1,188 @@
+{
+  "captured_at": "2026-10-29T10:21:25Z",
+  "cases": [
+    {
+      "alert": {
+        "@timestamp": "2026-10-29T10:20:52.327Z",
+        "agent": {
+          "id": "002",
+          "ip": "172.28.0.11",
+          "name": "black-host-01"
+        },
+        "decoder": {
+          "name": "useradd"
+        },
+        "full_log": "Oct 29 10:20:50 black-host-01 useradd[16773]: new group: name=deploy, GID=1001",
+        "id": "1793269252.309432",
+        "input": {
+          "type": "log"
+        },
+        "location": "/var/log/auth.log",
+        "manager": {
+          "name": "black-master-00"
+        },
+        "predecoder": {
+          "hostname": "black-host-01",
+          "program_name": "useradd",
+          "timestamp": "Oct 29 10:20:50"
+        },
+        "rule": {
+          "description": "New group added to the system.",
+          "firedtimes": 1,
+          "gdpr": [
+            "IV_35.7.d",
+            "IV_32.2"
+          ],
+          "gpg13": [
+            "4.13"
+          ],
+          "groups": [
+            "syslog",
+            "adduser"
+          ],
+          "hipaa": [
+            "164.312.b",
+            "164.312.a.2.I",
+            "164.312.a.2.II"
+          ],
+          "id": "5901",
+          "level": 8,
+          "mail": false,
+          "nist_800_53": [
+            "AU.14",
+            "AC.7",
+            "AC.2",
+            "IA.4"
+          ],
+          "pci_dss": [
+            "10.2.7",
+            "10.2.5",
+            "8.1.2"
+          ],
+          "tsc": [
+            "CC6.8",
+            "CC7.2",
+            "CC7.3"
+          ]
+        },
+        "timestamp": "2026-10-29T10:20:52.327+0000"
+      },
+      "context": {},
+      "doc_id": "nkwth6EBjm0FRj8CX7hA",
+      "expected": {
+        "category": "false_positive",
+        "match": {
+          "full_log": "name=deploy"
+        },
+        "min_count": 1,
+        "needs_context": false,
+        "rule_id": "5901",
+        "severity": "low",
+        "verdict": "false_positive",
+        "why": "Its own primary group, created together with the user."
+      }
+    },
+    {
+      "alert": {
+        "@timestamp": "2026-10-29T10:20:52.369Z",
+        "agent": {
+          "id": "002",
+          "ip": "172.28.0.11",
+          "name": "black-host-01"
+        },
+        "data": {
+          "dstuser": "deploy",
+          "gid": "1001",
+          "home": "/home/deploy",
+          "shell": "/bin/bash,",
+          "uid": "1001"
+        },
+        "decoder": {
+          "name": "useradd",
+          "parent": "useradd"
+        },
+        "full_log": "Oct 29 10:20:50 black-host-01 useradd[16773]: new user: name=deploy, UID=1001, GID=1001, home=/home/deploy, shell=/bin/bash, from=none",
+        "id": "1793269252.309914",
+        "input": {
+          "type": "log"
+        },
+        "location": "/var/log/auth.log",
+        "manager": {
+          "name": "black-master-00"
+        },
+        "predecoder": {
+          "hostname": "black-host-01",
+          "program_name": "useradd",
+          "timestamp": "Oct 29 10:20:50"
+        },
+        "rule": {
+          "description": "New user added to the system.",
+          "firedtimes": 1,
+          "gdpr": [
+            "IV_35.7.d",
+            "IV_32.2"
+          ],
+          "gpg13": [
+            "4.13"
+          ],
+          "groups": [
+            "syslog",
+            "adduser"
+          ],
+          "hipaa": [
+            "164.312.b",
+            "164.312.a.2.I",
+            "164.312.a.2.II"
+          ],
+          "id": "5902",
+          "level": 8,
+          "mail": false,
+          "mitre": {
+            "id": [
+              "T1136"
+            ],
+            "tactic": [
+              "Persistence"
+            ],
+            "technique": [
+              "Create Account"
+            ]
+          },
+          "nist_800_53": [
+            "AU.14",
+            "AC.7",
+            "AC.2",
+            "IA.4"
+          ],
+          "pci_dss": [
+            "10.2.7",
+            "10.2.5",
+            "8.1.2"
+          ],
+          "tsc": [
+            "CC6.8",
+            "CC7.2",
+            "CC7.3"
+          ]
+        },
+        "timestamp": "2026-10-29T10:20:52.369+0000"
+      },
+      "context": {},
+      "doc_id": "n0wth6EBjm0FRj8CX7hA",
+      "expected": {
+        "category": "false_positive",
+        "match": {
+          "full_log": "name=deploy"
+        },
+        "min_count": 1,
+        "needs_context": false,
+        "rule_id": "5902",
+        "severity": "low",
+        "verdict": "false_positive",
+        "why": "A normal unprivileged account (UID above 1000) named for its job, created during provisioning."
+      }
+    }
+  ],
+  "eval_set_version": "2026-10-29.2",
+  "scenario": "user-deploy"
+}

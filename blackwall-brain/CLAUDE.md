@@ -24,7 +24,8 @@ Step 2: eval set and harness. Step 3: context sources (mode 1).
 - Package `src/brain/`: `verdict` (schema, parsing), `models/` (interface +
   `anthropic_model`, `openai_compat` adapters), `analysis` (prompt,
   `PROMPT_VERSION`, retries), `message` (Telegram HTML), `indexer` + `state`
-  (polling intake), `telegram`, `config` (BRAIN_* env), `main` (loop).
+  (polling intake), `telegram`, `config` (BRAIN_* env), `main` (loop),
+  `eval/` (scenario loader, lab capture, scoring, run command).
 - Container built on the target by role `brain-analyst` (Containerfile,
   hash-pinned `requirements.lock`), run by `brain-analyst.service`
   (`podman run --network host`), config in `/etc/brain-analyst/brain.env`,
@@ -51,6 +52,7 @@ blackwall-brain/
 ├── pyproject.toml, requirements.lock, Containerfile, .containerignore
 ├── src/brain/                 # the package (see above)
 ├── tests/                     # pytest, no network
+├── eval/                      # scenarios, snapshots, results (see eval/README.md)
 └── ansible/
     ├── ansible.cfg
     ├── playbooks/brain.yml, verify-brain.yml

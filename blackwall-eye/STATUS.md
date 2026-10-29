@@ -2,13 +2,17 @@
 module: blackwall-eye
 status: in_progress
 stage: 1
-last_updated: 2026-10-28
+last_updated: 2026-10-29
 last_task: "auditd role verified on a real RHEL kernel (Lima VM, bw-check vm 13/13)"
 next_task: "Prod inventory for the stack (backlog: Wazuh server stack prod readiness) — owner decides when"
 blockers: []
 ---
 
 ## Done
+
+- 2026-10-29: FIM realtime also on `/etc/sudoers.d`, `/etc/cron.d`, `/root/.ssh`
+  (common persistence paths; needed by the Brain eval set). Lab: a new file
+  in sudoers.d / cron.d raises 554 (L5), a changed `authorized_keys` 550 (L7).
 
 - 2026-10-28: auditd role verified on a real RHEL kernel (backlog item
   closed): `bw-check vm` 13/13 on Rocky 9 (5.14.0-687.10.1.el9_8, aarch64).
