@@ -1,115 +1,141 @@
 # blackwall-brain — Brain
 
-AI analysis layer for the Blackwall security platform. Tail-follows Wazuh alerts,
-calls Claude API to classify threats, and sends enriched analysis to Telegram.
-Stage 3 delivers the brain-analyst service running alongside Voice on the Wazuh manager host.
+AI analysis layer for the Blackwall security platform. Polls new Wazuh alerts
+from the indexer, asks a model for a structured verdict and sends a short,
+readable message to Telegram: severity, host, verdict, one line on what
+happened, what to do, and links.
 
-## Stack
+Design: [Brain v2 spec](../docs/superpowers/specs/2026-10-28-brain-v2-eval-design.md).
 
-- Python 3 stdlib (no pip deps) + Anthropic Claude API
-- Wazuh alert log: `/var/ossec/logs/alerts/alerts.json`
-- Telegram Bot API (same bot as blackwall-voice)
-- Ansible role `brain-analyst` deploys to `wazuh_managers` group
+## How it works
 
-## Test Environment
+- A Python package (`src/brain/`) in its own container, run on the host by a
+  systemd unit (`podman run`). The `brain-analyst` role builds the image on
+  the target from this directory.
+- Intake: every `poll_interval` seconds it queries `wazuh-alerts-*` in the
+  Wazuh indexer for alerts with `rule.level >= analysis_threshold`, newer than
+  a cursor, with a short overlap for late-indexed alerts and dedup by indexer
+  `_id`. After downtime it catches up at most `brain_max_backfill` seconds.
+  Read-only indexer user; it does not need to run on the manager.
+- Verdict: one JSON object per alert, validated (`verdict`, `severity`,
+  `category`, `summary`, `action`, `confidence`, `needs`). An invalid answer is
+  retried once; a failed call three times; then the fallback message.
+- Models: no vendor lock-in. `anthropic` (Claude, default) or `openai_compat`
+  (Ollama, vLLM, llama.cpp server, LM Studio, OpenRouter, ...). Only the two
+  adapters in `src/brain/models/` know a vendor's format.
 
-Shared with blackwall-eye and blackwall-voice. Start containers from the **repo root**:
+## Message
 
-```bash
-docker compose -f tests/docker/docker-compose.yml --profile ubuntu2204 up -d --build
+```
+🔴 HIGH · black-host-01 · true positive
+┌─────────────────────────────────────────────────────────────── copy ┐
+│ New sudoers drop-in outside config management                       │
+│ Category: privilege_escalation · confidence: medium                 │
+│ Action: Check who wrote /etc/sudoers.d/90-app and revert it if unknown│
+└─────────────────────────────────────────────────────────────────────┘
+Rule 100120 (level 10): Sudoers file changed · 2026-10-28 14:02 UTC
+🔗 Alert in dashboard · Runbook
 ```
 
-Wait for SSH before running Ansible:
-
-```bash
-cd blackwall-brain
-ansible all -m wait_for_connection
-```
-
-See [tests/README.md](../tests/README.md) for full environment documentation.
+- The model's answer (summary, category, action, `Missing:`) is one `<pre>`
+  block, so Telegram shows a copy button for pasting it into a reply.
+- 🟥 critical, 🔴 high, 🟠 medium, 🟢 low. **🟡 "needs a look"** when the
+  model is unsure, whatever the severity: an unsure verdict never reads as calm.
+- `Missing:` lists what the model lacked (`needs`), when it says so.
+- "Alert in dashboard" opens that one alert in the Wazuh dashboard
+  (`brain_dashboard_url`). Per-rule links (runbooks, wiki) come from
+  `brain_rule_links`.
+- If the model fails, the alert still goes out, marked
+  `AI analysis unavailable: <reason>`, with severity from `rule.level`
+  (0–6 low, 7–9 medium, 10–12 high, 13+ critical). If Telegram fails after
+  3 attempts the alert is logged at ERROR as dropped.
 
 ## Configure
 
-On the test environment the secrets (claude_api_key, telegram_bot_token, telegram_chat_id)
-are read from env vars set in `.envrc` — see [tests/README.md](../tests/README.md#secrets-telegram-claude-api).
-For other targets, set these vars before deploying (use Ansible vault for secrets in production):
-
-```yaml
-claude_api_key:     "your-anthropic-api-key"
-claude_workspace_id: ""  # only if the key is not scoped to a workspace (wrkspc_...)
-telegram_bot_token: "your-bot-token"
-telegram_chat_id:   "your-chat-id"
-analysis_threshold: 7   # analyze alerts with rule.level >= this value
-claude_model:       "claude-haiku-5-5"
-claude_effort:      "low"
-max_tokens:         2048   # thinking counts against it
-```
-
 | Variable | Default | Purpose |
 |---|---|---|
-| `brain_ignore_rule_ids` | `["99999"]` | `rule.id`s never analyzed (Voice's verify rule) |
-| `claude_api_url` / `claude_timeout` | Anthropic messages URL / `30` | endpoint and per-request timeout (override in tests) |
-| `brain_state_max_ids` | `10000` | processed IDs kept in the state file |
+| `brain_enabled` | `true` | `false` stops and disables the service (image, config, state stay) |
+| `analysis_threshold` | `7` | analyse alerts with `rule.level` ≥ this |
+| `brain_ignore_rule_ids` | `["99999"]` | `rule.id`s never analysed (Voice's verify rule) |
+| `poll_interval` / `brain_max_backfill` | `5` / `3600` | seconds between polls / max catch-up after downtime |
+| `brain_indexer_url` | `https://127.0.0.1:9200` | Wazuh indexer |
+| `brain_indexer_user` / `brain_indexer_password` | `brain-ro` / — | read-only indexer user |
+| `brain_indexer_verify_tls` / `brain_indexer_ca_file` | `true` / `""` | TLS check; CA bundle on the host |
+| `brain_indexer_admin_user` / `_password` | `""` | if set, the role creates the read-only user (role `brain_read`: search on `wazuh-alerts-*` only) |
+| `brain_model_backend` | `anthropic` | or `openai_compat` |
+| `brain_model` / `brain_model_api_key` | `claude_model` / `claude_api_key` | model and key |
+| `brain_model_base_url` | `""` | required for `openai_compat`, e.g. `http://127.0.0.1:11434/v1` |
+| `brain_model_options` | `{effort: low, workspace_id: ""}` | anthropic: `effort`, `workspace_id`; openai_compat: `json_mode` (`schema`, `object`, `none`) |
+| `brain_model_timeout` / `brain_model_max_tokens` | `30` / `2048` | per request; thinking counts against max tokens |
+| `telegram_bot_token` / `telegram_chat_id` | — | same bot as Voice |
+| `brain_dashboard_url` | `""` | Wazuh dashboard base URL for the alert link |
+| `brain_rule_links` | `{}` | `{"<rule id>" or "*": [{title, url}]}` |
 
-The state file keeps only the newest `brain_state_max_ids` IDs: compacted at
-startup and at most once an hour (atomic rewrite), the in-memory set follows.
-Older IDs are useless, the analyst seeks to the end of the alert log on start.
+Without `brain_indexer_admin_user`, create the indexer user yourself: an
+internal user with a role that allows `read` and `indices:data/read/search`
+on `wazuh-alerts-*` only.
+
+Secrets: in the lab from `.envrc` (see
+[tests/README.md](../tests/README.md#secrets-telegram-claude-api)); elsewhere
+from your own secret store. They end up in `/etc/brain-analyst/brain.env`
+(root, 0600) on the host.
+
+A local model instead of Claude:
+
+```yaml
+brain_model_backend: openai_compat
+brain_model: qwen3:8b
+brain_model_base_url: http://127.0.0.1:11434/v1
+brain_model_api_key: ""
+```
 
 ## One message per alert
 
 Brain's Telegram message replaces Voice's for alerts at or above
 `analysis_threshold`: Voice is capped with `voice_max_level = analysis_threshold - 1`
-(see [blackwall-voice/README.md](../blackwall-voice/README.md#one-message-per-alert-with-brain);
-the lab inventory derives it from `brain_enabled`). The roles stay independent.
+(see [blackwall-voice/README.md](../blackwall-voice/README.md#one-message-per-alert-with-brain)).
+Voice reads the threshold from `/etc/brain-analyst/brain.env` and checks that
+the `brain-analyst` unit is active, so both roles must run on the same host.
 
-If Claude fails for an alert after 3 attempts, Brain does not drop it: it sends
-the raw alert to Telegram with the marker `AI analysis unavailable: <reason>`
-(e.g. `Claude API HTTP 401`, `Claude API timeout/unreachable`) and marks it processed. If Telegram itself fails,
-the send is retried 3 times and then logged as dropped.
-
-## Deploy
+## Deploy, turn on/off
 
 ```bash
 cd blackwall-brain
-ansible-playbook ansible/playbooks/brain.yml \
-  -e claude_api_key=<key> \
-  -e telegram_bot_token=<token> \
-  -e telegram_chat_id=<chat_id>
-```
-
-## Turn AI analysis on/off
-
-`brain_enabled` (default `true`) switches the analyst without uninstalling it:
-`false` stops and disables the service, the script, config and state stay in
-place. With Brain off Voice must forward everything again: Voice lifts its
-`voice_max_level` by itself, at deploy time and at runtime (it checks the
-`brain-analyst` unit every 15 s, so a crash or stop is covered too, apart from
-a window of up to 15 s plus the restart delay); in the lab
-`bw-lab provision brain ...` re-deploys Voice for you. Both roles must run on
-the same host.
-
-```bash
+ansible-playbook ansible/playbooks/brain.yml                          # deploy / on
 ansible-playbook ansible/playbooks/brain.yml -e brain_enabled=false   # off
-ansible-playbook ansible/playbooks/brain.yml                          # on again
 ```
 
-In the lab: `tests/bin/bw-lab provision brain -e brain_enabled=false` (re-deploys Voice too); while it
-is off, `bw-check brain` reports SKIP. Set it in the inventory to make it stick.
-Enabling requires `claude_api_key`, `telegram_bot_token` and `telegram_chat_id`
-(the role fails up front otherwise — in the lab run through `direnv exec .`);
-disabling works without them.
+In the lab: `tests/bin/bw-lab provision brain` (run through `direnv exec .`;
+`-e brain_enabled=false` to turn it off, Voice is re-deployed to match).
+Deploying over v1 removes the old script, its log and state.
+
+Logs: `journalctl -u brain-analyst` (one line per alert: verdict, severity,
+tokens, latency, model, prompt version).
 
 ## Verify
 
 ```bash
-ansible-playbook ansible/playbooks/verify-brain.yml
+tests/bin/bw-check brain
 ```
 
-Injects a synthetic level-10 alert (rule 99998, ignored by Voice) and confirms brain-analyst picks it up.
-With placeholder credentials: Claude API failure is logged gracefully (expected behavior).
-With real credentials: full pipeline executes and Telegram message is received.
+Checks the image, then injects a synthetic level-10 alert (rule 99998, ignored
+by Voice) into `alerts.json`; it reaches the indexer through filebeat. With
+credentials Brain must deliver it to Telegram within 120 s; without, it must
+at least pick it up.
+
+## Develop
+
+```bash
+cd blackwall-brain
+python3.12 -m venv .venv && .venv/bin/pip install -e '.[dev]'
+.venv/bin/pytest
+```
+
+`requirements.lock` pins runtime dependencies with hashes; regenerate it after
+changing `pyproject.toml`:
+`.venv/bin/pip install pip-tools && .venv/bin/pip-compile --generate-hashes --strip-extras -o requirements.lock pyproject.toml`.
 
 ## Docs
 
-- `CLAUDE.md` — full module context, design decisions, agent rules
+- `CLAUDE.md` — module context, design decisions, agent rules
 - `STATUS.md` — current implementation state

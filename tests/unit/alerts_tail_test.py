@@ -1,4 +1,4 @@
-"""Unit check: Voice and Brain lose no alerts.json lines around rotation.
+"""Unit check: Voice loses no alerts.json lines around rotation.
 
 Renders both templates with the role defaults, replaces handle_line with a
 collector and runs tail_alerts against a temp file in a background thread.
@@ -31,8 +31,6 @@ MODULES = {
     "voice": ("blackwall-voice/ansible/roles/telegram-alerter", "alerter.py.j2",
               {"severity_threshold": 10, "voice_max_level_effective": "",
                "telegram_bot_token": "t", "telegram_chat_id": "1"}),
-    "brain": ("blackwall-brain/ansible/roles/brain-analyst", "brain.py.j2",
-              {"telegram_bot_token": "t", "telegram_chat_id": "1"}),
 }
 
 
@@ -42,8 +40,8 @@ def load(name, role, template, extra, log_path, tmp):
     for k, v in d.items():
         ctx[k] = jinja2.Template(v).render(**ctx) if isinstance(v, str) else v
     ctx.update(extra)
-    ctx.update(poll_interval=POLL, alerter_alert_log=log_path, brain_alert_log=log_path,
-               alerter_state_file=f"{tmp}/{name}-state", brain_state_file=f"{tmp}/{name}-state")
+    ctx.update(poll_interval=POLL, alerter_alert_log=log_path,
+               alerter_state_file=f"{tmp}/{name}-state")
     src = jinja2.Template(open(f"{role}/templates/{template}").read()).render(**ctx)
     path = f"{tmp}/{name}_mod.py"
     open(path, "w").write(src)

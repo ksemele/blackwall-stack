@@ -1,6 +1,6 @@
 ---
 # Turn the AI analysis on/off without uninstalling: false stops and disables
-# the service (script, config and state stay in place). Voice is unaffected.
+# the service (image, config and state stay in place). Voice is unaffected.
 #   ansible-playbook ansible/playbooks/brain.yml -e brain_enabled=false
 brain_enabled: true
 
@@ -11,38 +11,69 @@ analysis_threshold: 7
 # 99999 is Voice's verify rule (verify-voice.yml)
 brain_ignore_rule_ids: ["99999"]
 
-# Seconds between reads of the alert log tail
+# Seconds between indexer polls
 poll_interval: 5
 
-# Alert log source on manager host (line-buffered JSON, one event per line)
-brain_alert_log: /var/ossec/logs/alerts/alerts.json
+# First start or long downtime: analyze at most this much history (seconds)
+brain_max_backfill: 3600
 
-# State file: tracks processed alert IDs for deduplication across restarts
+# State (cursor + processed indexer _ids), mounted into the container
 brain_state_dir: /var/lib/brain-analyst
-brain_state_file: "{{ brain_state_dir }}/sent_ids.txt"
-
-# Dedup state keeps the newest N IDs only; compacted at start and hourly
+# Dedup state keeps the newest N IDs only
 brain_state_max_ids: 10000
 
-# Log directory for the brain-analyst service itself
-brain_log_dir: /var/log/brain-analyst
-brain_log_file: "{{ brain_log_dir }}/analyst.log"
+# Rendered config (brain.env, mode 0600) and the image build context
+brain_config_dir: /etc/brain-analyst
+# blackwall-brain/ on the control node (package source and Containerfile)
+brain_source_dir: "{{ role_path }}/../../.."
+brain_image: "localhost/blackwall-brain:2.0.0"
 
-# Install directory for the analyst script
-brain_install_dir: /opt/brain-analyst
+# Wazuh indexer (OpenSearch): alerts are read from wazuh-alerts-* over HTTPS.
+brain_indexer_url: "https://127.0.0.1:9200"
+brain_indexer_user: brain-ro
+brain_indexer_password: ""
+brain_indexer_verify_tls: true
+# CA bundle on the host for the indexer certificate; mounted read-only
+brain_indexer_ca_file: ""
+# When set, the role creates/updates brain_indexer_user with read-only access
+# to wazuh-alerts-* through the OpenSearch security API. Leave empty when the
+# user is managed elsewhere.
+brain_indexer_admin_user: ""
+brain_indexer_admin_password: ""
 
-# Claude API settings
+# Model backend: anthropic (Claude) or openai_compat (Ollama, vLLM, llama.cpp
+# server, LM Studio, OpenRouter, ...). Brain's code is vendor-neutral.
+brain_model_backend: anthropic
+brain_model: "{{ claude_model }}"
+brain_model_api_key: "{{ claude_api_key }}"
+# Required for openai_compat, e.g. http://127.0.0.1:11434/v1 (Ollama)
+brain_model_base_url: ""
+brain_model_timeout: 30   # seconds per request
+brain_model_max_tokens: "{{ max_tokens }}"
+# Backend options as a dict. anthropic: effort, workspace_id.
+# openai_compat: json_mode (schema | object | none).
+brain_model_options:
+  effort: "{{ claude_effort }}"
+  workspace_id: "{{ claude_workspace_id }}"
+
+# Claude settings (defaults for the anthropic backend)
 claude_api_key: ""
 # Required only when the API key is not scoped to a workspace (wrkspc_...)
 claude_workspace_id: ""
-claude_api_url: "https://api.anthropic.com/v1/messages"
-claude_timeout: 30   # seconds per request
 claude_model: "claude-haiku-5-5"
 # Thinking is on by default for this model and counts against max_tokens:
 # keep room for it, and keep it short with low effort.
 claude_effort: "low"
 max_tokens: 2048
 
-# Telegram credentials — MUST be overridden (use ansible-vault in production)
+# Telegram credentials — MUST be overridden
 telegram_bot_token: ""
 telegram_chat_id: ""
+
+# Links in each message. brain_dashboard_url: Wazuh dashboard base URL; each
+# message links to its alert there (empty: no link).
+brain_dashboard_url: ""
+# Extra links per rule ID ("*" = every message), e.g.
+#   brain_rule_links:
+#     "100120": [{title: Runbook, url: "https://wiki.example.org/sudoers"}]
+brain_rule_links: {}

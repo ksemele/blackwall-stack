@@ -1,55 +1,178 @@
 ---
-# Empty secrets render a script that can never work (e.g. a lab run without
+# Brain v2: a container built on the host from blackwall-brain/ and run by a
+# plain systemd unit (`podman run`). Not a quadlet: Ubuntu 22.04 ships podman
+# 3.4 and quadlets need 4.4+.
+
+# Empty secrets render a config that can never work (e.g. a lab run without
 # `direnv exec .`). Fail before touching the host; disabling needs no secrets.
-- name: Require Claude and Telegram credentials when enabled
+- name: Require model, Telegram and indexer credentials when enabled
   ansible.builtin.assert:
     that:
-      - claude_api_key | default('') | length > 0
+      - brain_model_backend == 'openai_compat' or (brain_model_api_key | default('') | length > 0)
+      - brain_model_backend != 'openai_compat' or (brain_model_base_url | default('') | length > 0)
       - telegram_bot_token | default('') | length > 0
       - telegram_chat_id | default('') | string | length > 0
+      - brain_indexer_password | default('') | length > 0
     fail_msg: >-
-      claude_api_key / telegram_bot_token / telegram_chat_id is empty. In the lab
-      run through `direnv exec .` (values come from .envrc), elsewhere pass them
-      via ansible-vault. To turn the analyst off use -e brain_enabled=false.
+      brain_model_api_key (or brain_model_base_url for openai_compat), telegram_bot_token,
+      telegram_chat_id or brain_indexer_password is empty. In the lab run through
+      `direnv exec .` (values come from .envrc), elsewhere pass them from your secret
+      store. To turn the analyst off use -e brain_enabled=false.
     quiet: true
   when: brain_enabled | bool
 
-- name: Ensure python3 is installed
+- name: Install podman
   ansible.builtin.package:
-    name: python3
+    name: podman
     state: present
 
-- name: Create brain-analyst install directory
+# ── Migration from v1 (Python script tailing alerts.json) ────────────────────
+- name: Check for the v1 analyst script
+  ansible.builtin.stat:
+    path: /opt/brain-analyst/brain.py
+  register: brain_v1
+
+- name: Stop the v1 service before replacing it
+  ansible.builtin.systemd:
+    name: brain-analyst
+    state: stopped
+  when: brain_v1.stat.exists
+
+- name: Remove v1 files
   ansible.builtin.file:
-    path: "{{ brain_install_dir }}"
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - /opt/brain-analyst
+    - /var/log/brain-analyst
+    - "{{ brain_state_dir }}/sent_ids.txt"
+
+# ── Image ────────────────────────────────────────────────────────────────────
+- name: Create config and build directories
+  ansible.builtin.file:
+    path: "{{ item }}"
     state: directory
     owner: root
     group: root
-    mode: "0755"
+    mode: "0700"
+  loop:
+    - "{{ brain_config_dir }}"
+    - "{{ brain_config_dir }}/build"
 
-- name: Create brain-analyst state directory
+# The package source sits next to ansible/ in blackwall-brain/. Only *.py
+# files are copied (no __pycache__ or egg-info from a local dev install).
+- name: List the package sources
+  ansible.builtin.find:
+    paths: "{{ brain_source_dir }}/src"
+    patterns: "*.py"
+    recurse: true
+  delegate_to: localhost
+  become: false
+  run_once: true
+  register: brain_sources
+
+- name: Create source directories
+  ansible.builtin.file:
+    path: "{{ brain_config_dir }}/build/{{ item }}"
+    state: directory
+    mode: "0755"
+  loop: "{{ brain_sources.files | map(attribute='path')
+            | map('relpath', brain_source_dir) | map('dirname') | unique | list }}"
+
+- name: Copy the build context
+  ansible.builtin.copy:
+    src: "{{ brain_source_dir }}/{{ item }}"
+    dest: "{{ brain_config_dir }}/build/{{ item }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop: "{{ ['pyproject.toml', 'requirements.lock', 'Containerfile']
+            + (brain_sources.files | map(attribute='path') | map('relpath', brain_source_dir) | list) }}"
+  register: brain_context
+
+- name: Check the image exists
+  ansible.builtin.command: podman image exists {{ brain_image }}
+  register: brain_image_check
+  changed_when: false
+  failed_when: brain_image_check.rc not in [0, 1]
+
+- name: Build the image
+  ansible.builtin.command:
+    cmd: podman build -t {{ brain_image }} -f Containerfile .
+    chdir: "{{ brain_config_dir }}/build"
+  when: brain_context is changed or brain_image_check.rc != 0
+  notify: Restart brain-analyst service
+
+# ── State, indexer user, config, unit ────────────────────────────────────────
+# The container runs as uid 10001 (Containerfile).
+- name: Create state directory
   ansible.builtin.file:
     path: "{{ brain_state_dir }}"
     state: directory
-    owner: root
-    group: root
+    owner: "10001"
+    group: "10001"
     mode: "0750"
 
-- name: Create brain-analyst log directory
-  ansible.builtin.file:
-    path: "{{ brain_log_dir }}"
-    state: directory
+- name: Create the read-only indexer role and user
+  when: brain_indexer_admin_user | default('') | length > 0
+  block:
+    - name: Indexer role brain_read (search wazuh-alerts-* only)
+      ansible.builtin.uri:
+        url: "{{ brain_indexer_url }}/_plugins/_security/api/roles/brain_read"
+        method: PUT
+        user: "{{ brain_indexer_admin_user }}"
+        password: "{{ brain_indexer_admin_password }}"
+        force_basic_auth: true
+        validate_certs: "{{ brain_indexer_verify_tls | bool }}"
+        ca_path: "{{ brain_indexer_ca_file if brain_indexer_ca_file else omit }}"
+        body_format: json
+        body:
+          index_permissions:
+            - index_patterns: ["wazuh-alerts-*"]
+              allowed_actions: ["read", "indices:data/read/search"]
+        status_code: [200, 201]
+      changed_when: false
+
+    - name: Indexer user {{ brain_indexer_user }}
+      ansible.builtin.uri:
+        url: "{{ brain_indexer_url }}/_plugins/_security/api/internalusers/{{ brain_indexer_user }}"
+        method: PUT
+        user: "{{ brain_indexer_admin_user }}"
+        password: "{{ brain_indexer_admin_password }}"
+        force_basic_auth: true
+        validate_certs: "{{ brain_indexer_verify_tls | bool }}"
+        ca_path: "{{ brain_indexer_ca_file if brain_indexer_ca_file else omit }}"
+        body_format: json
+        body:
+          password: "{{ brain_indexer_password }}"
+          opendistro_security_roles: ["brain_read"]
+        status_code: [200, 201]
+      changed_when: false
+      no_log: true
+
+# A copy, not the original: the :Z mount relabels the file on SELinux hosts,
+# which would cut the indexer off from its own CA.
+- name: Copy the indexer CA bundle for the container
+  ansible.builtin.copy:
+    src: "{{ brain_indexer_ca_file }}"
+    remote_src: true
+    dest: "{{ brain_config_dir }}/indexer-ca.pem"
     owner: root
     group: root
-    mode: "0750"
+    mode: "0644"
+  when: brain_indexer_ca_file | default('') | length > 0
+  notify: Restart brain-analyst service
 
-- name: Deploy brain analyst script
+# Secrets inside: keep them out of -v output and --diff.
+- name: Render brain.env
   ansible.builtin.template:
-    src: brain.py.j2
-    dest: "{{ brain_install_dir }}/brain.py"
+    src: brain.env.j2
+    dest: "{{ brain_config_dir }}/brain.env"
     owner: root
     group: root
-    mode: "0750"
+    mode: "0600"
+  no_log: true
+  diff: false
   notify: Restart brain-analyst service
 
 - name: Deploy systemd unit

@@ -58,7 +58,7 @@ tests/bin/bw-lab ssh black-host-01      # shell into a node
 and SKIP until their target is provisioned. Every line prints `PASS`, `FAIL` or
 `SKIP`, and the exit code is 0 only when nothing failed.
 
-Unit checks for scripts run without the lab. The Voice and Brain checks render
+Unit checks for scripts run without the lab. The Voice checks render
 the role templates and need `jinja2` and `pyyaml`; the Python that runs Ansible
 already has both, a bare system `python3` may not:
 
@@ -67,6 +67,14 @@ PY="$(brew --prefix ansible)/libexec/bin/python"   # Homebrew Ansible; pipx: ~/.
 "$PY" tests/unit/voice_format_test.py
 "$PY" tests/unit/alerts_tail_test.py
 "$PY" tests/unit/fang_refresh_test.py
+```
+
+Brain is a Python package with its own pytest suite (Python 3.12+):
+
+```bash
+cd blackwall-brain
+python3.12 -m venv .venv && .venv/bin/pip install -e '.[dev]'
+.venv/bin/pytest
 ```
 
 Full lab documentation (containers, ports, credentials, manual debugging, known
@@ -127,8 +135,8 @@ belongs in an inventory or `group_vars` file.
 
 In the lab, `tests/inventory/hosts.yml` reads secrets from environment
 variables. Copy `.envrc.example` to `.envrc` (gitignored) and fill it in, or
-export the variables yourself. Without them Voice and Brain still deploy; only
-delivery fails.
+export the variables yourself. Without them Voice still deploys (only delivery
+fails); Brain refuses to deploy while enabled.
 
 The lab's default credentials (`admin` / `Blackwall1!`, `root` / `blackwall`,
 and so on) are intentional and lab-only. Don't reuse them in roles' defaults

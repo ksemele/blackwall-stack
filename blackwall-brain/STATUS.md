@@ -3,12 +3,28 @@ module: blackwall-brain
 status: in_progress
 stage: 3
 last_updated: 2026-10-28
-last_task: "No alerts lost around alerts.json rotation (#23), same tail as Voice"
-next_task: "Trap integration (Stage 4) or workload identity federation (see Plans)"
+last_task: "Brain v2 step 1: structured verdict, vendor-neutral models, HTML message, container, indexer polling"
+next_task: "Brain v2 step 2: eval set and harness (spec 2026-10-28)"
 blockers: []
 ---
 
 ## Done
+
+- 2026-10-28: Brain v2 step 1 (spec `docs/superpowers/specs/2026-10-28-brain-v2-eval-design.md`,
+  plan `docs/superpowers/plans/2026-10-28-brain-v2-step1.md`). Python package
+  `src/brain/` in a container built on the host, run by `brain-analyst.service`
+  (`podman run`); polls `wazuh-alerts-*` with a read-only indexer user instead
+  of tailing `alerts.json`; structured verdict validated against a schema;
+  `anthropic` and `openai_compat` backends; HTML Telegram message with severity,
+  verdict (🟡 when uncertain), dashboard link and per-rule links. 91 unit tests.
+  Verified in the lab with placeholder credentials: podman 3.4 on
+  black-master-00, image build, read-only user, pickup of the synthetic alert
+  in ~12 s, 3 model attempts → fallback → 3 Telegram attempts → "dropped"
+  logged; restart re-sends nothing; `brain_enabled=false` → SKIP; Voice clamps
+  to 9 and passes. 2026-10-29 with real keys: a real verdict arrived in
+  Telegram (Haiku 5.5 accepts effort + JSON schema). The dashboard link is a
+  placeholder for now: its URL shape is not verified against the dashboard.
+- 2026-10-29: the model's answer is one `<pre>` block (Telegram copy button).
 
 - 2026-10-28: no alerts lost around `alerts.json` rotation (#23): same tail
   loop as Voice (drain the old file, read the new one from its start, hold a

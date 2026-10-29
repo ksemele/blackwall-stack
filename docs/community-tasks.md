@@ -51,6 +51,7 @@ the stack and Brain follow.
 | C11 | Catalog and awesome-list submissions | tui | medium | C1, C8 |
 | C12 | Launch posts | tui, stack | medium | C1, C2, C3, C8 |
 | C13 | Config: explicit `false` is ignored | tui | medium | — |
+| C14 | TUI plugin system; first plugin: send to Brain | tui, stack | low (after Brain v2) | C9 |
 
 C1, C2, C3, C6, C7, C9 touch different files and can run in parallel sessions.
 
@@ -296,3 +297,25 @@ re-reads the raw YAML to restore an explicit `false`; nothing does that.
 
 **Done when:** `select_context_on_start: false` starts on `:agents` without
 `--context`, `vim_keys: false` turns vim keys off, `make test` passes.
+
+## C14. TUI plugin system; first plugin: send to Brain
+
+- [ ] Status: idea, recorded 2026-10-28
+
+**Repo:** tui (plugin system), stack (Brain side). **Depends on:** C9 / Brain
+v2 (`docs/superpowers/specs/2026-10-28-brain-v2-eval-design.md`).
+**Why:** the TUI is where the operator looks at hosts and alerts; asking for
+an AI look should be one key away, without hard-wiring one backend into the
+TUI.
+
+**Idea (brainstorm before any code):**
+1. A plugin system in the TUI: an action on the current selection (a host,
+   an alert, or a batch of alerts) is handed to a plugin.
+2. First plugin: send the selection to Brain for research and show the
+   verdict (same schema as Brain v2) in the TUI.
+3. A second scenario of the same plugin type: send the selection straight to
+   an AI model (any backend, same no-vendor-lock rule as Brain v2), without
+   Brain.
+4. Brain side: on-demand requests need an inbound API on Brain; this joins
+   the "push intake" item in the Brain v2 future list.
+

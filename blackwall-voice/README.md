@@ -52,7 +52,7 @@ read the id from `https://api.telegram.org/bot<token>/getUpdates`
 | `alerter_ignore_rule_ids` | `["99998"]` | `rule.id`s never forwarded (Brain's verify rule) |
 | `alerter_state_max_ids` | `10000` | dedup IDs kept in `sent_ids.txt` |
 | `voice_cover_unit` | `brain-analyst` | unit that must be active for the upper bound to apply |
-| `voice_cover_script` | `/opt/brain-analyst/brain.py` | read at deploy time for `ANALYSIS_THRESHOLD` (bound clamp) |
+| `voice_cover_script` | `/etc/brain-analyst/brain.env` | read at deploy time for `BRAIN_ANALYSIS_THRESHOLD` (bound clamp) |
 
 ### One message per alert with Brain
 
