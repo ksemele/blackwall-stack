@@ -16,8 +16,12 @@ expected:
   severity: low
   category: false_positive
   why: A normal unprivileged account (UID above 1000) named for its job, created during provisioning.
+  match:
+    full_log: name=deploy
 - rule_id: '5901'
   verdict: false_positive
   severity: low
   category: false_positive
   why: Its own primary group, created together with the user.
+  match:
+    full_log: name=deploy

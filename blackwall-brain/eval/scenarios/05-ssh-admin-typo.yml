@@ -16,3 +16,5 @@ expected:
   category: false_positive
   why: A single failed login with a near-miss of a real admin name (opss vs ops), from the internal management
     host.
+  match:
+    full_log: opss

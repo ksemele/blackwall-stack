@@ -1,9 +1,9 @@
 {
-  "captured_at": "2026-10-29T09:50:40Z",
+  "captured_at": "2026-10-29T10:21:25Z",
   "cases": [
     {
       "alert": {
-        "@timestamp": "2026-10-29T09:50:11.178Z",
+        "@timestamp": "2026-10-29T10:20:52.327Z",
         "agent": {
           "id": "002",
           "ip": "172.28.0.11",
@@ -12,8 +12,8 @@
         "decoder": {
           "name": "useradd"
         },
-        "full_log": "Oct 29 09:50:10 black-host-01 useradd[14404]: new group: name=deploy, GID=1001",
-        "id": "1793267411.252349",
+        "full_log": "Oct 29 10:20:50 black-host-01 useradd[16773]: new group: name=deploy, GID=1001",
+        "id": "1793269252.309432",
         "input": {
           "type": "log"
         },
@@ -24,11 +24,11 @@
         "predecoder": {
           "hostname": "black-host-01",
           "program_name": "useradd",
-          "timestamp": "Oct 29 09:50:10"
+          "timestamp": "Oct 29 10:20:50"
         },
         "rule": {
           "description": "New group added to the system.",
-          "firedtimes": 6,
+          "firedtimes": 1,
           "gdpr": [
             "IV_35.7.d",
             "IV_32.2"
@@ -65,13 +65,17 @@
             "CC7.3"
           ]
         },
-        "timestamp": "2026-10-29T09:50:11.178+0000"
+        "timestamp": "2026-10-29T10:20:52.327+0000"
       },
       "context": {},
-      "doc_id": "PEwRh6EBjm0FRj8CS7hv",
+      "doc_id": "nkwth6EBjm0FRj8CX7hA",
       "expected": {
         "category": "false_positive",
+        "match": {
+          "full_log": "name=deploy"
+        },
         "min_count": 1,
+        "needs_context": false,
         "rule_id": "5901",
         "severity": "low",
         "verdict": "false_positive",
@@ -80,7 +84,7 @@
     },
     {
       "alert": {
-        "@timestamp": "2026-10-29T09:50:11.219Z",
+        "@timestamp": "2026-10-29T10:20:52.369Z",
         "agent": {
           "id": "002",
           "ip": "172.28.0.11",
@@ -97,8 +101,8 @@
           "name": "useradd",
           "parent": "useradd"
         },
-        "full_log": "Oct 29 09:50:10 black-host-01 useradd[14404]: new user: name=deploy, UID=1001, GID=1001, home=/home/deploy, shell=/bin/bash, from=none",
-        "id": "1793267411.252831",
+        "full_log": "Oct 29 10:20:50 black-host-01 useradd[16773]: new user: name=deploy, UID=1001, GID=1001, home=/home/deploy, shell=/bin/bash, from=none",
+        "id": "1793269252.309914",
         "input": {
           "type": "log"
         },
@@ -109,11 +113,11 @@
         "predecoder": {
           "hostname": "black-host-01",
           "program_name": "useradd",
-          "timestamp": "Oct 29 09:50:10"
+          "timestamp": "Oct 29 10:20:50"
         },
         "rule": {
           "description": "New user added to the system.",
-          "firedtimes": 9,
+          "firedtimes": 1,
           "gdpr": [
             "IV_35.7.d",
             "IV_32.2"
@@ -161,13 +165,17 @@
             "CC7.3"
           ]
         },
-        "timestamp": "2026-10-29T09:50:11.219+0000"
+        "timestamp": "2026-10-29T10:20:52.369+0000"
       },
       "context": {},
-      "doc_id": "PUwRh6EBjm0FRj8CS7hv",
+      "doc_id": "n0wth6EBjm0FRj8CX7hA",
       "expected": {
         "category": "false_positive",
+        "match": {
+          "full_log": "name=deploy"
+        },
         "min_count": 1,
+        "needs_context": false,
         "rule_id": "5902",
         "severity": "low",
         "verdict": "false_positive",
@@ -175,6 +183,6 @@
       }
     }
   ],
-  "eval_set_version": "2026-10-29.1",
+  "eval_set_version": "2026-10-29.2",
   "scenario": "user-deploy"
 }

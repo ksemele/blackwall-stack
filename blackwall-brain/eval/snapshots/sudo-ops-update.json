@@ -1,9 +1,9 @@
 {
-  "captured_at": "2026-10-29T09:51:57Z",
+  "captured_at": "2026-10-29T10:22:52Z",
   "cases": [
     {
       "alert": {
-        "@timestamp": "2026-10-29T09:51:31.367Z",
+        "@timestamp": "2026-10-29T10:22:16.607Z",
         "agent": {
           "id": "002",
           "ip": "172.28.0.11",
@@ -20,8 +20,8 @@
           "name": "sudo",
           "parent": "sudo"
         },
-        "full_log": "Oct 29 09:51:31 black-host-01 sudo:      ops : PWD=/home/ops ; USER=root ; COMMAND=/usr/bin/apt-get -qq update",
-        "id": "1793267491.255915",
+        "full_log": "Oct 29 10:22:16 black-host-01 sudo:      ops : PWD=/home/ops ; USER=root ; COMMAND=/usr/bin/apt-get -qq update",
+        "id": "1793269336.313443",
         "input": {
           "type": "log"
         },
@@ -32,11 +32,11 @@
         "predecoder": {
           "hostname": "black-host-01",
           "program_name": "sudo",
-          "timestamp": "Oct 29 09:51:31"
+          "timestamp": "Oct 29 10:22:16"
         },
         "rule": {
           "description": "Successful sudo to ROOT executed.",
-          "firedtimes": 2,
+          "firedtimes": 1,
           "gdpr": [
             "IV_32.2"
           ],
@@ -82,13 +82,17 @@
             "CC7.3"
           ]
         },
-        "timestamp": "2026-10-29T09:51:31.367+0000"
+        "timestamp": "2026-10-29T10:22:16.607+0000"
       },
       "context": {},
-      "doc_id": "Q0wSh6EBjm0FRj8CcLif",
+      "doc_id": "pkwuh6EBjm0FRj8Cq7ij",
       "expected": {
         "category": "false_positive",
+        "match": {
+          "full_log": "COMMAND=/usr/bin/apt-get"
+        },
         "min_count": 1,
+        "needs_context": false,
         "rule_id": "5402",
         "severity": "low",
         "verdict": "false_positive",
@@ -96,6 +100,6 @@
       }
     }
   ],
-  "eval_set_version": "2026-10-29.1",
+  "eval_set_version": "2026-10-29.2",
   "scenario": "sudo-ops-update"
 }

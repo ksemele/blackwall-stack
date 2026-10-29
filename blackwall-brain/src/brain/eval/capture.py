@@ -52,8 +52,15 @@ def _iso(dt: datetime) -> str:
 def capture_scenario(s: Scenario, indexer, *, run=docker_exec,
                      now=lambda: datetime.now(timezone.utc), clock=time.monotonic,
                      sleep=time.sleep, poll_s: float = 5, settle_s: float = 20) -> ScenarioResult:
-    since = _iso(now())
     try:
+        for step in s.setup:
+            res = run(step.host, step.user, step.run)
+            if res.returncode != 0:
+                return ScenarioResult(s.name, False, error=f"setup failed ({res.returncode}): "
+                                      f"{step.run[:80]}: {res.stderr[-200:]}")
+        if s.setup:
+            sleep(settle_s)   # setup's own alerts land before the window opens
+        since = _iso(now())
         for step in s.steps:
             res = run(step.host, step.user, step.run)
             if res.returncode != 0:
@@ -69,23 +76,35 @@ def capture_scenario(s: Scenario, indexer, *, run=docker_exec,
         sleep(settle_s)
 
 
-def _collect(s: Scenario, indexer, since: str, *, clock, sleep, poll_s) -> ScenarioResult:
-    wanted = {e.rule_id: e for e in s.expected}
+def _assign(s: Scenario, hits: list) -> tuple[list[Case], int]:
+    cases, unlabelled = [], 0
+    for doc_id, alert in hits:
+        e = next((e for e in s.expected if e.matches(alert)), None)
+        if e is None:
+            unlabelled += 1
+        else:
+            cases.append(Case(s.name, doc_id, alert, {}, e))
+    return cases, unlabelled
 
+
+def _missing(s: Scenario, cases: list[Case]) -> list[str]:
+    return [e.rule_id for e in s.expected
+            if sum(1 for c in cases if c.expected is e) < e.min_count]
+
+
+def _collect(s: Scenario, indexer, since: str, *, clock, sleep, poll_s) -> ScenarioResult:
+    rule_ids = sorted({e.rule_id for e in s.expected})
     deadline = clock() + s.wait_s
     while True:
-        hits = indexer.search(alerts_query(s.agent, since, list(wanted)))
-        counts = {r: sum(1 for _, a in hits if a["rule"]["id"] == r) for r in wanted}
-        missing = [r for r, e in wanted.items() if counts[r] < e.min_count]
+        cases, _ = _assign(s, indexer.search(alerts_query(s.agent, since, rule_ids)))
+        missing = _missing(s, cases)
         if not missing or clock() >= deadline:
             break
         sleep(poll_s)
-
-    everything = indexer.search(alerts_query(s.agent, since, []))
-    cases = [Case(s.name, doc_id, a, {}, wanted[a["rule"]["id"]])
-             for doc_id, a in everything if a["rule"]["id"] in wanted]
-    unlabelled = sum(1 for _, a in everything if a["rule"]["id"] not in wanted)
-    return ScenarioResult(s.name, not missing, cases, missing, unlabelled)
+    # Wanted rules and everything else separately, so noise cannot crowd them out.
+    cases, _ = _assign(s, indexer.search(alerts_query(s.agent, since, rule_ids)))
+    _, unlabelled = _assign(s, indexer.search(alerts_query(s.agent, since, [])))
+    return ScenarioResult(s.name, not _missing(s, cases), cases, _missing(s, cases), unlabelled)
 
 
 def main(argv: list[str] | None = None) -> int:

@@ -1,9 +1,9 @@
 {
-  "captured_at": "2026-10-29T09:50:10Z",
+  "captured_at": "2026-10-29T10:20:50Z",
   "cases": [
     {
       "alert": {
-        "@timestamp": "2026-10-29T09:49:41.122Z",
+        "@timestamp": "2026-10-29T10:20:16.198Z",
         "agent": {
           "id": "002",
           "ip": "172.28.0.11",
@@ -11,15 +11,15 @@
         },
         "data": {
           "srcip": "172.28.0.10",
-          "srcport": "45746",
+          "srcport": "50178",
           "srcuser": "opss"
         },
         "decoder": {
           "name": "sshd",
           "parent": "sshd"
         },
-        "full_log": "Oct 29 09:49:40 black-host-01 sshd[14387]: Invalid user opss from 172.28.0.10 port 45746",
-        "id": "1793267381.251818",
+        "full_log": "Oct 29 10:20:15 black-host-01 sshd[16749]: Invalid user opss from 172.28.0.10 port 50178",
+        "id": "1793269216.308901",
         "input": {
           "type": "log"
         },
@@ -30,11 +30,11 @@
         "predecoder": {
           "hostname": "black-host-01",
           "program_name": "sshd",
-          "timestamp": "Oct 29 09:49:40"
+          "timestamp": "Oct 29 10:20:15"
         },
         "rule": {
           "description": "sshd: Attempt to login using a non-existent user",
-          "firedtimes": 18,
+          "firedtimes": 10,
           "gdpr": [
             "IV_35.7.d",
             "IV_32.2"
@@ -85,13 +85,17 @@
             "CC7.3"
           ]
         },
-        "timestamp": "2026-10-29T09:49:41.122+0000"
+        "timestamp": "2026-10-29T10:20:16.198+0000"
       },
       "context": {},
-      "doc_id": "OUwQh6EBjm0FRj8Cwriw",
+      "doc_id": "nUwsh6EBjm0FRj8C1rhu",
       "expected": {
         "category": "false_positive",
+        "match": {
+          "full_log": "opss"
+        },
         "min_count": 1,
+        "needs_context": false,
         "rule_id": "5710",
         "severity": "low",
         "verdict": "false_positive",
@@ -99,6 +103,6 @@
       }
     }
   ],
-  "eval_set_version": "2026-10-29.1",
+  "eval_set_version": "2026-10-29.2",
   "scenario": "ssh-admin-typo"
 }

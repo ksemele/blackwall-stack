@@ -71,3 +71,13 @@ def test_unknown_price_warns(snaps, monkeypatch, capsys):
     eval_run.main(["--snapshots", str(snaps / "snap"), "--out", str(snaps / "res"),
                    "--model", "mystery", "--max-cost", "1"])
     assert "not enforced" in capsys.readouterr().out
+
+
+def test_run_survives_unexpected_backend_exception(snaps, monkeypatch):
+    class Broken(Model):
+        def complete(self, system, user, schema=None):
+            raise TypeError("sdk bug")
+
+    rc, res, _ = go(snaps, monkeypatch, Broken())
+    assert rc == 0 and res["score"]["invalid_rate"] == 1
+    assert "TypeError" in res["per_case"][0]["error"]

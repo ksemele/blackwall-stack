@@ -16,3 +16,6 @@ expected:
   severity: critical
   category: privilege_escalation
   why: A new sudoers drop-in, outside config management, named like an app file, granting root.
+  match:
+    syscheck.path: /etc/sudoers.d/90-app
+  needs_context: true

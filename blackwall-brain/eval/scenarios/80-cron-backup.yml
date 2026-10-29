@@ -16,3 +16,6 @@ expected:
   severity: low
   category: false_positive
   why: A nightly backup job is routine scheduled maintenance.
+  match:
+    syscheck.path: /etc/cron.d/nightly-backup
+  needs_context: true

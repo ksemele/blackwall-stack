@@ -17,3 +17,6 @@ expected:
   severity: low
   category: false_positive
   why: Keep-alive tuning is a harmless, common sshd change.
+  match:
+    syscheck.path: /etc/ssh/sshd_config
+  needs_context: true

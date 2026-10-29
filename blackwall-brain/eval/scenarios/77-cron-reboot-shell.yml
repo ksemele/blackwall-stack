@@ -16,3 +16,6 @@ expected:
   severity: critical
   category: command_and_control
   why: A boot-time reverse shell to an external address, hidden behind a system-like name.
+  match:
+    syscheck.path: /etc/cron.d/0hourly-sync
+  needs_context: true

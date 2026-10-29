@@ -1,9 +1,9 @@
 {
-  "captured_at": "2026-10-29T09:53:06Z",
+  "captured_at": "2026-10-29T10:24:00Z",
   "cases": [
     {
       "alert": {
-        "@timestamp": "2026-10-29T09:52:35.493Z",
+        "@timestamp": "2026-10-29T10:23:30.825Z",
         "agent": {
           "id": "002",
           "ip": "172.28.0.11",
@@ -13,8 +13,8 @@
           "name": "su",
           "parent": "su"
         },
-        "full_log": "Oct 29 09:52:35 black-host-01 su: FAILED SU (to root) www-data on none",
-        "id": "1793267555.261564",
+        "full_log": "Oct 29 10:23:29 black-host-01 su: FAILED SU (to root) www-data on none",
+        "id": "1793269410.318647",
         "input": {
           "type": "log"
         },
@@ -25,11 +25,11 @@
         "predecoder": {
           "hostname": "black-host-01",
           "program_name": "su",
-          "timestamp": "Oct 29 09:52:35"
+          "timestamp": "Oct 29 10:23:29"
         },
         "rule": {
           "description": "User missed the password to change UID (user id).",
-          "firedtimes": 4,
+          "firedtimes": 1,
           "gdpr": [
             "IV_35.7.d",
             "IV_32.2"
@@ -63,13 +63,17 @@
             "CC7.3"
           ]
         },
-        "timestamp": "2026-10-29T09:52:35.493+0000"
+        "timestamp": "2026-10-29T10:23:30.825+0000"
       },
       "context": {},
-      "doc_id": "T0wTh6EBjm0FRj8Ccrid",
+      "doc_id": "sUwvh6EBjm0FRj8Cwbg6",
       "expected": {
         "category": "privilege_escalation",
+        "match": {
+          "full_log": "www-data"
+        },
         "min_count": 1,
+        "needs_context": false,
         "rule_id": "5301",
         "severity": "high",
         "verdict": "true_positive",
@@ -77,6 +81,6 @@
       }
     }
   ],
-  "eval_set_version": "2026-10-29.1",
+  "eval_set_version": "2026-10-29.2",
   "scenario": "su-webuser"
 }

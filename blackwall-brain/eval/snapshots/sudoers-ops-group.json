@@ -1,9 +1,9 @@
 {
-  "captured_at": "2026-10-29T09:58:20Z",
+  "captured_at": "2026-10-29T10:29:05Z",
   "cases": [
     {
       "alert": {
-        "@timestamp": "2026-10-29T09:57:40.419Z",
+        "@timestamp": "2026-10-29T10:28:29.971Z",
         "agent": {
           "id": "002",
           "ip": "172.28.0.11",
@@ -12,8 +12,8 @@
         "decoder": {
           "name": "syscheck_integrity_changed"
         },
-        "full_log": "File '/etc/sudoers' modified\nMode: realtime\nChanged attributes: size,mtime,md5,sha1,sha256\nSize changed from '1671' to '1690'\nOld modification time was: '1793264734', now it is '1793267860'\nOld md5sum was: '791aa979aa5e859f9ba0112a9512158c'\nNew md5sum is : '23ee7b929e3fd8563023d947730fd1d5'\nOld sha1sum was: 'b3d869971836a061841e6382aaf4d23a9d958dcc'\nNew sha1sum is : '17efb42f030940c9647932f49a001269f214d3c3'\nOld sha256sum was: '5ae1d5673f987e403c3d08a209798e737169f5f89286862963b6b28d09fb619c'\nNew sha256sum is : 'd9a4eba26cc63de4b4ea5d96fd68122f3f75f1f1157ecea2f86b026118493cec'\n",
-        "id": "1793267860.267859",
+        "full_log": "File '/etc/sudoers' modified\nMode: realtime\nChanged attributes: size,mtime,md5,sha1,sha256\nSize changed from '1671' to '1690'\nOld modification time was: '1793264734', now it is '1793269709'\nOld md5sum was: '791aa979aa5e859f9ba0112a9512158c'\nNew md5sum is : '23ee7b929e3fd8563023d947730fd1d5'\nOld sha1sum was: 'b3d869971836a061841e6382aaf4d23a9d958dcc'\nNew sha1sum is : '17efb42f030940c9647932f49a001269f214d3c3'\nOld sha256sum was: '5ae1d5673f987e403c3d08a209798e737169f5f89286862963b6b28d09fb619c'\nNew sha256sum is : 'd9a4eba26cc63de4b4ea5d96fd68122f3f75f1f1157ecea2f86b026118493cec'\n",
+        "id": "1793269709.325325",
         "input": {
           "type": "log"
         },
@@ -23,7 +23,7 @@
         },
         "rule": {
           "description": "Integrity checksum changed.",
-          "firedtimes": 27,
+          "firedtimes": 18,
           "gdpr": [
             "II_5.1.f"
           ],
@@ -84,7 +84,7 @@
           "md5_after": "23ee7b929e3fd8563023d947730fd1d5",
           "md5_before": "791aa979aa5e859f9ba0112a9512158c",
           "mode": "realtime",
-          "mtime_after": "2026-10-29T09:57:40",
+          "mtime_after": "2026-10-29T10:28:29",
           "mtime_before": "2026-10-29T09:05:34",
           "path": "/etc/sudoers",
           "perm_after": "r--r-----",
@@ -97,13 +97,17 @@
           "uid_after": "0",
           "uname_after": "root"
         },
-        "timestamp": "2026-10-29T09:57:40.419+0000"
+        "timestamp": "2026-10-29T10:28:29.971+0000"
       },
       "context": {},
-      "doc_id": "XEwYh6EBjm0FRj8CLrgt",
+      "doc_id": "v0w0h6EBjm0FRj8CYbjV",
       "expected": {
         "category": "false_positive",
+        "match": {
+          "syscheck.path": "/etc/sudoers"
+        },
         "min_count": 1,
+        "needs_context": true,
         "rule_id": "550",
         "severity": "low",
         "verdict": "false_positive",
@@ -111,6 +115,6 @@
       }
     }
   ],
-  "eval_set_version": "2026-10-29.1",
+  "eval_set_version": "2026-10-29.2",
   "scenario": "sudoers-ops-group"
 }

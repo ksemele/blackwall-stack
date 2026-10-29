@@ -1,18 +1,16 @@
 name: root-key-added
 description: An unknown SSH key is appended to root's authorized_keys.
 agent: black-host-01
-wait_s: 120
-steps:
+wait_s: 90
+setup:
 - host: black-host-01
   user: root
   run: mkdir -p /root/.ssh && chmod 700 /root/.ssh && touch /root/.ssh/authorized_keys && chmod 600 /root/.ssh/authorized_keys
     && cp -p /root/.ssh/authorized_keys /root/.ssh/.ak.orig
+steps:
 - host: black-host-01
   user: root
-  run: sleep 20
-- host: black-host-01
-  user: root
-  run: echo 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIHq3v0d9mXo2xT1kVb7PZcR8yNnW4aLs6uFe5gJ0tQhY root@kali'
+  run: echo 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIHq3v0d9mXo2xT1kVb7PZcR8yNnW4aLs6uFe5gJ0tQhY dev@laptop7'
     >> /root/.ssh/authorized_keys
 cleanup:
 - host: black-host-01
@@ -23,4 +21,8 @@ expected:
   verdict: true_positive
   severity: high
   category: persistence
-  why: A new key for root from an unknown machine is a persistent backdoor.
+  why: A new key for root from a machine nobody manages is a persistent backdoor.
+  match:
+    syscheck.path: /root/.ssh/authorized_keys
+    syscheck.changed_attributes: size
+  needs_context: true

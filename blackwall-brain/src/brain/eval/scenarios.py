@@ -10,9 +10,11 @@ from brain.verdict import CATEGORIES, SEVERITIES, VERDICTS
 # or snapshot containing one would measure the string, not the triage.
 MARKERS = ("bw-trigger", "donotuseinprod", "synthetic")
 
-_SCENARIO_KEYS = {"name", "description", "agent", "wait_s", "steps", "cleanup", "expected"}
+_SCENARIO_KEYS = {"name", "description", "agent", "wait_s", "setup", "steps", "cleanup",
+                  "expected"}
 _STEP_KEYS = {"host", "user", "run"}
-_EXPECTED_KEYS = {"rule_id", "verdict", "severity", "category", "why", "min_count"}
+_EXPECTED_KEYS = {"rule_id", "verdict", "severity", "category", "why", "min_count", "match",
+                  "needs_context"}
 
 
 @dataclass
@@ -30,6 +32,21 @@ class Expected:
     category: str
     why: str
     min_count: int = 1
+    # Dotted alert path -> substring, all must hold (e.g. syscheck.path).
+    match: dict = field(default_factory=dict)
+    # True when the alert alone cannot tell attacker from admin.
+    needs_context: bool = False
+
+    def matches(self, alert: dict) -> bool:
+        if str(alert.get("rule", {}).get("id")) != self.rule_id:
+            return False
+        for path, needle in self.match.items():
+            value = alert
+            for part in path.split("."):
+                value = value.get(part, "") if isinstance(value, dict) else ""
+            if str(needle) not in str(value):
+                return False
+        return True
 
 
 @dataclass
@@ -41,6 +58,8 @@ class Scenario:
     cleanup: list[Step] = field(default_factory=list)
     expected: list[Expected] = field(default_factory=list)
     wait_s: int = 90
+    # Runs before the alert window opens: its own alerts are never labelled.
+    setup: list[Step] = field(default_factory=list)
 
 
 def find_marker(text: str) -> str | None:
@@ -63,8 +82,12 @@ def _step(obj, where: str) -> Step:
 
 def _expected(obj, where: str) -> Expected:
     _check_keys(obj, _EXPECTED_KEYS, where)
+    match = obj.get("match") or {}
+    if not isinstance(match, dict):
+        raise ValueError(f"{where}: match must be a mapping")
     e = Expected(str(obj["rule_id"]), obj["verdict"], obj["severity"], obj["category"],
-                 obj["why"], int(obj.get("min_count", 1)))
+                 obj["why"], int(obj.get("min_count", 1)), {str(k): str(v) for k, v in match.items()},
+                 bool(obj.get("needs_context", False)))
     for name, allowed in (("verdict", VERDICTS), ("severity", SEVERITIES),
                           ("category", CATEGORIES)):
         if getattr(e, name) not in allowed:
@@ -88,15 +111,17 @@ def _load(path: str) -> Scenario:
             raise ValueError(f"{path}: no expected alerts")
         seen = set()
         for e in expected:
-            if e.rule_id in seen:
-                raise ValueError(f"{path}: rule {e.rule_id} listed twice")
-            seen.add(e.rule_id)
+            key = (e.rule_id, tuple(sorted(e.match.items())))
+            if key in seen:
+                raise ValueError(f"{path}: rule {e.rule_id} listed twice with the same match")
+            seen.add(key)
         return Scenario(
             name=obj["name"], description=obj["description"], agent=obj["agent"],
             steps=[_step(s, f"{path}: steps[{i}]") for i, s in enumerate(obj["steps"])],
             cleanup=[_step(s, f"{path}: cleanup[{i}]")
                      for i, s in enumerate(obj.get("cleanup") or [])],
-            expected=expected, wait_s=int(obj.get("wait_s", 90)))
+            expected=expected, wait_s=int(obj.get("wait_s", 90)),
+            setup=[_step(s, f"{path}: setup[{i}]") for i, s in enumerate(obj.get("setup") or [])])
     except KeyError as exc:
         raise ValueError(f"{path}: missing key {exc}") from exc
     except yaml.YAMLError as exc:

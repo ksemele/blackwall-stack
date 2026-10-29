@@ -16,3 +16,6 @@ expected:
   severity: low
   category: false_positive
   why: Granting an admin group password-protected sudo is routine access management.
+  match:
+    syscheck.path: /etc/sudoers
+  needs_context: true

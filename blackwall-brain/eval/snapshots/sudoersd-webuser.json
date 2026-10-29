@@ -1,9 +1,9 @@
 {
-  "captured_at": "2026-10-29T09:59:00Z",
+  "captured_at": "2026-10-29T10:29:35Z",
   "cases": [
     {
       "alert": {
-        "@timestamp": "2026-10-29T09:58:20.686Z",
+        "@timestamp": "2026-10-29T10:29:05.229Z",
         "agent": {
           "id": "002",
           "ip": "172.28.0.11",
@@ -13,7 +13,7 @@
           "name": "syscheck_new_entry"
         },
         "full_log": "File '/etc/sudoers.d/90-app' added\nMode: realtime\n",
-        "id": "1793267900.270325",
+        "id": "1793269745.327791",
         "input": {
           "type": "log"
         },
@@ -23,7 +23,7 @@
         },
         "rule": {
           "description": "File added to the system.",
-          "firedtimes": 10,
+          "firedtimes": 7,
           "gdpr": [
             "II_5.1.f"
           ],
@@ -62,10 +62,10 @@
           "event": "added",
           "gid_after": "0",
           "gname_after": "root",
-          "inode_after": 5504090,
+          "inode_after": 5508270,
           "md5_after": "e069929e816b4ae37b8d6920053fb159",
           "mode": "realtime",
-          "mtime_after": "2026-10-29T09:58:20",
+          "mtime_after": "2026-10-29T10:29:05",
           "path": "/etc/sudoers.d/90-app",
           "perm_after": "r--r-----",
           "sha1_after": "f819d22ca656cd4d6d597b762b3795940ff07b04",
@@ -74,13 +74,17 @@
           "uid_after": "0",
           "uname_after": "root"
         },
-        "timestamp": "2026-10-29T09:58:20.686+0000"
+        "timestamp": "2026-10-29T10:29:05.229+0000"
       },
       "context": {},
-      "doc_id": "XkwYh6EBjm0FRj8CyriW",
+      "doc_id": "wUw0h6EBjm0FRj8C37gA",
       "expected": {
         "category": "privilege_escalation",
+        "match": {
+          "syscheck.path": "/etc/sudoers.d/90-app"
+        },
         "min_count": 1,
+        "needs_context": true,
         "rule_id": "554",
         "severity": "critical",
         "verdict": "true_positive",
@@ -88,6 +92,6 @@
       }
     }
   ],
-  "eval_set_version": "2026-10-29.1",
+  "eval_set_version": "2026-10-29.2",
   "scenario": "sudoersd-webuser"
 }

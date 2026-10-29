@@ -1,9 +1,9 @@
 {
-  "captured_at": "2026-10-29T10:02:42Z",
+  "captured_at": "2026-10-29T10:33:12Z",
   "cases": [
     {
       "alert": {
-        "@timestamp": "2026-10-29T10:02:12.342Z",
+        "@timestamp": "2026-10-29T10:32:41.917Z",
         "agent": {
           "id": "002",
           "ip": "172.28.0.11",
@@ -13,7 +13,7 @@
           "name": "syscheck_new_entry"
         },
         "full_log": "File '/etc/cron.d/0hourly-sync' added\nMode: realtime\n",
-        "id": "1793268132.284381",
+        "id": "1793269961.341847",
         "input": {
           "type": "log"
         },
@@ -23,7 +23,7 @@
         },
         "rule": {
           "description": "File added to the system.",
-          "firedtimes": 2,
+          "firedtimes": 10,
           "gdpr": [
             "II_5.1.f"
           ],
@@ -62,10 +62,10 @@
           "event": "added",
           "gid_after": "0",
           "gname_after": "root",
-          "inode_after": 5504795,
+          "inode_after": 5508946,
           "md5_after": "df4c827c95252c2742b6b7f3e34964aa",
           "mode": "realtime",
-          "mtime_after": "2026-10-29T10:02:12",
+          "mtime_after": "2026-10-29T10:32:41",
           "path": "/etc/cron.d/0hourly-sync",
           "perm_after": "rw-rw-rw-",
           "sha1_after": "e6d5735009c1c32a246cf87a817d993c3b7551a4",
@@ -74,13 +74,17 @@
           "uid_after": "0",
           "uname_after": "root"
         },
-        "timestamp": "2026-10-29T10:02:12.342+0000"
+        "timestamp": "2026-10-29T10:32:41.917+0000"
       },
       "context": {},
-      "doc_id": "cUwch6EBjm0FRj8CRrhP",
+      "doc_id": "1Ew4h6EBjm0FRj8CG7ja",
       "expected": {
         "category": "command_and_control",
+        "match": {
+          "syscheck.path": "/etc/cron.d/0hourly-sync"
+        },
         "min_count": 1,
+        "needs_context": true,
         "rule_id": "554",
         "severity": "critical",
         "verdict": "true_positive",
@@ -88,6 +92,6 @@
       }
     }
   ],
-  "eval_set_version": "2026-10-29.1",
+  "eval_set_version": "2026-10-29.2",
   "scenario": "cron-reboot-shell"
 }

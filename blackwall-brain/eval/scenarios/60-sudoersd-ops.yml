@@ -16,3 +16,6 @@ expected:
   severity: low
   category: false_positive
   why: A drop-in for the ops group with password-required sudo is the normal way to grant admin rights.
+  match:
+    syscheck.path: /etc/sudoers.d/91-ops
+  needs_context: true

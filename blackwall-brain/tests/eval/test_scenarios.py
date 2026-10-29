@@ -78,3 +78,29 @@ def test_rejects_missing_expected(tmp_path):
     write(tmp_path, "none.yml", GOOD.split("expected:")[0] + "expected: []\n")
     with pytest.raises(ValueError, match="none.yml.*expected"):
         load_scenarios(str(tmp_path))
+
+
+def test_setup_and_match_and_needs_context(tmp_path):
+    text = GOOD.replace("steps:", "setup:\n  - {host: black-host-01, run: \"touch /root/.ssh/authorized_keys\"}\nsteps:")
+    text = text.replace("    why: www-data has no business editing sudoers.",
+                        "    why: www-data has no business editing sudoers.\n"
+                        "    needs_context: true\n"
+                        "    match: {syscheck.path: /etc/sudoers.d/90-app}")
+    write(tmp_path, "a.yml", text)
+    [s] = load_scenarios(str(tmp_path))
+    assert s.setup == [Step("black-host-01", "root", "touch /root/.ssh/authorized_keys")]
+    assert s.expected[0].match == {"syscheck.path": "/etc/sudoers.d/90-app"}
+    assert s.expected[0].needs_context is True
+
+
+def test_same_rule_twice_allowed_with_different_match(tmp_path):
+    text = GOOD + """    match: {full_log: "/etc/a"}
+  - rule_id: "554"
+    verdict: true_positive
+    severity: high
+    category: persistence
+    why: again
+    match: {full_log: "/etc/b"}
+"""
+    write(tmp_path, "two.yml", text)
+    assert len(load_scenarios(str(tmp_path))[0].expected) == 2

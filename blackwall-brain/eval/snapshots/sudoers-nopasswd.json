@@ -1,9 +1,9 @@
 {
-  "captured_at": "2026-10-29T09:57:40Z",
+  "captured_at": "2026-10-29T10:28:29Z",
   "cases": [
     {
       "alert": {
-        "@timestamp": "2026-10-29T09:57:00.122Z",
+        "@timestamp": "2026-10-29T10:28:04.792Z",
         "agent": {
           "id": "002",
           "ip": "172.28.0.11",
@@ -12,8 +12,8 @@
         "decoder": {
           "name": "syscheck_integrity_changed"
         },
-        "full_log": "File '/etc/sudoers' modified\nMode: realtime\nChanged attributes: size,mtime,md5,sha1,sha256\nSize changed from '1671' to '1704'\nOld modification time was: '1793264734', now it is '1793267820'\nOld md5sum was: '791aa979aa5e859f9ba0112a9512158c'\nNew md5sum is : '38d6bdde5a74049213618c97760a77d7'\nOld sha1sum was: 'b3d869971836a061841e6382aaf4d23a9d958dcc'\nNew sha1sum is : 'ff113f25c53f0f3d2ebf5a94ab8e5178692f5745'\nOld sha256sum was: '5ae1d5673f987e403c3d08a209798e737169f5f89286862963b6b28d09fb619c'\nNew sha256sum is : '72cfd973dec4683f526bd7ed27dec640029e373070031d3a16bd60570985c54f'\n",
-        "id": "1793267820.265393",
+        "full_log": "File '/etc/sudoers' modified\nMode: realtime\nChanged attributes: size,mtime,md5,sha1,sha256\nSize changed from '1671' to '1704'\nOld modification time was: '1793264734', now it is '1793269684'\nOld md5sum was: '791aa979aa5e859f9ba0112a9512158c'\nNew md5sum is : '38d6bdde5a74049213618c97760a77d7'\nOld sha1sum was: 'b3d869971836a061841e6382aaf4d23a9d958dcc'\nNew sha1sum is : 'ff113f25c53f0f3d2ebf5a94ab8e5178692f5745'\nOld sha256sum was: '5ae1d5673f987e403c3d08a209798e737169f5f89286862963b6b28d09fb619c'\nNew sha256sum is : '72cfd973dec4683f526bd7ed27dec640029e373070031d3a16bd60570985c54f'\n",
+        "id": "1793269684.322859",
         "input": {
           "type": "log"
         },
@@ -23,7 +23,7 @@
         },
         "rule": {
           "description": "Integrity checksum changed.",
-          "firedtimes": 25,
+          "firedtimes": 16,
           "gdpr": [
             "II_5.1.f"
           ],
@@ -84,7 +84,7 @@
           "md5_after": "38d6bdde5a74049213618c97760a77d7",
           "md5_before": "791aa979aa5e859f9ba0112a9512158c",
           "mode": "realtime",
-          "mtime_after": "2026-10-29T09:57:00",
+          "mtime_after": "2026-10-29T10:28:04",
           "mtime_before": "2026-10-29T09:05:34",
           "path": "/etc/sudoers",
           "perm_after": "r--r-----",
@@ -97,13 +97,17 @@
           "uid_after": "0",
           "uname_after": "root"
         },
-        "timestamp": "2026-10-29T09:57:00.122+0000"
+        "timestamp": "2026-10-29T10:28:04.792+0000"
       },
       "context": {},
-      "doc_id": "WkwXh6EBjm0FRj8Ckbja",
+      "doc_id": "vUwzh6EBjm0FRj8C5LjM",
       "expected": {
         "category": "privilege_escalation",
+        "match": {
+          "syscheck.path": "/etc/sudoers"
+        },
         "min_count": 1,
+        "needs_context": true,
         "rule_id": "550",
         "severity": "critical",
         "verdict": "true_positive",
@@ -111,6 +115,6 @@
       }
     }
   ],
-  "eval_set_version": "2026-10-29.1",
+  "eval_set_version": "2026-10-29.2",
   "scenario": "sudoers-nopasswd"
 }

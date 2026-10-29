@@ -1,15 +1,13 @@
 name: sudo-ops-update
 description: An admin in the sudo group runs sudo to update package lists.
 agent: black-host-01
-wait_s: 120
-steps:
+wait_s: 90
+setup:
 - host: black-host-01
   user: root
   run: id ops >/dev/null 2>&1 || (useradd -m -s /bin/bash -c 'Ops admin' ops && usermod -aG sudo ops &&
     echo 'ops:Op5-Rotate-77' | chpasswd); echo 'ops:Op5-Rotate-77' | chpasswd
-- host: black-host-01
-  user: root
-  run: sleep 20
+steps:
 - host: black-host-01
   user: root
   run: su - ops -c "echo 'Op5-Rotate-77' | sudo -S -k apt-get -qq update >/dev/null 2>&1"; true
@@ -20,3 +18,5 @@ expected:
   severity: low
   category: false_positive
   why: An admin in the sudo group running apt-get update with sudo is routine.
+  match:
+    full_log: COMMAND=/usr/bin/apt-get

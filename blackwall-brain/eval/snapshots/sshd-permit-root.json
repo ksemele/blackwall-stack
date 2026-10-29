@@ -1,9 +1,9 @@
 {
-  "captured_at": "2026-10-29T10:00:06Z",
+  "captured_at": "2026-10-29T10:30:40Z",
   "cases": [
     {
       "alert": {
-        "@timestamp": "2026-10-29T09:59:36.210Z",
+        "@timestamp": "2026-10-29T10:30:10.726Z",
         "agent": {
           "id": "002",
           "ip": "172.28.0.11",
@@ -12,8 +12,8 @@
         "decoder": {
           "name": "syscheck_integrity_changed"
         },
-        "full_log": "File '/etc/ssh/sshd_config' modified\nMode: realtime\nChanged attributes: size,mtime,md5,sha1,sha256\nSize changed from '3301' to '3348'\nOld modification time was: '1793265066', now it is '1793267976'\nOld md5sum was: '90c85d4c3138c8a425bc5d3f09dfeb2f'\nNew md5sum is : 'd1777ef32cf33f5d8a9a605405b1ed8f'\nOld sha1sum was: '8ee9380bb4117ec726dae1e77d804e5320e0057b'\nNew sha1sum is : 'ef9d8da3c118a3491365b0ddf7a5329ce20e00a1'\nOld sha256sum was: 'df516d4064d242efe7735080a9d282f30384d1c8ec088a4bccd3917c1ff83bdb'\nNew sha256sum is : '13c2feb0cc933572011e63b8d33c897a7c8067a83428ae71bc3d65921f41dfe8'\n",
-        "id": "1793267976.273077",
+        "full_log": "File '/etc/ssh/sshd_config' modified\nMode: realtime\nChanged attributes: size,mtime,md5,sha1,sha256\nSize changed from '3301' to '3348'\nOld modification time was: '1793265066', now it is '1793269810'\nOld md5sum was: '90c85d4c3138c8a425bc5d3f09dfeb2f'\nNew md5sum is : 'd1777ef32cf33f5d8a9a605405b1ed8f'\nOld sha1sum was: '8ee9380bb4117ec726dae1e77d804e5320e0057b'\nNew sha1sum is : 'ef9d8da3c118a3491365b0ddf7a5329ce20e00a1'\nOld sha256sum was: 'df516d4064d242efe7735080a9d282f30384d1c8ec088a4bccd3917c1ff83bdb'\nNew sha256sum is : '13c2feb0cc933572011e63b8d33c897a7c8067a83428ae71bc3d65921f41dfe8'\n",
+        "id": "1793269810.330543",
         "input": {
           "type": "log"
         },
@@ -23,7 +23,7 @@
         },
         "rule": {
           "description": "Integrity checksum changed.",
-          "firedtimes": 29,
+          "firedtimes": 20,
           "gdpr": [
             "II_5.1.f"
           ],
@@ -84,7 +84,7 @@
           "md5_after": "d1777ef32cf33f5d8a9a605405b1ed8f",
           "md5_before": "90c85d4c3138c8a425bc5d3f09dfeb2f",
           "mode": "realtime",
-          "mtime_after": "2026-10-29T09:59:36",
+          "mtime_after": "2026-10-29T10:30:10",
           "mtime_before": "2026-10-29T09:11:06",
           "path": "/etc/ssh/sshd_config",
           "perm_after": "rw-r--r--",
@@ -97,13 +97,17 @@
           "uid_after": "0",
           "uname_after": "root"
         },
-        "timestamp": "2026-10-29T09:59:36.210+0000"
+        "timestamp": "2026-10-29T10:30:10.726+0000"
       },
       "context": {},
-      "doc_id": "YkwZh6EBjm0FRj8C5Lgy",
+      "doc_id": "ykw1h6EBjm0FRj8C0bh_",
       "expected": {
         "category": "persistence",
+        "match": {
+          "syscheck.path": "/etc/ssh/sshd_config"
+        },
         "min_count": 1,
+        "needs_context": true,
         "rule_id": "550",
         "severity": "high",
         "verdict": "true_positive",
@@ -111,6 +115,6 @@
       }
     }
   ],
-  "eval_set_version": "2026-10-29.1",
+  "eval_set_version": "2026-10-29.2",
   "scenario": "sshd-permit-root"
 }

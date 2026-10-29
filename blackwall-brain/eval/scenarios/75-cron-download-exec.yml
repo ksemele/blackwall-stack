@@ -16,3 +16,6 @@ expected:
   severity: high
   category: persistence
   why: A root cron job piping a remote script to sh is a persistence and C2 pattern.
+  match:
+    syscheck.path: /etc/cron.d/sysupdate
+  needs_context: true

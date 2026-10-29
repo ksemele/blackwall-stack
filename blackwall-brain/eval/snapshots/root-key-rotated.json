@@ -1,9 +1,9 @@
 {
-  "captured_at": "2026-10-29T10:05:08Z",
+  "captured_at": "2026-10-29T10:36:03Z",
   "cases": [
     {
       "alert": {
-        "@timestamp": "2026-10-29T10:04:28.317Z",
+        "@timestamp": "2026-10-29T10:35:27.961Z",
         "agent": {
           "id": "002",
           "ip": "172.28.0.11",
@@ -12,8 +12,8 @@
         "decoder": {
           "name": "syscheck_integrity_changed"
         },
-        "full_log": "File '/root/.ssh/authorized_keys' modified\nMode: realtime\nChanged attributes: mtime\nOld modification time was: '1793268228', now it is '1793268268'\n",
-        "id": "1793268268.293164",
+        "full_log": "File '/root/.ssh/authorized_keys' modified\nMode: realtime\nChanged attributes: size,mtime,md5,sha1,sha256\nSize changed from '0' to '93'\nOld modification time was: '1793270107', now it is '1793270127'\nOld md5sum was: 'd41d8cd98f00b204e9800998ecf8427e'\nNew md5sum is : 'c9cb58976acaa5e4819ac41eea77879a'\nOld sha1sum was: 'da39a3ee5e6b4b0d3255bfef95601890afd80709'\nNew sha1sum is : '2c629531288f1649215fce0338d102582e56e4e8'\nOld sha256sum was: 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855'\nNew sha256sum is : '7312805c028918bb7d05a7614437a240e0606d096c02852b50666165827b7b6d'\n",
+        "id": "1793270127.352113",
         "input": {
           "type": "log"
         },
@@ -23,7 +23,7 @@
         },
         "rule": {
           "description": "Integrity checksum changed.",
-          "firedtimes": 10,
+          "firedtimes": 32,
           "gdpr": [
             "II_5.1.f"
           ],
@@ -71,31 +71,44 @@
         },
         "syscheck": {
           "changed_attributes": [
-            "mtime"
+            "size",
+            "mtime",
+            "md5",
+            "sha1",
+            "sha256"
           ],
           "event": "modified",
           "gid_after": "0",
           "gname_after": "root",
           "inode_after": 5495261,
-          "md5_after": "d41d8cd98f00b204e9800998ecf8427e",
+          "md5_after": "c9cb58976acaa5e4819ac41eea77879a",
+          "md5_before": "d41d8cd98f00b204e9800998ecf8427e",
           "mode": "realtime",
-          "mtime_after": "2026-10-29T10:04:28",
-          "mtime_before": "2026-10-29T10:03:48",
+          "mtime_after": "2026-10-29T10:35:27",
+          "mtime_before": "2026-10-29T10:35:07",
           "path": "/root/.ssh/authorized_keys",
           "perm_after": "rw-------",
-          "sha1_after": "da39a3ee5e6b4b0d3255bfef95601890afd80709",
-          "sha256_after": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-          "size_after": "0",
+          "sha1_after": "2c629531288f1649215fce0338d102582e56e4e8",
+          "sha1_before": "da39a3ee5e6b4b0d3255bfef95601890afd80709",
+          "sha256_after": "7312805c028918bb7d05a7614437a240e0606d096c02852b50666165827b7b6d",
+          "sha256_before": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "size_after": "93",
+          "size_before": "0",
           "uid_after": "0",
           "uname_after": "root"
         },
-        "timestamp": "2026-10-29T10:04:28.317+0000"
+        "timestamp": "2026-10-29T10:35:27.961+0000"
       },
       "context": {},
-      "doc_id": "fEweh6EBjm0FRj8CSrhr",
+      "doc_id": "40w6h6EBjm0FRj8CvLg1",
       "expected": {
         "category": "false_positive",
+        "match": {
+          "syscheck.changed_attributes": "size",
+          "syscheck.path": "/root/.ssh/authorized_keys"
+        },
         "min_count": 1,
+        "needs_context": true,
         "rule_id": "550",
         "severity": "low",
         "verdict": "false_positive",
@@ -103,6 +116,6 @@
       }
     }
   ],
-  "eval_set_version": "2026-10-29.1",
+  "eval_set_version": "2026-10-29.2",
   "scenario": "root-key-rotated"
 }

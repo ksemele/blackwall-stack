@@ -14,3 +14,5 @@ expected:
   category: privilege_escalation
   why: www-data never needs sudo; repeated tries from it mean a compromised web app probing for root.
   min_count: 3
+  match:
+    full_log: www-data

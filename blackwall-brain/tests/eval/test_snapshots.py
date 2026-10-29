@@ -41,3 +41,14 @@ def test_stable_output(tmp_path, monkeypatch):
     a = open(write_snapshot(str(tmp_path / "a"), SCEN, [case()])).read()
     b = open(write_snapshot(str(tmp_path / "b"), SCEN, [case()])).read()
     assert a == b and EVAL_SET_VERSION in a
+
+
+@pytest.mark.parametrize("leak", ["/Users/someone/x", "8.8.8.8", "10.0.0.5"])
+def test_host_data_leak_rejected(tmp_path, leak):
+    with pytest.raises(ValueError, match="leak"):
+        write_snapshot(str(tmp_path), SCEN, [case(log=f"seen {leak}")])
+
+
+def test_lab_and_documentation_addresses_allowed(tmp_path):
+    write_snapshot(str(tmp_path), SCEN,
+                   [case(log="from 172.28.0.10 to 203.0.113.66 and 198.51.100.23, 127.0.0.1")])

@@ -1,9 +1,9 @@
 {
-  "captured_at": "2026-10-29T09:51:10Z",
+  "captured_at": "2026-10-29T10:21:56Z",
   "cases": [
     {
       "alert": {
-        "@timestamp": "2026-10-29T09:50:41.242Z",
+        "@timestamp": "2026-10-29T10:21:26.435Z",
         "agent": {
           "id": "002",
           "ip": "172.28.0.11",
@@ -20,8 +20,8 @@
           "name": "useradd",
           "parent": "useradd"
         },
-        "full_log": "Oct 29 09:50:40 black-host-01 useradd[14450]: new user: name=sysadm, UID=0, GID=0, home=/root, shell=/bin/bash, from=none",
-        "id": "1793267441.253918",
+        "full_log": "Oct 29 10:21:25 black-host-01 useradd[16817]: new user: name=sysadm, UID=0, GID=0, home=/root, shell=/bin/bash, from=none",
+        "id": "1793269286.311001",
         "input": {
           "type": "log"
         },
@@ -32,11 +32,11 @@
         "predecoder": {
           "hostname": "black-host-01",
           "program_name": "useradd",
-          "timestamp": "Oct 29 09:50:40"
+          "timestamp": "Oct 29 10:21:25"
         },
         "rule": {
           "description": "New user added to the system.",
-          "firedtimes": 10,
+          "firedtimes": 2,
           "gdpr": [
             "IV_35.7.d",
             "IV_32.2"
@@ -84,13 +84,17 @@
             "CC7.3"
           ]
         },
-        "timestamp": "2026-10-29T09:50:41.242+0000"
+        "timestamp": "2026-10-29T10:21:26.435+0000"
       },
       "context": {},
-      "doc_id": "P0wRh6EBjm0FRj8CuLjn",
+      "doc_id": "oUwth6EBjm0FRj8C1LiQ",
       "expected": {
         "category": "persistence",
+        "match": {
+          "full_log": "name=sysadm"
+        },
         "min_count": 1,
+        "needs_context": false,
         "rule_id": "5902",
         "severity": "critical",
         "verdict": "true_positive",
@@ -98,6 +102,6 @@
       }
     }
   ],
-  "eval_set_version": "2026-10-29.1",
+  "eval_set_version": "2026-10-29.2",
   "scenario": "user-uid0"
 }

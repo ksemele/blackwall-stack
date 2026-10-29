@@ -1,141 +1,163 @@
 {
   "backend": "anthropic",
-  "cost_usd": 0.0064115,
+  "cost_usd": 0.0065375,
   "date": "2026-10-29",
-  "eval_set_version": "2026-10-29.1",
+  "eval_set_version": "2026-10-29.2",
   "model": "claude-haiku-5-5",
   "options": {
     "effort": "low"
   },
   "per_case": [
     {
-      "doc_id": "c0wch6EBjm0FRj8Cw7hu",
+      "doc_id": "1kw4h6EBjm0FRj8Ckbgk",
       "error": "",
       "expected": {
         "category": "false_positive",
+        "match": {
+          "syscheck.path": "/etc/cron.d/nightly-backup"
+        },
         "min_count": 1,
+        "needs_context": true,
         "rule_id": "554",
         "severity": "low",
         "verdict": "false_positive",
         "why": "A nightly backup job is routine scheduled maintenance."
       },
       "got": {
-        "action": "Check who created the file and its contents, and confirm with the admin team whether a nightly backup job was expected on this host.",
+        "action": "Check who created the file, its contents, and whether a change ticket or deployment matches the timestamp.",
         "category": "persistence",
-        "confidence": "low",
+        "confidence": "medium",
         "needs": [
-          "file contents of /etc/cron.d/nightly-backup",
+          "file contents and hash",
           "user or process that created the file",
-          "change management record for backup job",
-          "auth logs around 10:02 UTC on black-host-01"
+          "change management records for backup job",
+          "whether nightly-backup is an approved job on this host"
         ],
         "severity": "medium",
-        "summary": "A new cron job file /etc/cron.d/nightly-backup was added on black-host-01, which could be legitimate backup setup or a persistence mechanism.",
+        "summary": "A new cron job file /etc/cron.d/nightly-backup was added on black-host-01; the name suggests routine backup but cron.d additions are a common persistence method.",
         "verdict": "uncertain"
       },
       "scenario": "cron-backup"
     },
     {
-      "doc_id": "dUwdh6EBjm0FRj8COLi8",
+      "doc_id": "2Ew5h6EBjm0FRj8CDrg4",
       "error": "",
       "expected": {
         "category": "false_positive",
+        "match": {
+          "syscheck.path": "/etc/cron.d/certbot"
+        },
         "min_count": 1,
+        "needs_context": true,
         "rule_id": "554",
         "severity": "low",
         "verdict": "false_positive",
         "why": "The stock certbot renewal job, exactly as the package ships it."
       },
       "got": {
-        "action": "Check the file contents and owner, confirm whether certbot was installed or updated recently, and compare against the package manager's file list.",
+        "action": "Check the file contents and owner, verify whether certbot was recently installed or updated via package manager logs, and review the cron entry for unexpected commands.",
         "category": "persistence",
         "confidence": "low",
         "needs": [
-          "file contents and hash of /etc/cron.d/certbot",
-          "package manager record showing whether certbot is installed",
-          "user or process that created the file (audit log)",
-          "whether the host is expected to run certbot"
+          "file contents of /etc/cron.d/certbot",
+          "package manager logs showing certbot install or update",
+          "file owner, permissions, and hash",
+          "auth or shell logs around 2026-10-29 10:33 UTC",
+          "whether black-host-01 is expected to run certbot"
         ],
         "severity": "medium",
-        "summary": "A new file /etc/cron.d/certbot was added on black-host-01, which could be a legitimate certbot renewal job or a planted cron persistence entry.",
+        "summary": "A new file /etc/cron.d/certbot was added on black-host-01; this could be a legitimate certbot package install or a planted cron job for persistence.",
         "verdict": "uncertain"
       },
       "scenario": "cron-certbot"
     },
     {
-      "doc_id": "b0wbh6EBjm0FRj8Cybg7",
+      "doc_id": "0kw3h6EBjm0FRj8CpriU",
       "error": "",
       "expected": {
         "category": "persistence",
+        "match": {
+          "syscheck.path": "/etc/cron.d/sysupdate"
+        },
         "min_count": 1,
+        "needs_context": true,
         "rule_id": "554",
         "severity": "high",
         "verdict": "true_positive",
         "why": "A root cron job piping a remote script to sh is a persistence and C2 pattern."
       },
       "got": {
-        "action": "Inspect the contents of /etc/cron.d/sysupdate, check who created it and which process did, and confirm whether a change ticket or package install explains it.",
+        "action": "Inspect the cron file contents, its owner and creation process, and check whether a package manager or change ticket explains it.",
         "category": "persistence",
         "confidence": "medium",
         "needs": [
-          "file contents and hash",
-          "creating user and process (auditd or syscheck who-data)",
-          "whether a package manager or config management run was active at 10:01:37 UTC",
-          "cron job schedule and command in the file"
+          "contents of /etc/cron.d/sysupdate",
+          "file owner and hash",
+          "process or user that created the file",
+          "change management or package install records for the host"
         ],
-        "severity": "high",
-        "summary": "A new file /etc/cron.d/sysupdate was added on black-host-01, a cron drop-in with a generic name that could be used for persistence.",
+        "severity": "medium",
+        "summary": "A new file /etc/cron.d/sysupdate was added on black-host-01, a cron drop-in with a generic name that could be persistence or routine software installation.",
         "verdict": "uncertain"
       },
       "scenario": "cron-download-exec"
     },
     {
-      "doc_id": "cUwch6EBjm0FRj8CRrhP",
+      "doc_id": "1Ew4h6EBjm0FRj8CG7ja",
       "error": "",
       "expected": {
         "category": "command_and_control",
+        "match": {
+          "syscheck.path": "/etc/cron.d/0hourly-sync"
+        },
         "min_count": 1,
+        "needs_context": true,
         "rule_id": "554",
         "severity": "critical",
         "verdict": "true_positive",
         "why": "A boot-time reverse shell to an external address, hidden behind a system-like name."
       },
       "got": {
-        "action": "Inspect the cron file contents, its owner and creation process, and check whether a change ticket or package install explains it.",
+        "action": "Inspect the cron file contents, its owner and creation process, and check whether the associated job or package was an approved change.",
         "category": "persistence",
         "confidence": "medium",
         "needs": [
           "file contents of /etc/cron.d/0hourly-sync",
-          "file owner and permissions",
-          "process or user that created the file",
-          "change management record or package manager history"
+          "file owner, permissions, and hash",
+          "process or user that created the file (auditd or session logs)",
+          "change management record for the host",
+          "whether the file's referenced script exists and its contents"
         ],
-        "severity": "medium",
-        "summary": "A new file /etc/cron.d/0hourly-sync was added on black-host-01, which could be a scheduled persistence mechanism or legitimate job.",
+        "severity": "high",
+        "summary": "A new file /etc/cron.d/0hourly-sync was added on black-host-01, a cron drop-in that could be used for persistence or could be legitimate scheduled sync.",
         "verdict": "uncertain"
       },
       "scenario": "cron-reboot-shell"
     },
     {
-      "doc_id": "kEwih6EBjm0FRj8CuLhB",
+      "doc_id": "ukwxh6EBjm0FRj8ChrjW",
       "error": "",
       "expected": {
         "category": "false_positive",
+        "match": {
+          "full_log": "/var/log/syslog"
+        },
         "min_count": 1,
+        "needs_context": true,
         "rule_id": "592",
         "severity": "low",
         "verdict": "false_positive",
         "why": "copytruncate rotation keeps the old content in syslog.1; a size drop is expected."
       },
       "got": {
-        "action": "Check syslog integrity and whether logrotate or a maintenance job ran around 10:09 UTC, and review auth and syslog content for gaps.",
+        "action": "Check whether logrotate or a maintenance job ran at this time, and review syslog around 10:25 UTC for gaps or tampering.",
         "category": "defense_evasion",
         "confidence": "medium",
         "needs": [
           "logrotate or maintenance schedule for the host",
-          "file size before and after the change",
-          "recent auth and sudo activity on black-host-01",
-          "other alerts from the same host around the timestamp"
+          "syslog contents before and after the truncation",
+          "auth and sudo logs for the same window",
+          "whether the file was truncated by an interactive user"
         ],
         "severity": "medium",
         "summary": "Syslog file on black-host-01 shrank while keeping the same inode, which can mean log rotation or truncation, possibly to hide activity.",
@@ -144,64 +166,77 @@
       "scenario": "logs-rotated"
     },
     {
-      "doc_id": "VkwVh6EBjm0FRj8CDLj4",
+      "doc_id": "9Ew-h6EBjm0FRj8CK7i_",
       "error": "",
       "expected": {
         "category": "defense_evasion",
-        "min_count": 2,
+        "match": {
+          "full_log": "/var/log/auth.log"
+        },
+        "min_count": 1,
+        "needs_context": true,
         "rule_id": "592",
         "severity": "high",
         "verdict": "true_positive",
-        "why": "Emptying auth.log and syslog at once, with no rotated copy, hides tracks."
+        "why": "auth.log emptied in place, with syslog at the same moment and no rotated copy: hiding tracks."
       },
       "got": {
-        "action": "Check auth.log contents and gaps, review recent logins and sudo use on black-host-01, and confirm whether logrotate or an admin truncated the file.",
+        "action": "Check auth.log contents and gaps, review recent root or sudo sessions on black-host-01, and confirm whether logrotate or a maintenance job ran at that time.",
         "category": "defense_evasion",
         "confidence": "medium",
         "needs": [
-          "auth.log contents before and after the change",
-          "logrotate schedule and recent admin activity on black-host-01",
-          "recent auth events from other hosts for the same timeframe"
+          "auth.log content before and after the truncation",
+          "logrotate or cron schedule for the host",
+          "recent login and sudo history from other sources",
+          "whether the rule's MITRE mapping fits this event"
         ],
-        "severity": "medium",
-        "summary": "FIM reports /var/log/auth.log shrank on black-host-01 with inode unchanged, which can indicate log truncation or tampering to hide activity.",
+        "severity": "high",
+        "summary": "Wazuh FIM reports /var/log/auth.log shrank on black-host-01 with the same inode, which can indicate log truncation to hide activity.",
         "verdict": "uncertain"
       },
       "scenario": "logs-wiped"
     },
     {
-      "doc_id": "V0wVh6EBjm0FRj8CDLj4",
+      "doc_id": "9Uw-h6EBjm0FRj8CK7i_",
       "error": "",
       "expected": {
         "category": "defense_evasion",
-        "min_count": 2,
+        "match": {
+          "full_log": "/var/log/syslog"
+        },
+        "min_count": 1,
+        "needs_context": true,
         "rule_id": "592",
         "severity": "high",
         "verdict": "true_positive",
-        "why": "Emptying auth.log and syslog at once, with no rotated copy, hides tracks."
+        "why": "syslog emptied together with auth.log, with no rotated copy."
       },
       "got": {
-        "action": "Check syslog for recent entries and gaps, and confirm whether logrotate or a maintenance job ran at 09:54 UTC.",
+        "action": "Check syslog content and rotation config on black-host-01 and correlate with logins or sudo activity around 10:39 UTC.",
         "category": "defense_evasion",
         "confidence": "medium",
         "needs": [
-          "logrotate or maintenance schedule",
-          "syslog contents before and after the size change",
-          "auth and sudo logs from the same window",
-          "file size before and after"
+          "syslog content before and after the change",
+          "logrotate or logging service schedule",
+          "auth logs and sudo activity for the same window",
+          "whether the host has a scheduled log rotation or maintenance job"
         ],
         "severity": "medium",
-        "summary": "Syslog file on black-host-01 shrank while keeping the same inode, which could be log rotation or truncation to hide activity.",
+        "summary": "Wazuh FIM reports /var/log/syslog shrank on black-host-01 with inode unchanged, which can indicate log truncation or tampering to hide activity.",
         "verdict": "uncertain"
       },
       "scenario": "logs-wiped"
     },
     {
-      "doc_id": "hUwfh6EBjm0FRj8CqrhV",
+      "doc_id": "6Ew8h6EBjm0FRj8CQ7gi",
       "error": "",
       "expected": {
         "category": "false_positive",
+        "match": {
+          "full_log": "for ops"
+        },
         "min_count": 1,
+        "needs_context": true,
         "rule_id": "5555",
         "severity": "low",
         "verdict": "false_positive",
@@ -212,393 +247,394 @@
         "category": "credential_access",
         "confidence": "medium",
         "needs": [
-          "the session or user that invoked chpasswd",
-          "change ticket or maintenance window",
-          "whether the ops account is expected to be changed by automation"
+          "whether a change ticket or admin session explains the chpasswd run",
+          "parent process and login user that invoked chpasswd",
+          "whether the 'ops' account is privileged or used by automation"
         ],
-        "severity": "low",
-        "summary": "A chpasswd run on black-host-01 changed the password for the local account 'ops' at 10:05:54 UTC.",
+        "severity": "medium",
+        "summary": "A password was changed for user 'ops' on black-host-01 via chpasswd at 10:37 UTC; the change itself is routine but the account and the initiating session are unknown.",
         "verdict": "uncertain"
       },
       "scenario": "ops-password-rotation"
     },
     {
-      "doc_id": "d0wdh6EBjm0FRj8CrrgL",
+      "doc_id": "3Ew5h6EBjm0FRj8C5bgy",
       "error": "",
       "expected": {
         "category": "persistence",
+        "match": {
+          "syscheck.changed_attributes": "size",
+          "syscheck.path": "/root/.ssh/authorized_keys"
+        },
         "min_count": 1,
+        "needs_context": true,
         "rule_id": "550",
         "severity": "high",
         "verdict": "true_positive",
-        "why": "A new key for root from an unknown machine is a persistent backdoor."
+        "why": "A new key for root from a machine nobody manages is a persistent backdoor."
       },
       "got": {
-        "action": "Inspect the authorized_keys contents against the known-good version, check recent root logins and who was active at 10:03 UTC, and isolate the host if the key is unrecognized.",
+        "action": "Verify who added the key, compare it against known keys, remove it if unauthorized, and check auth logs and recent root logins on black-host-01.",
         "category": "persistence",
         "confidence": "medium",
         "needs": [
-          "current contents or diff of authorized_keys",
-          "auth logs for root SSH logins around the timestamp",
-          "whether a configuration management or admin change was scheduled",
-          "process or session that performed the write"
+          "Contents of the new authorized_keys entry",
+          "Whether a change window or authorized admin activity explains the edit",
+          "auth.log or sshd logs around 10:34 UTC",
+          "Process or user session that wrote the file"
         ],
         "severity": "high",
-        "summary": "Realtime integrity check reports /root/.ssh/authorized_keys on black-host-01 was modified (mtime changed), which could be an attacker adding an SSH key.",
-        "verdict": "uncertain"
+        "summary": "Root's authorized_keys file on black-host-01 went from empty to 93 bytes, adding an SSH public key, which could be a backdoor for persistent root access.",
+        "verdict": "true_positive"
       },
       "scenario": "root-key-added"
     },
     {
-      "doc_id": "fEweh6EBjm0FRj8CSrhr",
+      "doc_id": "40w6h6EBjm0FRj8CvLg1",
       "error": "",
       "expected": {
         "category": "false_positive",
+        "match": {
+          "syscheck.changed_attributes": "size",
+          "syscheck.path": "/root/.ssh/authorized_keys"
+        },
         "min_count": 1,
+        "needs_context": true,
         "rule_id": "550",
         "severity": "low",
         "verdict": "false_positive",
         "why": "Key rotation by config management, for the ops team's bastion."
       },
       "got": {
-        "action": "Inspect the authorized_keys contents now, compare against a known-good copy, and check root logins and the active session source for the same window.",
+        "action": "Verify whether the key was added by an authorized change; if not, remove it, check root SSH logins and recent sessions, and investigate the host for compromise.",
         "category": "persistence",
         "confidence": "medium",
         "needs": [
-          "current contents or diff of authorized_keys",
-          "who or what process made the change (auditd or sudo logs)",
-          "recent SSH login history for root on black-host-01",
-          "whether an approved change was scheduled at that time"
+          "Confirmation from change management whether this key addition was authorized",
+          "The actual contents of authorized_keys (key owner and fingerprint)",
+          "Auth logs showing SSH logins to black-host-01 around 10:35 UTC",
+          "Process or user responsible for the write (audit or realtime process info)"
         ],
         "severity": "high",
-        "summary": "Realtime integrity check reports /root/.ssh/authorized_keys on black-host-01 was modified (mtime changed by about 40 seconds), which could be an added SSH key.",
-        "verdict": "uncertain"
+        "summary": "Root's SSH authorized_keys file on black-host-01 went from empty to 93 bytes, a new public key was added, which can grant persistent SSH access.",
+        "verdict": "true_positive"
       },
       "scenario": "root-key-rotated"
     },
     {
-      "doc_id": "g0weh6EBjm0FRj8C5rjb",
+      "doc_id": "5kw7h6EBjm0FRj8CWLiW",
       "error": "",
       "expected": {
-        "category": "credential_access",
+        "category": "persistence",
+        "match": {
+          "full_log": "for root"
+        },
         "min_count": 1,
+        "needs_context": true,
         "rule_id": "5555",
         "severity": "medium",
         "verdict": "true_positive",
-        "why": "An unplanned root password change can lock admins out or set up access."
+        "why": "An unplanned root password change is account manipulation: it can lock admins out or keep access."
       },
       "got": {
-        "action": "Confirm with the admin team whether this root password change was planned, and check who ran chpasswd and from which session.",
+        "action": "Check whether an authorized admin or config-management job ran chpasswd at that time, and if not, investigate the session and parent process.",
         "category": "credential_access",
         "confidence": "medium",
         "needs": [
-          "whether a change window or ticket covers this root password change",
-          "the user session or parent process that invoked chpasswd",
-          "auth logs showing the login source and any preceding activity"
+          "parent process or invoking user for chpasswd",
+          "whether a change window or automation job was scheduled",
+          "login history and source IP around 10:36 UTC"
         ],
         "severity": "medium",
-        "summary": "The chpasswd utility changed the root password on black-host-01 at 10:05:08 UTC.",
+        "summary": "The root account password was changed via chpasswd on black-host-01 at 10:36 UTC, with no indication of who or what initiated it.",
         "verdict": "uncertain"
       },
       "scenario": "root-password-reset"
     },
     {
-      "doc_id": "OUwQh6EBjm0FRj8Cwriw",
+      "doc_id": "nUwsh6EBjm0FRj8C1rhu",
       "error": "",
       "expected": {
         "category": "false_positive",
+        "match": {
+          "full_log": "opss"
+        },
         "min_count": 1,
+        "needs_context": false,
         "rule_id": "5710",
         "severity": "low",
         "verdict": "false_positive",
         "why": "A single failed login with a near-miss of a real admin name (opss vs ops), from the internal management host."
       },
       "got": {
-        "action": "Check whether 172.28.0.10 has other failed SSH attempts or is an expected internal source, and review for repeated guessing against black-host-01.",
+        "action": "Check whether 172.28.0.10 has other failed SSH attempts or successful logins to black-host-01 and confirm whether it is an authorized host.",
         "category": "credential_access",
         "confidence": "medium",
         "needs": [
           "count of failed logins from 172.28.0.10 over time",
-          "whether 172.28.0.10 is a known or authorized host",
-          "whether any login succeeded from that source",
-          "other hosts targeted by the same source"
+          "whether 172.28.0.10 is a known or authorized system",
+          "any successful login from 172.28.0.10 after the failure",
+          "sshd logs around 10:20 for other usernames tried"
         ],
-        "severity": "low",
-        "summary": "sshd on black-host-01 logged an attempt to log in as non-existent user 'opss' from 172.28.0.10, a single event with no success shown.",
+        "severity": "medium",
+        "summary": "SSH login attempt for non-existent user 'opss' from 172.28.0.10 against black-host-01; a single event, could be a typo or a guessing attempt.",
         "verdict": "uncertain"
       },
       "scenario": "ssh-admin-typo"
     },
     {
-      "doc_id": "jUwgh6EBjm0FRj8CM7g1",
+      "doc_id": "8Ew8h6EBjm0FRj8Cy7j5",
       "error": "",
       "expected": {
         "category": "credential_access",
+        "match": {},
         "min_count": 1,
+        "needs_context": false,
         "rule_id": "5712",
         "severity": "high",
         "verdict": "true_positive",
-        "why": "Ten dictionary user names in seconds from one source is SSH brute force."
+        "why": "Ten dictionary user names in seconds from one source is SSH brute force, even from an internal host."
       },
       "got": {
-        "action": "Check auth logs on black-host-01 for repeated failed attempts from 172.28.0.10 and confirm whether that source is an authorized scanner or internal host.",
+        "action": "Check whether 172.28.0.10 is an known internal host and review other sshd failures from that source for a burst of attempts against multiple usernames.",
         "category": "credential_access",
         "confidence": "medium",
         "needs": [
           "count of failed sshd attempts from 172.28.0.10 in the last hour",
-          "whether 172.28.0.10 is a known scanner or admin host",
-          "any successful login from 172.28.0.10 after the failures"
+          "identity and purpose of 172.28.0.10",
+          "whether 172.28.0.10 is a scanner or authorized vulnerability scanner",
+          "whether ftp account exists or service expected on black-host-01"
         ],
         "severity": "medium",
-        "summary": "Single sshd log shows an invalid user 'ftp' login attempt from 172.28.0.10 against black-host-01; rule 5712 flags possible brute force but this excerpt is one attempt.",
+        "summary": "sshd rejected a login attempt for non-existent user 'ftp' from 172.28.0.10; rule 5712 fired as a brute-force indicator, but this single log line shows only one attempt.",
         "verdict": "uncertain"
       },
       "scenario": "ssh-bruteforce"
     },
     {
-      "doc_id": "aUwah6EBjm0FRj8CYbhk",
+      "doc_id": "zEw2h6EBjm0FRj8CRrjH",
       "error": "",
       "expected": {
         "category": "persistence",
+        "match": {
+          "syscheck.path": "/etc/ssh/sshd_config"
+        },
         "min_count": 1,
+        "needs_context": true,
         "rule_id": "550",
         "severity": "high",
         "verdict": "true_positive",
         "why": "An extra key file in a world-writable directory lets anyone add a login key."
       },
       "got": {
-        "action": "Check who was logged in around 10:00 UTC and diff the config against the known-good version; revert if unauthorized.",
+        "action": "Check with the admin team whether a change was planned, diff the file against the previous version or config management baseline, and review sshd logins and auth logs for that host.",
         "category": "persistence",
         "confidence": "medium",
         "needs": [
-          "change management record for sshd_config edit",
-          "auth logs for the host around 2026-10-29T10:00",
-          "diff of the actual config contents",
-          "process/user that wrote the file"
+          "whether a change window or admin session existed at 10:30 UTC",
+          "the actual diff of the sshd_config contents",
+          "who or what process made the modification (auditd or user context)",
+          "recent authentication logs from black-host-01"
         ],
         "severity": "high",
-        "summary": "sshd_config on black-host-01 was modified in realtime (size 3301 to 3349 bytes, hashes changed), which could be admin change or attacker altering SSH settings.",
+        "summary": "sshd_config on black-host-01 was modified (size 3301 to 3349 bytes, hashes changed) in realtime monitoring; could be an admin change or attacker altering SSH access settings.",
         "verdict": "uncertain"
       },
       "scenario": "sshd-authkeys-tmp"
     },
     {
-      "doc_id": "bUwbh6EBjm0FRj8CTLgG",
+      "doc_id": "0Ew3h6EBjm0FRj8CMbhQ",
       "error": "",
       "expected": {
         "category": "false_positive",
+        "match": {
+          "syscheck.path": "/etc/ssh/sshd_config"
+        },
         "min_count": 1,
+        "needs_context": true,
         "rule_id": "550",
         "severity": "low",
         "verdict": "false_positive",
         "why": "A login banner is a compliance setting with no security downside."
       },
       "got": {
-        "action": "Check who changed /etc/ssh/sshd_config and when, diff it against the previous version or config management, and confirm the change was authorized.",
-        "category": "defense_evasion",
+        "action": "Verify with the admin whether this change was authorized, diff the file against the known-good copy, and check sshd settings like PermitRootLogin, authorized keys, and recent logins on the host.",
+        "category": "persistence",
         "confidence": "medium",
         "needs": [
-          "change management or admin activity record for the timeframe",
-          "diff of the old and new sshd_config contents",
-          "authenticated user and process that wrote the file (auditd)",
-          "recent SSH login history on black-host-01"
+          "Whether a change window or admin session explains the edit",
+          "Actual diff of the config contents",
+          "Who or what process made the modification (auditd or user context)",
+          "Recent sshd auth logs from the host"
         ],
         "severity": "high",
-        "summary": "sshd_config on black-host-01 was modified in realtime (size 3301 to 3323 bytes, new checksums), which could be an admin change or tampering that weakens SSH access.",
+        "summary": "sshd_config on black-host-01 was modified (size 3301 to 3323 bytes, hashes changed) in realtime monitoring.",
         "verdict": "uncertain"
       },
       "scenario": "sshd-banner"
     },
     {
-      "doc_id": "a0wah6EBjm0FRj8Czrjl",
+      "doc_id": "zkw2h6EBjm0FRj8CvLgR",
       "error": "",
       "expected": {
         "category": "false_positive",
+        "match": {
+          "syscheck.path": "/etc/ssh/sshd_config"
+        },
         "min_count": 1,
+        "needs_context": true,
         "rule_id": "550",
         "severity": "low",
         "verdict": "false_positive",
         "why": "Keep-alive tuning is a harmless, common sshd change."
       },
       "got": {
-        "action": "Check with the admin team whether a change was planned, diff the file against the previous version, and review sshd and auth logs for new config reloads or unusual logins.",
+        "action": "Check who or what changed /etc/ssh/sshd_config around 10:31 UTC (auth logs, sudo history, config management) and diff the new config against a known-good copy.",
         "category": "persistence",
         "confidence": "medium",
         "needs": [
-          "change management records for the host around 2026-10-29 10:00 UTC",
-          "actual diff of the sshd_config contents",
-          "who or which process made the modification (auditd or user session)",
-          "sshd and auth log entries after the change"
+          "who or what process made the change and the user session",
+          "diff of old vs new sshd_config contents",
+          "whether a change ticket or config management run matches this time",
+          "auth and sudo logs for the host around the timestamp"
         ],
         "severity": "high",
-        "summary": "sshd_config on black-host-01 was modified in realtime (size 3301 to 3347, hashes changed), which could be a hardening change or an attacker altering SSH access settings.",
+        "summary": "sshd_config on black-host-01 was modified (size and hashes changed) in realtime; could be admin change or attacker altering SSH settings.",
         "verdict": "uncertain"
       },
       "scenario": "sshd-keepalive"
     },
     {
-      "doc_id": "YkwZh6EBjm0FRj8C5Lgy",
+      "doc_id": "ykw1h6EBjm0FRj8C0bh_",
       "error": "",
       "expected": {
         "category": "persistence",
+        "match": {
+          "syscheck.path": "/etc/ssh/sshd_config"
+        },
         "min_count": 1,
+        "needs_context": true,
         "rule_id": "550",
         "severity": "high",
         "verdict": "true_positive",
         "why": "Re-enabling password root login opens a persistent way back in."
       },
       "got": {
-        "action": "Check who edited sshd_config and when, diff the file against the known-good version or config management, and review auth logs and authorized_keys for unexpected changes.",
+        "action": "Check who edited sshd_config around 10:30 UTC via auth logs and shell history, diff against the previous version or config management, and verify the change was authorized.",
         "category": "persistence",
         "confidence": "medium",
         "needs": [
-          "change ticket or admin session record for the edit time",
-          "diff of old vs new sshd_config contents",
-          "auth and sudo logs around 1793267976 epoch time",
-          "current authorized_keys files and sshd running config"
+          "authenticated user or process that made the change",
+          "auth and sudo logs around 2026-10-29 10:30 UTC",
+          "diff of the old and new sshd_config contents",
+          "whether a change ticket or config management run covers this time"
         ],
         "severity": "high",
-        "summary": "Realtime integrity alert: /etc/ssh/sshd_config on black-host-01 changed size and hashes (3301 to 3348 bytes), which could be a legitimate admin edit or a backdoor such as added keys or auth settings.",
+        "summary": "Realtime integrity check shows /etc/ssh/sshd_config on black-host-01 was modified (size 3301 to 3348 bytes, new hashes), which could be a legitimate admin change or tampering with SSH settings.",
         "verdict": "uncertain"
       },
       "scenario": "sshd-permit-root"
     },
     {
-      "doc_id": "VEwUh6EBjm0FRj8CNrgJ",
+      "doc_id": "tkwwh6EBjm0FRj8ChLjD",
       "error": "",
       "expected": {
         "category": "false_positive",
+        "match": {
+          "full_log": "ops"
+        },
         "min_count": 1,
+        "needs_context": false,
         "rule_id": "5301",
         "severity": "low",
         "verdict": "false_positive",
         "why": "One failed su by a known admin account, a likely typo; no repeated attempts."
       },
       "got": {
-        "action": "Check whether ops is expected to use su on this host and look for repeated failures from the same account.",
+        "action": "Check whether user ops is expected to use su on this host and look for repeated failed su attempts around the same time.",
         "category": "credential_access",
-        "confidence": "medium",
+        "confidence": "low",
         "needs": [
-          "count of recent failed su attempts for ops",
-          "source terminal or session that ran su",
-          "whether ops is a legitimate admin account"
+          "count of recent failed su attempts for user ops",
+          "source terminal or session for the su attempt",
+          "whether ops normally has su access on black-host-01"
         ],
         "severity": "low",
-        "summary": "A failed su attempt to root by user ops on black-host-01, logged as a missed password.",
+        "summary": "A failed su attempt to root by user ops on black-host-01, logged as a single authentication failure.",
         "verdict": "uncertain"
       },
       "scenario": "su-ops-typo"
     },
     {
-      "doc_id": "T0wTh6EBjm0FRj8Ccrid",
+      "doc_id": "sUwvh6EBjm0FRj8Cwbg6",
       "error": "",
       "expected": {
         "category": "privilege_escalation",
+        "match": {
+          "full_log": "www-data"
+        },
         "min_count": 1,
+        "needs_context": false,
         "rule_id": "5301",
         "severity": "high",
         "verdict": "true_positive",
         "why": "su to root from the web server account is privilege escalation from a web shell."
       },
       "got": {
-        "action": "Check whether www-data should ever run su, review auth logs around 09:52 for repeated attempts or a successful follow-up login, and inspect the web application for command injection.",
+        "action": "Check whether www-data should ever run su, review auth logs for repeated attempts or a successful root login, and inspect the web application for command injection.",
         "category": "privilege_escalation",
         "confidence": "medium",
         "needs": [
-          "auth log lines before and after the failure",
-          "process/parent of the su command",
-          "whether www-data has a login shell or sudo rights",
-          "other alerts from this host in the same window"
+          "auth.log entries before and after the failure",
+          "process tree or shell history for www-data",
+          "whether any successful su or sudo followed",
+          "web server logs around the same time"
         ],
         "severity": "medium",
-        "summary": "A www-data service account failed a su attempt to root on black-host-01.",
+        "summary": "A failed su attempt to root by the www-data service account was logged on black-host-01.",
         "verdict": "uncertain"
       },
       "scenario": "su-webuser"
     },
     {
-      "doc_id": "Q0wSh6EBjm0FRj8CcLif",
+      "doc_id": "pkwuh6EBjm0FRj8Cq7ij",
       "error": "",
       "expected": {
         "category": "false_positive",
+        "match": {
+          "full_log": "COMMAND=/usr/bin/apt-get"
+        },
         "min_count": 1,
+        "needs_context": false,
         "rule_id": "5402",
         "severity": "low",
         "verdict": "false_positive",
         "why": "An admin in the sudo group running apt-get update with sudo is routine."
       },
       "got": {
-        "action": "No immediate action; confirm ops is an expected admin account and that apt-get update fits normal maintenance for this host.",
+        "action": "Confirm ops is an authorized admin and that apt-get update is expected maintenance; close if so.",
         "category": "false_positive",
         "confidence": "medium",
         "needs": [
-          "confirmation that user ops is an authorized administrator",
-          "change or maintenance context for this time window"
+          "confirmation that ops should have sudo access",
+          "whether this apt update was scheduled or run manually"
         ],
         "severity": "low",
-        "summary": "User ops ran apt-get update via sudo as root on black-host-01, a routine package index refresh.",
+        "summary": "User ops ran apt-get update via sudo as root on black-host-01, a routine package maintenance command.",
         "verdict": "false_positive"
       },
       "scenario": "sudo-ops-update"
     },
     {
-      "doc_id": "SUwSh6EBjm0FRj8C2rgh",
+      "doc_id": "q0wvh6EBjm0FRj8CNLh-",
       "error": "",
       "expected": {
         "category": "privilege_escalation",
+        "match": {
+          "full_log": "www-data"
+        },
         "min_count": 3,
-        "rule_id": "5405",
-        "severity": "high",
-        "verdict": "true_positive",
-        "why": "www-data never needs sudo; repeated tries from it mean a compromised web app probing for root."
-      },
-      "got": {
-        "action": "Check the web application on black-host-01 for command injection or webshell activity and review www-data's recent process history.",
-        "category": "privilege_escalation",
-        "confidence": "medium",
-        "needs": [
-          "web server logs around 09:51 UTC",
-          "process tree or auditd records for www-data",
-          "whether a web app or cron job normally invokes sudo as www-data"
-        ],
-        "severity": "medium",
-        "summary": "The www-data web service account attempted to run /usr/bin/id as root via sudo and was rejected because it is not in sudoers.",
-        "verdict": "true_positive"
-      },
-      "scenario": "sudo-webuser"
-    },
-    {
-      "doc_id": "S0wSh6EBjm0FRj8C5bjh",
-      "error": "",
-      "expected": {
-        "category": "privilege_escalation",
-        "min_count": 3,
-        "rule_id": "5405",
-        "severity": "high",
-        "verdict": "true_positive",
-        "why": "www-data never needs sudo; repeated tries from it mean a compromised web app probing for root."
-      },
-      "got": {
-        "action": "Check the web server logs and processes around 09:52 for signs of command injection or a web shell, and review www-data's recent activity.",
-        "category": "privilege_escalation",
-        "confidence": "medium",
-        "needs": [
-          "web server access logs around the event time",
-          "process and network history for black-host-01",
-          "whether a web application or service runs as www-data and recent changes to it"
-        ],
-        "severity": "high",
-        "summary": "The www-data web server account attempted to run /usr/bin/id as root via sudo, but it is not in sudoers. This suggests a web shell or compromised web app probing for privilege escalation.",
-        "verdict": "true_positive"
-      },
-      "scenario": "sudo-webuser"
-    },
-    {
-      "doc_id": "TUwSh6EBjm0FRj8C6bjQ",
-      "error": "",
-      "expected": {
-        "category": "privilege_escalation",
-        "min_count": 3,
+        "needs_context": false,
         "rule_id": "5405",
         "severity": "high",
         "verdict": "true_positive",
@@ -609,198 +645,287 @@
         "category": "privilege_escalation",
         "confidence": "medium",
         "needs": [
-          "web server logs around 09:52 UTC",
-          "process tree for www-data on black-host-01",
-          "whether the sudo attempt was initiated interactively or by an application"
+          "web server logs around 10:22:54",
+          "process tree for the sudo invocation",
+          "whether the web app legitimately calls sudo"
         ],
         "severity": "medium",
-        "summary": "The www-data web service account attempted to run /usr/bin/id as root via sudo, but it is not in sudoers, so the attempt was denied.",
+        "summary": "The www-data web service account attempted to run /usr/bin/id as root via sudo, but it is not in sudoers.",
         "verdict": "true_positive"
       },
       "scenario": "sudo-webuser"
     },
     {
-      "doc_id": "WkwXh6EBjm0FRj8Ckbja",
+      "doc_id": "rUwvh6EBjm0FRj8CNLh-",
       "error": "",
       "expected": {
         "category": "privilege_escalation",
+        "match": {
+          "full_log": "www-data"
+        },
+        "min_count": 3,
+        "needs_context": false,
+        "rule_id": "5405",
+        "severity": "high",
+        "verdict": "true_positive",
+        "why": "www-data never needs sudo; repeated tries from it mean a compromised web app probing for root."
+      },
+      "got": {
+        "action": "Check the web application on black-host-01 for command injection or webshell activity that would spawn sudo, and review recent www-data process history.",
+        "category": "privilege_escalation",
+        "confidence": "medium",
+        "needs": [
+          "surrounding auth and syslog entries for the same minute",
+          "web server access logs around 10:22 UTC",
+          "process tree or auditd data for the sudo parent process"
+        ],
+        "severity": "medium",
+        "summary": "The www-data web service account attempted to run /usr/bin/id as root via sudo and was rejected because it is not in sudoers.",
+        "verdict": "true_positive"
+      },
+      "scenario": "sudo-webuser"
+    },
+    {
+      "doc_id": "r0wvh6EBjm0FRj8COLho",
+      "error": "",
+      "expected": {
+        "category": "privilege_escalation",
+        "match": {
+          "full_log": "www-data"
+        },
+        "min_count": 3,
+        "needs_context": false,
+        "rule_id": "5405",
+        "severity": "high",
+        "verdict": "true_positive",
+        "why": "www-data never needs sudo; repeated tries from it mean a compromised web app probing for root."
+      },
+      "got": {
+        "action": "Check the web application on black-host-01 for command injection or webshell activity and review nearby www-data process and auth logs.",
+        "category": "privilege_escalation",
+        "confidence": "medium",
+        "needs": [
+          "surrounding web server logs",
+          "other www-data sudo or command activity on the host",
+          "whether the web app legitimately invokes sudo"
+        ],
+        "severity": "medium",
+        "summary": "The www-data web service account tried to run /usr/bin/id as root via sudo and was rejected because it is not in sudoers.",
+        "verdict": "true_positive"
+      },
+      "scenario": "sudo-webuser"
+    },
+    {
+      "doc_id": "vUwzh6EBjm0FRj8C5LjM",
+      "error": "",
+      "expected": {
+        "category": "privilege_escalation",
+        "match": {
+          "syscheck.path": "/etc/sudoers"
+        },
         "min_count": 1,
+        "needs_context": true,
         "rule_id": "550",
         "severity": "critical",
         "verdict": "true_positive",
         "why": "Giving www-data passwordless root is privilege escalation and persistence."
       },
       "got": {
-        "action": "Check who edited /etc/sudoers at that time (auth logs, sudo/session records) and diff the file against its known-good version or config management baseline.",
+        "action": "Check who edited /etc/sudoers around 10:28 UTC via auth logs and compare the file against its known-good version or config management; escalate if the change was not planned.",
         "category": "privilege_escalation",
         "confidence": "medium",
         "needs": [
-          "auditd or auth log entries for the change window",
-          "user/session that made the modification",
-          "whether a change ticket or config management run covers this time",
-          "diff of old and new sudoers content"
+          "auth/sudo logs for the change window",
+          "identity of the user or process that modified the file",
+          "whether a change ticket or config management run explains it",
+          "current contents diff of /etc/sudoers"
         ],
         "severity": "high",
-        "summary": "/etc/sudoers on black-host-01 was modified in realtime (size 1671 to 1704 bytes, hashes changed); could be a legitimate admin edit or a privilege escalation attempt.",
+        "summary": "/etc/sudoers was modified on black-host-01 (size 1671 to 1704 bytes), a change that could grant new sudo rights if unauthorized.",
         "verdict": "uncertain"
       },
       "scenario": "sudoers-nopasswd"
     },
     {
-      "doc_id": "XEwYh6EBjm0FRj8CLrgt",
+      "doc_id": "v0w0h6EBjm0FRj8CYbjV",
       "error": "",
       "expected": {
         "category": "false_positive",
+        "match": {
+          "syscheck.path": "/etc/sudoers"
+        },
         "min_count": 1,
+        "needs_context": true,
         "rule_id": "550",
         "severity": "low",
         "verdict": "false_positive",
         "why": "Granting an admin group password-protected sudo is routine access management."
       },
       "got": {
-        "action": "Check who edited /etc/sudoers around 09:57 UTC via auditd and bash history, diff against the previous version, and confirm it matches an approved change.",
+        "action": "Check who edited /etc/sudoers around 10:28 UTC via auth logs and sudo/audit records, diff the file against the known-good copy, and escalate if the change was unauthorized.",
         "category": "privilege_escalation",
         "confidence": "medium",
         "needs": [
-          "auditd or user session data for the change",
-          "diff of old and new sudoers contents",
-          "change management record for this time window"
+          "auth and audit logs for the modification time window",
+          "the diff of sudoers content before and after the change",
+          "the user session or process that performed the write",
+          "change management records for planned admin work on this host"
         ],
         "severity": "high",
-        "summary": "/etc/sudoers was modified on black-host-01 (size 1671 to 1690 bytes), which could be a privilege grant or a legitimate admin edit.",
+        "summary": "/etc/sudoers on black-host-01 was modified in realtime (size 1671 to 1690 bytes, hashes changed), which could be a privilege grant or a legitimate admin edit.",
         "verdict": "uncertain"
       },
       "scenario": "sudoers-ops-group"
     },
     {
-      "doc_id": "YEwZh6EBjm0FRj8CZrj_",
+      "doc_id": "w0w1h6EBjm0FRj8CXLgt",
       "error": "",
       "expected": {
         "category": "false_positive",
+        "match": {
+          "syscheck.path": "/etc/sudoers.d/91-ops"
+        },
         "min_count": 1,
+        "needs_context": true,
         "rule_id": "554",
         "severity": "low",
         "verdict": "false_positive",
         "why": "A drop-in for the ops group with password-required sudo is the normal way to grant admin rights."
       },
       "got": {
-        "action": "Check the file contents and owner, confirm with the ops team whether it was an approved change, and review who was logged in around 09:59 UTC.",
+        "action": "Inspect the file contents and owner, check who created it and when via audit logs, and confirm it matches an approved change; remove it if unauthorized.",
         "category": "privilege_escalation",
         "confidence": "medium",
         "needs": [
-          "file contents and owner/permissions of /etc/sudoers.d/91-ops",
-          "change management record for this host",
-          "auth logs and session info around the timestamp",
-          "whether the file name matches a known configuration management deployment"
+          "file contents and ownership of /etc/sudoers.d/91-ops",
+          "change ticket or config management record for the ops sudo entry",
+          "auditd or shell history showing the process and user that created the file",
+          "whether the host is expected to have ops sudo rules"
         ],
         "severity": "high",
-        "summary": "A new file /etc/sudoers.d/91-ops was added on black-host-01, which could grant sudo rights to a user.",
+        "summary": "A new file /etc/sudoers.d/91-ops was added on black-host-01, which could grant sudo rights to a user or group.",
         "verdict": "uncertain"
       },
       "scenario": "sudoersd-ops"
     },
     {
-      "doc_id": "XkwYh6EBjm0FRj8CyriW",
+      "doc_id": "wUw0h6EBjm0FRj8C37gA",
       "error": "",
       "expected": {
         "category": "privilege_escalation",
+        "match": {
+          "syscheck.path": "/etc/sudoers.d/90-app"
+        },
         "min_count": 1,
+        "needs_context": true,
         "rule_id": "554",
         "severity": "critical",
         "verdict": "true_positive",
         "why": "A new sudoers drop-in, outside config management, named like an app file, granting root."
       },
       "got": {
-        "action": "Check the contents and owner of /etc/sudoers.d/90-app and confirm with the app owner whether this change was planned.",
+        "action": "Inspect the file contents and owner, check who or what created it and when, and confirm it matches an approved change.",
         "category": "privilege_escalation",
         "confidence": "medium",
         "needs": [
           "file contents and permissions of /etc/sudoers.d/90-app",
-          "change management or deployment record for this host",
-          "process or user that created the file"
+          "process or user that created the file",
+          "change management record for this host",
+          "whether 90-app is a known package or config file"
         ],
-        "severity": "medium",
-        "summary": "A new file /etc/sudoers.d/90-app was added on black-host-01, which could grant sudo privileges if it contains rules.",
+        "severity": "high",
+        "summary": "A new file /etc/sudoers.d/90-app was added on black-host-01, which could grant sudo privileges to an account.",
         "verdict": "uncertain"
       },
       "scenario": "sudoersd-webuser"
     },
     {
-      "doc_id": "PEwRh6EBjm0FRj8CS7hv",
+      "doc_id": "nkwth6EBjm0FRj8CX7hA",
       "error": "",
       "expected": {
         "category": "false_positive",
+        "match": {
+          "full_log": "name=deploy"
+        },
         "min_count": 1,
+        "needs_context": false,
         "rule_id": "5901",
         "severity": "low",
         "verdict": "false_positive",
         "why": "Its own primary group, created together with the user."
       },
       "got": {
-        "action": "Check who ran groupadd or useradd at that time and whether the deploy group is an approved change; review group membership.",
+        "action": "Check who ran useradd and whether the deploy group was an approved change, then review group membership and sudo rights tied to it.",
         "category": "persistence",
         "confidence": "medium",
         "needs": [
-          "change ticket or admin session context for 2026-10-29 09:50",
-          "actor user and parent process for useradd PID 14404",
-          "current membership of the deploy group"
+          "change ticket or admin session context for useradd",
+          "group membership and sudoers entries for deploy",
+          "shell history or auth logs for the creating account"
         ],
         "severity": "medium",
-        "summary": "A new group named deploy (GID 1001) was created on black-host-01 via useradd at 09:50 UTC.",
+        "summary": "A new local group named deploy (GID 1001) was created on black-host-01 via useradd at 10:20 UTC.",
         "verdict": "uncertain"
       },
       "scenario": "user-deploy"
     },
     {
-      "doc_id": "PUwRh6EBjm0FRj8CS7hv",
+      "doc_id": "n0wth6EBjm0FRj8CX7hA",
       "error": "",
       "expected": {
         "category": "false_positive",
+        "match": {
+          "full_log": "name=deploy"
+        },
         "min_count": 1,
+        "needs_context": false,
         "rule_id": "5902",
         "severity": "low",
         "verdict": "false_positive",
         "why": "A normal unprivileged account (UID above 1000) named for its job, created during provisioning."
       },
       "got": {
-        "action": "Confirm with the admin or change record whether the deploy account was expected, and check who ran useradd and when the account was last used.",
+        "action": "Confirm with the change owner or admin whether the deploy account was expected, and check who ran useradd and whether the account has sudo or SSH keys.",
         "category": "persistence",
-        "confidence": "medium",
+        "confidence": "low",
         "needs": [
-          "change management or ticket for account creation",
-          "session/sudo log showing who ran useradd",
-          "whether 'deploy' is a standard service account on this host",
-          "any subsequent logins by the deploy user"
+          "change ticket or admin confirmation for deploy account",
+          "auth log showing the session that ran useradd",
+          "sudo group membership and authorized_keys for deploy"
         ],
         "severity": "medium",
-        "summary": "A new login-capable user 'deploy' (UID 1001, bash shell) was created on black-host-01 via useradd, with no originating session shown.",
+        "summary": "A new local user named deploy (UID 1001, bash shell) was created on black-host-01 via useradd, with no originating session shown.",
         "verdict": "uncertain"
       },
       "scenario": "user-deploy"
     },
     {
-      "doc_id": "P0wRh6EBjm0FRj8CuLjn",
+      "doc_id": "oUwth6EBjm0FRj8C1LiQ",
       "error": "",
       "expected": {
         "category": "persistence",
+        "match": {
+          "full_log": "name=sysadm"
+        },
         "min_count": 1,
+        "needs_context": false,
         "rule_id": "5902",
         "severity": "critical",
         "verdict": "true_positive",
         "why": "A new user with UID 0 and root's home is a classic backdoor account."
       },
       "got": {
-        "action": "Immediately verify whether this account was authorized, check who ran useradd and from which session, disable the account if unexpected, and audit for other changes or logins on the host.",
+        "action": "Immediately verify whether this account was authorized, disable it if not, and investigate who ran useradd and how root access was obtained on black-host-01.",
         "category": "persistence",
         "confidence": "high",
         "needs": [
-          "who or what process invoked useradd (auth logs, sudo/session records)",
-          "whether a change ticket or admin activity explains the account",
-          "list of other accounts and SSH keys on the host",
-          "recent logins and commands run by sysadm"
+          "whether change was authorized by change ticket or admin",
+          "session/login history showing who ran useradd",
+          "auth logs for preceding sudo or root logins",
+          "list of other accounts or SSH keys added on the host"
         ],
         "severity": "critical",
-        "summary": "A new user 'sysadm' with UID 0 and GID 0 (root-equivalent) was created on black-host-01 via useradd, with home /root and a bash shell.",
+        "summary": "A new user 'sysadm' with UID 0 and GID 0 (root-equivalent) was created on black-host-01 via useradd, from an unknown source.",
         "verdict": "true_positive"
       },
       "scenario": "user-uid0"
@@ -809,26 +934,26 @@
   "prompt_version": "2026-10-28.1",
   "score": {
     "category": {
-      "accuracy": 0.5333333333333333
+      "accuracy": 0.5
     },
     "invalid_rate": 0.0,
     "latency": {
-      "p50": 2.097308582975529,
-      "p95": 2.662215990238473
+      "p50": 2.213371041492792,
+      "p95": 3.020324556238483
     },
     "missed_threats": [],
     "n": 30,
     "needs": [
       [
+        "file owner, permissions, and hash",
+        2
+      ],
+      [
         "process or user that created the file",
         2
       ],
       [
-        "current contents or diff of authorized_keys",
-        2
-      ],
-      [
-        "file contents of /etc/cron.d/nightly-backup",
+        "file contents and hash",
         1
       ],
       [
@@ -836,32 +961,32 @@
         1
       ],
       [
-        "change management record for backup job",
+        "change management records for backup job",
         1
       ],
       [
-        "auth logs around 10:02 UTC on black-host-01",
+        "whether nightly-backup is an approved job on this host",
         1
       ],
       [
-        "file contents and hash of /etc/cron.d/certbot",
+        "file contents of /etc/cron.d/certbot",
         1
       ],
       [
-        "package manager record showing whether certbot is installed",
+        "package manager logs showing certbot install or update",
         1
       ],
       [
-        "user or process that created the file (audit log)",
+        "auth or shell logs around 2026-10-29 10:33 UTC",
         1
       ],
       [
-        "whether the host is expected to run certbot",
+        "whether black-host-01 is expected to run certbot",
         1
       ]
     ],
     "severity": {
-      "accuracy": 0.36666666666666664
+      "accuracy": 0.26666666666666666
     },
     "subset_at_threshold": {
       "category": {
@@ -884,22 +1009,49 @@
         }
       }
     },
-    "threats_not_called": 12,
-    "tokens": {
-      "input": 34670,
-      "output": 5889
+    "subset_without_context_need": {
+      "category": {
+        "accuracy": 0.6363636363636364
+      },
+      "invalid_rate": 0.0,
+      "missed_threats": [],
+      "n": 11,
+      "severity": {
+        "accuracy": 0.2727272727272727
+      },
+      "threats_not_called": 2,
+      "uncertain_rate": 0.5454545454545454,
+      "verdict": {
+        "accuracy": 0.45454545454545453,
+        "confusion": {
+          "false_positive": {
+            "false_positive": 1,
+            "uncertain": 4
+          },
+          "true_positive": {
+            "true_positive": 4,
+            "uncertain": 2
+          }
+        }
+      }
     },
-    "uncertain_rate": 0.8333333333333334,
+    "threats_not_called": 11,
+    "tokens": {
+      "input": 35110,
+      "output": 6053
+    },
+    "uncertain_rate": 0.7666666666666667,
     "verdict": {
-      "accuracy": 0.16666666666666666,
+      "accuracy": 0.2,
       "confusion": {
         "false_positive": {
           "false_positive": 1,
-          "uncertain": 13
+          "true_positive": 1,
+          "uncertain": 12
         },
         "true_positive": {
-          "true_positive": 4,
-          "uncertain": 12
+          "true_positive": 5,
+          "uncertain": 11
         }
       }
     }

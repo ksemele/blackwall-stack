@@ -16,3 +16,6 @@ expected:
   severity: critical
   category: privilege_escalation
   why: Giving www-data passwordless root is privilege escalation and persistence.
+  match:
+    syscheck.path: /etc/sudoers
+  needs_context: true

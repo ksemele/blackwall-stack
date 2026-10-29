@@ -66,6 +66,9 @@ def score(outcomes: list[Outcome], threshold: int) -> dict:
     lat = [o.latency_s for o in outcomes]
     result["latency"] = {"p50": _percentile(lat, 0.5), "p95": _percentile(lat, 0.95)}
     # What production Brain actually sees: rule.level >= analysis_threshold.
+    # Cases where the alert alone is enough to decide (no context needed).
+    result["subset_without_context_need"] = _core(
+        [o for o in outcomes if not o.case.expected.needs_context])
     result["subset_at_threshold"] = _core(
         [o for o in outcomes if int(o.case.alert.get("rule", {}).get("level", 0)) >= threshold])
     return result

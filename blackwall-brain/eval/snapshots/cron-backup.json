@@ -1,9 +1,9 @@
 {
-  "captured_at": "2026-10-29T10:03:17Z",
+  "captured_at": "2026-10-29T10:33:37Z",
   "cases": [
     {
       "alert": {
-        "@timestamp": "2026-10-29T10:02:42.536Z",
+        "@timestamp": "2026-10-29T10:33:12.138Z",
         "agent": {
           "id": "002",
           "ip": "172.28.0.11",
@@ -13,7 +13,7 @@
           "name": "syscheck_new_entry"
         },
         "full_log": "File '/etc/cron.d/nightly-backup' added\nMode: realtime\n",
-        "id": "1793268162.285763",
+        "id": "1793269992.343229",
         "input": {
           "type": "log"
         },
@@ -23,7 +23,7 @@
         },
         "rule": {
           "description": "File added to the system.",
-          "firedtimes": 3,
+          "firedtimes": 11,
           "gdpr": [
             "II_5.1.f"
           ],
@@ -62,10 +62,10 @@
           "event": "added",
           "gid_after": "0",
           "gname_after": "root",
-          "inode_after": 5504876,
+          "inode_after": 5509025,
           "md5_after": "bd7e9c8b3e94511f60b50d443717e2e9",
           "mode": "realtime",
-          "mtime_after": "2026-10-29T10:02:42",
+          "mtime_after": "2026-10-29T10:33:12",
           "path": "/etc/cron.d/nightly-backup",
           "perm_after": "rw-rw-rw-",
           "sha1_after": "db6e75db923a5efa7c20da410ffcfe114a4b0a64",
@@ -74,13 +74,17 @@
           "uid_after": "0",
           "uname_after": "root"
         },
-        "timestamp": "2026-10-29T10:02:42.536+0000"
+        "timestamp": "2026-10-29T10:33:12.138+0000"
       },
       "context": {},
-      "doc_id": "c0wch6EBjm0FRj8Cw7hu",
+      "doc_id": "1kw4h6EBjm0FRj8Ckbgk",
       "expected": {
         "category": "false_positive",
+        "match": {
+          "syscheck.path": "/etc/cron.d/nightly-backup"
+        },
         "min_count": 1,
+        "needs_context": true,
         "rule_id": "554",
         "severity": "low",
         "verdict": "false_positive",
@@ -88,6 +92,6 @@
       }
     }
   ],
-  "eval_set_version": "2026-10-29.1",
+  "eval_set_version": "2026-10-29.2",
   "scenario": "cron-backup"
 }

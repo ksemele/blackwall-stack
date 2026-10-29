@@ -1,9 +1,9 @@
 {
-  "captured_at": "2026-10-29T10:07:05Z",
+  "captured_at": "2026-10-29T10:38:14Z",
   "cases": [
     {
       "alert": {
-        "@timestamp": "2026-10-29T10:06:29.950Z",
+        "@timestamp": "2026-10-29T10:37:45.249Z",
         "agent": {
           "id": "002",
           "ip": "172.28.0.11",
@@ -11,15 +11,15 @@
         },
         "data": {
           "srcip": "172.28.0.10",
-          "srcport": "35184",
+          "srcport": "44844",
           "srcuser": "ftp"
         },
         "decoder": {
           "name": "sshd",
           "parent": "sshd"
         },
-        "full_log": "Oct 29 10:06:29 black-host-01 sshd[16024]: Invalid user ftp from 172.28.0.10 port 35184",
-        "id": "1793268389.303050",
+        "full_log": "Oct 29 10:37:44 black-host-01 sshd[18586]: Invalid user ftp from 172.28.0.10 port 44844",
+        "id": "1793270265.360516",
         "input": {
           "type": "log"
         },
@@ -30,12 +30,12 @@
         "predecoder": {
           "hostname": "black-host-01",
           "program_name": "sshd",
-          "timestamp": "Oct 29 10:06:29"
+          "timestamp": "Oct 29 10:37:44"
         },
-        "previous_output": "Oct 29 10:06:29 black-host-01 sshd[16022]: Invalid user user from 172.28.0.10 port 35182\nOct 29 10:06:29 black-host-01 sshd[16026]: Invalid user postgres from 172.28.0.10 port 35192\nOct 29 10:06:29 black-host-01 sshd[16018]: Invalid user ubuntu from 172.28.0.10 port 35160\nOct 29 10:06:29 black-host-01 sshd[16016]: Invalid user guest from 172.28.0.10 port 35156\nOct 29 10:06:29 black-host-01 sshd[16014]: Invalid user test from 172.28.0.10 port 35152\nOct 29 10:06:29 black-host-01 sshd[16012]: Invalid user oracle from 172.28.0.10 port 35146\nOct 29 10:06:29 black-host-01 sshd[16010]: Invalid user admin from 172.28.0.10 port 35138",
+        "previous_output": "Oct 29 10:37:44 black-host-01 sshd[18588]: Invalid user postgres from 172.28.0.10 port 44856\nOct 29 10:37:44 black-host-01 sshd[18584]: Invalid user user from 172.28.0.10 port 44838\nOct 29 10:37:44 black-host-01 sshd[18576]: Invalid user test from 172.28.0.10 port 44800\nOct 29 10:37:44 black-host-01 sshd[18580]: Invalid user ubuntu from 172.28.0.10 port 44824\nOct 29 10:37:44 black-host-01 sshd[18578]: Invalid user guest from 172.28.0.10 port 44816\nOct 29 10:37:44 black-host-01 sshd[18574]: Invalid user oracle from 172.28.0.10 port 44796\nOct 29 10:37:43 black-host-01 sshd[18572]: Invalid user admin from 172.28.0.10 port 44792",
         "rule": {
           "description": "sshd: brute force trying to get access to the system. Non existent user.",
-          "firedtimes": 1,
+          "firedtimes": 2,
           "frequency": 8,
           "gdpr": [
             "IV_35.7.d",
@@ -80,20 +80,22 @@
             "CC7.3"
           ]
         },
-        "timestamp": "2026-10-29T10:06:29.950+0000"
+        "timestamp": "2026-10-29T10:37:45.249+0000"
       },
       "context": {},
-      "doc_id": "jUwgh6EBjm0FRj8CM7g1",
+      "doc_id": "8Ew8h6EBjm0FRj8Cy7j5",
       "expected": {
         "category": "credential_access",
+        "match": {},
         "min_count": 1,
+        "needs_context": false,
         "rule_id": "5712",
         "severity": "high",
         "verdict": "true_positive",
-        "why": "Ten dictionary user names in seconds from one source is SSH brute force."
+        "why": "Ten dictionary user names in seconds from one source is SSH brute force, even from an internal host."
       }
     }
   ],
-  "eval_set_version": "2026-10-29.1",
+  "eval_set_version": "2026-10-29.2",
   "scenario": "ssh-bruteforce"
 }

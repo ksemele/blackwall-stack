@@ -16,3 +16,5 @@ expected:
   severity: critical
   category: persistence
   why: A new user with UID 0 and root's home is a classic backdoor account.
+  match:
+    full_log: name=sysadm

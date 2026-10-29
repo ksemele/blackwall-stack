@@ -17,3 +17,6 @@ expected:
   severity: high
   category: persistence
   why: Re-enabling password root login opens a persistent way back in.
+  match:
+    syscheck.path: /etc/ssh/sshd_config
+  needs_context: true

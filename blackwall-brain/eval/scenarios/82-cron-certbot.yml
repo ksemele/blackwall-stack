@@ -17,3 +17,6 @@ expected:
   severity: low
   category: false_positive
   why: The stock certbot renewal job, exactly as the package ships it.
+  match:
+    syscheck.path: /etc/cron.d/certbot
+  needs_context: true

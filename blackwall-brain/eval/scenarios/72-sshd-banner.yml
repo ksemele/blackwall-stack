@@ -16,3 +16,6 @@ expected:
   severity: low
   category: false_positive
   why: A login banner is a compliance setting with no security downside.
+  match:
+    syscheck.path: /etc/ssh/sshd_config
+  needs_context: true

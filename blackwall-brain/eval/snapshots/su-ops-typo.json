@@ -1,9 +1,9 @@
 {
-  "captured_at": "2026-10-29T09:53:59Z",
+  "captured_at": "2026-10-29T10:24:48Z",
   "cases": [
     {
       "alert": {
-        "@timestamp": "2026-10-29T09:53:23.590Z",
+        "@timestamp": "2026-10-29T10:24:22.977Z",
         "agent": {
           "id": "002",
           "ip": "172.28.0.11",
@@ -13,8 +13,8 @@
           "name": "su",
           "parent": "su"
         },
-        "full_log": "Oct 29 09:53:23 black-host-01 su: FAILED SU (to root) ops on none",
-        "id": "1793267603.263875",
+        "full_log": "Oct 29 10:24:22 black-host-01 su: FAILED SU (to root) ops on none",
+        "id": "1793269462.320958",
         "input": {
           "type": "log"
         },
@@ -25,11 +25,11 @@
         "predecoder": {
           "hostname": "black-host-01",
           "program_name": "su",
-          "timestamp": "Oct 29 09:53:23"
+          "timestamp": "Oct 29 10:24:22"
         },
         "rule": {
           "description": "User missed the password to change UID (user id).",
-          "firedtimes": 5,
+          "firedtimes": 2,
           "gdpr": [
             "IV_35.7.d",
             "IV_32.2"
@@ -63,13 +63,17 @@
             "CC7.3"
           ]
         },
-        "timestamp": "2026-10-29T09:53:23.590+0000"
+        "timestamp": "2026-10-29T10:24:22.977+0000"
       },
       "context": {},
-      "doc_id": "VEwUh6EBjm0FRj8CNrgJ",
+      "doc_id": "tkwwh6EBjm0FRj8ChLjD",
       "expected": {
         "category": "false_positive",
+        "match": {
+          "full_log": "ops"
+        },
         "min_count": 1,
+        "needs_context": false,
         "rule_id": "5301",
         "severity": "low",
         "verdict": "false_positive",
@@ -77,6 +81,6 @@
       }
     }
   ],
-  "eval_set_version": "2026-10-29.1",
+  "eval_set_version": "2026-10-29.2",
   "scenario": "su-ops-typo"
 }

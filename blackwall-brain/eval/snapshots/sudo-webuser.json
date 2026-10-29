@@ -1,9 +1,9 @@
 {
-  "captured_at": "2026-10-29T09:52:33Z",
+  "captured_at": "2026-10-29T10:23:27Z",
   "cases": [
     {
       "alert": {
-        "@timestamp": "2026-10-29T09:51:59.451Z",
+        "@timestamp": "2026-10-29T10:22:54.728Z",
         "agent": {
           "id": "002",
           "ip": "172.28.0.11",
@@ -20,8 +20,8 @@
           "name": "sudo",
           "parent": "sudo"
         },
-        "full_log": "Oct 29 09:51:59 black-host-01 sudo: www-data : user NOT in sudoers ; PWD=/ ; USER=root ; COMMAND=/usr/bin/id",
-        "id": "1793267519.258586",
+        "full_log": "Oct 29 10:22:54 black-host-01 sudo: www-data : user NOT in sudoers ; PWD=/ ; USER=root ; COMMAND=/usr/bin/id",
+        "id": "1793269374.315669",
         "input": {
           "type": "log"
         },
@@ -32,11 +32,11 @@
         "predecoder": {
           "hostname": "black-host-01",
           "program_name": "sudo",
-          "timestamp": "Oct 29 09:51:59"
+          "timestamp": "Oct 29 10:22:54"
         },
         "rule": {
           "description": "Unauthorized user attempted to use sudo.",
-          "firedtimes": 7,
+          "firedtimes": 1,
           "gdpr": [
             "IV_35.7.d",
             "IV_32.2"
@@ -81,13 +81,17 @@
             "CC7.3"
           ]
         },
-        "timestamp": "2026-10-29T09:51:59.451+0000"
+        "timestamp": "2026-10-29T10:22:54.728+0000"
       },
       "context": {},
-      "doc_id": "SUwSh6EBjm0FRj8C2rgh",
+      "doc_id": "q0wvh6EBjm0FRj8CNLh-",
       "expected": {
         "category": "privilege_escalation",
+        "match": {
+          "full_log": "www-data"
+        },
         "min_count": 3,
+        "needs_context": false,
         "rule_id": "5405",
         "severity": "high",
         "verdict": "true_positive",
@@ -96,7 +100,7 @@
     },
     {
       "alert": {
-        "@timestamp": "2026-10-29T09:52:01.421Z",
+        "@timestamp": "2026-10-29T10:22:56.736Z",
         "agent": {
           "id": "002",
           "ip": "172.28.0.11",
@@ -113,8 +117,8 @@
           "name": "sudo",
           "parent": "sudo"
         },
-        "full_log": "Oct 29 09:52:01 black-host-01 sudo: www-data : user NOT in sudoers ; PWD=/ ; USER=root ; COMMAND=/usr/bin/id",
-        "id": "1793267521.259582",
+        "full_log": "Oct 29 10:22:56 black-host-01 sudo: www-data : user NOT in sudoers ; PWD=/ ; USER=root ; COMMAND=/usr/bin/id",
+        "id": "1793269376.316665",
         "input": {
           "type": "log"
         },
@@ -125,11 +129,11 @@
         "predecoder": {
           "hostname": "black-host-01",
           "program_name": "sudo",
-          "timestamp": "Oct 29 09:52:01"
+          "timestamp": "Oct 29 10:22:56"
         },
         "rule": {
           "description": "Unauthorized user attempted to use sudo.",
-          "firedtimes": 8,
+          "firedtimes": 2,
           "gdpr": [
             "IV_35.7.d",
             "IV_32.2"
@@ -174,13 +178,17 @@
             "CC7.3"
           ]
         },
-        "timestamp": "2026-10-29T09:52:01.421+0000"
+        "timestamp": "2026-10-29T10:22:56.736+0000"
       },
       "context": {},
-      "doc_id": "S0wSh6EBjm0FRj8C5bjh",
+      "doc_id": "rUwvh6EBjm0FRj8CNLh-",
       "expected": {
         "category": "privilege_escalation",
+        "match": {
+          "full_log": "www-data"
+        },
         "min_count": 3,
+        "needs_context": false,
         "rule_id": "5405",
         "severity": "high",
         "verdict": "true_positive",
@@ -189,7 +197,7 @@
     },
     {
       "alert": {
-        "@timestamp": "2026-10-29T09:52:03.422Z",
+        "@timestamp": "2026-10-29T10:22:58.738Z",
         "agent": {
           "id": "002",
           "ip": "172.28.0.11",
@@ -206,8 +214,8 @@
           "name": "sudo",
           "parent": "sudo"
         },
-        "full_log": "Oct 29 09:52:03 black-host-01 sudo: www-data : user NOT in sudoers ; PWD=/ ; USER=root ; COMMAND=/usr/bin/id",
-        "id": "1793267523.260578",
+        "full_log": "Oct 29 10:22:57 black-host-01 sudo: www-data : user NOT in sudoers ; PWD=/ ; USER=root ; COMMAND=/usr/bin/id",
+        "id": "1793269378.317661",
         "input": {
           "type": "log"
         },
@@ -218,11 +226,11 @@
         "predecoder": {
           "hostname": "black-host-01",
           "program_name": "sudo",
-          "timestamp": "Oct 29 09:52:03"
+          "timestamp": "Oct 29 10:22:57"
         },
         "rule": {
           "description": "Unauthorized user attempted to use sudo.",
-          "firedtimes": 9,
+          "firedtimes": 3,
           "gdpr": [
             "IV_35.7.d",
             "IV_32.2"
@@ -267,13 +275,17 @@
             "CC7.3"
           ]
         },
-        "timestamp": "2026-10-29T09:52:03.422+0000"
+        "timestamp": "2026-10-29T10:22:58.738+0000"
       },
       "context": {},
-      "doc_id": "TUwSh6EBjm0FRj8C6bjQ",
+      "doc_id": "r0wvh6EBjm0FRj8COLho",
       "expected": {
         "category": "privilege_escalation",
+        "match": {
+          "full_log": "www-data"
+        },
         "min_count": 3,
+        "needs_context": false,
         "rule_id": "5405",
         "severity": "high",
         "verdict": "true_positive",
@@ -281,6 +293,6 @@
       }
     }
   ],
-  "eval_set_version": "2026-10-29.1",
+  "eval_set_version": "2026-10-29.2",
   "scenario": "sudo-webuser"
 }

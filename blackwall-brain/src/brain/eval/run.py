@@ -32,6 +32,8 @@ def _report(s: dict, cost: float | None) -> str:
         f"Severity accuracy: {pct(s['severity']['accuracy'])}",
         f"Category accuracy: {pct(s['category']['accuracy'])}",
         f"Uncertain: {pct(s['uncertain_rate'])}   Invalid output: {pct(s['invalid_rate'])}",
+        f"Decidable without context (n={s['subset_without_context_need']['n']}): verdict "
+        f"{pct(s['subset_without_context_need']['verdict']['accuracy'])}",
         f"At threshold (n={s['subset_at_threshold']['n']}): verdict "
         f"{pct(s['subset_at_threshold']['verdict']['accuracy'])}",
         f"Tokens: {s['tokens']['input']} in / {s['tokens']['output']} out   "
@@ -71,6 +73,8 @@ def main(argv: list[str] | None = None) -> int:
                         a.result.latency_s)
         except AnalysisError as exc:
             o = Outcome(c, None, str(exc), 0, 0, 0.0)
+        except Exception as exc:  # a backend bug must not lose a paid run
+            o = Outcome(c, None, f"{type(exc).__name__}: {exc}", 0, 0, 0.0)
         outcomes.append(o)
         print(f"[{i}/{len(cases)}] {c.scenario}/{c.doc_id}: "
               f"{o.verdict.verdict if o.verdict else 'invalid'}", file=sys.stderr)

@@ -1,9 +1,9 @@
 {
-  "captured_at": "2026-10-29T10:09:51Z",
+  "captured_at": "2026-10-29T10:25:53Z",
   "cases": [
     {
       "alert": {
-        "@timestamp": "2026-10-29T10:09:17.172Z",
+        "@timestamp": "2026-10-29T10:25:21.173Z",
         "agent": {
           "id": "002",
           "ip": "172.28.0.11",
@@ -13,7 +13,7 @@
           "name": "ossec"
         },
         "full_log": "ossec: File size reduced (inode remained): '/var/log/syslog'.",
-        "id": "1793268557.305273",
+        "id": "1793269521.321764",
         "input": {
           "type": "log"
         },
@@ -23,7 +23,7 @@
         },
         "rule": {
           "description": "Log file size reduced.",
-          "firedtimes": 1,
+          "firedtimes": 2,
           "gdpr": [
             "IV_35.7.d"
           ],
@@ -66,13 +66,17 @@
             "CC6.8"
           ]
         },
-        "timestamp": "2026-10-29T10:09:17.172+0000"
+        "timestamp": "2026-10-29T10:25:21.173+0000"
       },
       "context": {},
-      "doc_id": "kEwih6EBjm0FRj8CuLhB",
+      "doc_id": "ukwxh6EBjm0FRj8ChrjW",
       "expected": {
         "category": "false_positive",
+        "match": {
+          "full_log": "/var/log/syslog"
+        },
         "min_count": 1,
+        "needs_context": true,
         "rule_id": "592",
         "severity": "low",
         "verdict": "false_positive",
@@ -80,6 +84,6 @@
       }
     }
   ],
-  "eval_set_version": "2026-10-29.1",
+  "eval_set_version": "2026-10-29.2",
   "scenario": "logs-rotated"
 }

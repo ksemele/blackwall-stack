@@ -1,9 +1,9 @@
 {
-  "captured_at": "2026-10-29T09:59:36Z",
+  "captured_at": "2026-10-29T10:30:10Z",
   "cases": [
     {
       "alert": {
-        "@timestamp": "2026-10-29T09:59:00.951Z",
+        "@timestamp": "2026-10-29T10:29:35.468Z",
         "agent": {
           "id": "002",
           "ip": "172.28.0.11",
@@ -13,7 +13,7 @@
           "name": "syscheck_new_entry"
         },
         "full_log": "File '/etc/sudoers.d/91-ops' added\nMode: realtime\n",
-        "id": "1793267940.271701",
+        "id": "1793269775.329167",
         "input": {
           "type": "log"
         },
@@ -23,7 +23,7 @@
         },
         "rule": {
           "description": "File added to the system.",
-          "firedtimes": 11,
+          "firedtimes": 8,
           "gdpr": [
             "II_5.1.f"
           ],
@@ -62,10 +62,10 @@
           "event": "added",
           "gid_after": "0",
           "gname_after": "root",
-          "inode_after": 5504186,
+          "inode_after": 5508376,
           "md5_after": "cd3a8a6f0c9ba7cd0cf9a92b6a8a74cc",
           "mode": "realtime",
-          "mtime_after": "2026-10-29T09:59:00",
+          "mtime_after": "2026-10-29T10:29:35",
           "path": "/etc/sudoers.d/91-ops",
           "perm_after": "r--r-----",
           "sha1_after": "3c4207c4dd337a62cad9729ee153af44cdb3a336",
@@ -74,13 +74,17 @@
           "uid_after": "0",
           "uname_after": "root"
         },
-        "timestamp": "2026-10-29T09:59:00.951+0000"
+        "timestamp": "2026-10-29T10:29:35.468+0000"
       },
       "context": {},
-      "doc_id": "YEwZh6EBjm0FRj8CZrj_",
+      "doc_id": "w0w1h6EBjm0FRj8CXLgt",
       "expected": {
         "category": "false_positive",
+        "match": {
+          "syscheck.path": "/etc/sudoers.d/91-ops"
+        },
         "min_count": 1,
+        "needs_context": true,
         "rule_id": "554",
         "severity": "low",
         "verdict": "false_positive",
@@ -88,6 +92,6 @@
       }
     }
   ],
-  "eval_set_version": "2026-10-29.1",
+  "eval_set_version": "2026-10-29.2",
   "scenario": "sudoersd-ops"
 }

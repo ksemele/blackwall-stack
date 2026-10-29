@@ -3,7 +3,9 @@
 An open, labelled set of Wazuh alerts and a harness that measures how well
 Brain triages them: is it real or noise, how urgent, what kind. Every alert
 comes from a scenario run in the Blackwall lab, not from hand-written JSON,
-and every attack has a benign twin that raises the same rule.
+and most attacks have a benign twin that raises the same rule. Two do not:
+web-user sudo (5405) and SSH brute force (5712) have twins on neighbouring
+rules (5402, 5710), so those two can be called from the rule alone.
 
 Design: [spec §8](../../docs/superpowers/specs/2026-10-28-brain-v2-eval-design.md).
 
@@ -49,8 +51,13 @@ uncertain and invalid-output rates, the data the model asked for most
   be `low` with category `false_positive`.
 - The labels are the truth of the scenario, even when the alert alone cannot
   tell: an FIM alert for `/etc/sudoers` looks the same whether an attacker or
-  an admin edited it. A low score on such twins without context is the honest
-  result; step 3 (context sources) has to raise it.
+  an admin edited it. Such labels carry `needs_context: true` (19 of 30), and
+  the report shows accuracy on the rest ("decidable without context")
+  separately: the headline number has a ceiling well below 100% until step 3
+  (context sources) gives the model more than the alert.
+- "At threshold" covers what production Brain sees (`rule.level` ≥ 10 in the
+  lab). Only SSH brute force reaches it today (n=1), so read it as a gap in
+  the set, not a score.
 
 ## Capture (needs the lab)
 
@@ -85,14 +92,25 @@ expected:
     severity: low
     category: false_positive
     why: A nightly backup job is routine scheduled maintenance.
+    match: {syscheck.path: /etc/cron.d/nightly-backup}
+    needs_context: true
 ```
+
+- `setup:` (optional) runs before the alert window opens, so its own alerts
+  (creating a user, touching a file) are never labelled.
+- `match:` (dotted alert path → substring) picks the alert the label belongs
+  to. Same-rule noise in the window (another sudo, a scheduled FIM scan) stays
+  unlabelled. The same rule may appear twice with different `match`.
+- `needs_context: true` when a careful analyst could not decide from this
+  alert alone.
 
 Rules:
 - Realistic names. Never test giveaways (`bw-trigger`, `synthetic`,
   `DoNotUseInProd`): the loader and the snapshot writer refuse them, because a
   model that sees them judges the string, not the event.
 - Lab hosts and addresses only; "external" addresses from documentation
-  ranges (`198.51.100.0/24`, `203.0.113.0/24`).
+  ranges (`198.51.100.0/24`, `203.0.113.0/24`). The snapshot writer refuses
+  any other address and host-machine paths (`/Users/…`, the host name).
 - Add the benign twin together with the attack. Keep at least 40% of the
   labelled alerts `false_positive`.
 - `why` says what a human analyst would conclude and why.
@@ -114,7 +132,10 @@ Lab facts the scenarios work around:
 - Rule 5403 ("first time user executed sudo") fires once per user per
   manager, so it cannot be reproduced; the admin sudo scenario expects 5402.
 - Rule 592 (log size reduced) does not repeat for the same file within a
-  short time, so log rotation (34) runs before log wiping (35).
+  short time, so log rotation (12) runs well before log wiping (35).
+- The `ops` admin is created once and kept; scenarios that need it create it
+  in `setup` when missing and set its password.
+- No context switch in `run` yet: snapshots carry `context: {}` until step 3.
 
 Not covered yet, because the lab does not raise an alert for it:
 package installs (`dpkg.log` is not collected), process execution (auditd

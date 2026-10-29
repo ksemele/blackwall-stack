@@ -17,3 +17,6 @@ expected:
   severity: high
   category: persistence
   why: An extra key file in a world-writable directory lets anyone add a login key.
+  match:
+    syscheck.path: /etc/ssh/sshd_config
+  needs_context: true

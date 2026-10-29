@@ -13,4 +13,5 @@ expected:
   verdict: true_positive
   severity: high
   category: credential_access
-  why: Ten dictionary user names in seconds from one source is SSH brute force.
+  why: Ten dictionary user names in seconds from one source is SSH brute force, even from an internal
+    host.

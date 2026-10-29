@@ -1,9 +1,9 @@
 {
-  "captured_at": "2026-10-29T10:02:12Z",
+  "captured_at": "2026-10-29T10:32:41Z",
   "cases": [
     {
       "alert": {
-        "@timestamp": "2026-10-29T10:01:37.104Z",
+        "@timestamp": "2026-10-29T10:32:11.704Z",
         "agent": {
           "id": "002",
           "ip": "172.28.0.11",
@@ -13,7 +13,7 @@
           "name": "syscheck_new_entry"
         },
         "full_log": "File '/etc/cron.d/sysupdate' added\nMode: realtime\n",
-        "id": "1793268097.283005",
+        "id": "1793269931.340471",
         "input": {
           "type": "log"
         },
@@ -23,7 +23,7 @@
         },
         "rule": {
           "description": "File added to the system.",
-          "firedtimes": 1,
+          "firedtimes": 9,
           "gdpr": [
             "II_5.1.f"
           ],
@@ -62,10 +62,10 @@
           "event": "added",
           "gid_after": "0",
           "gname_after": "root",
-          "inode_after": 5504670,
+          "inode_after": 5508835,
           "md5_after": "fc87b235dc425855997926ee0117c213",
           "mode": "realtime",
-          "mtime_after": "2026-10-29T10:01:37",
+          "mtime_after": "2026-10-29T10:32:11",
           "path": "/etc/cron.d/sysupdate",
           "perm_after": "rw-rw-rw-",
           "sha1_after": "4fc520c5dff85aaa3157966447d88658bfa576dd",
@@ -74,13 +74,17 @@
           "uid_after": "0",
           "uname_after": "root"
         },
-        "timestamp": "2026-10-29T10:01:37.104+0000"
+        "timestamp": "2026-10-29T10:32:11.704+0000"
       },
       "context": {},
-      "doc_id": "b0wbh6EBjm0FRj8Cybg7",
+      "doc_id": "0kw3h6EBjm0FRj8CpriU",
       "expected": {
         "category": "persistence",
+        "match": {
+          "syscheck.path": "/etc/cron.d/sysupdate"
+        },
         "min_count": 1,
+        "needs_context": true,
         "rule_id": "554",
         "severity": "high",
         "verdict": "true_positive",
@@ -88,6 +92,6 @@
       }
     }
   ],
-  "eval_set_version": "2026-10-29.1",
+  "eval_set_version": "2026-10-29.2",
   "scenario": "cron-download-exec"
 }

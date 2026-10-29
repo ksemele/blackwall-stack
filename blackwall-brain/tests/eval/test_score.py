@@ -72,3 +72,11 @@ def test_cost_known_and_unknown():
     prices = {"m": {"input_per_mtok": 1.0, "output_per_mtok": 5.0}}
     assert estimate_cost("m", 1_000_000, 200_000, prices) == pytest.approx(2.0)
     assert estimate_cost("other", 1, 1, prices) is None
+
+
+def test_subset_distinguishable_without_context():
+    c1, c2 = case(1), case(2)
+    c2.expected.needs_context = True
+    r = score([out(c1, got()), out(c2, got("uncertain"))], threshold=10)
+    assert r["subset_without_context_need"]["n"] == 1
+    assert r["subset_without_context_need"]["verdict"]["accuracy"] == 1

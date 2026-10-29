@@ -13,3 +13,5 @@ expected:
   severity: high
   category: privilege_escalation
   why: su to root from the web server account is privilege escalation from a web shell.
+  match:
+    full_log: www-data

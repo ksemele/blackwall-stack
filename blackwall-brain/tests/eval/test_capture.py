@@ -138,3 +138,42 @@ def test_cleanup_runs_after_alerts_are_collected_then_settles():
     assert r.ok
     assert events.index("cleanup") > max(i for i, e in enumerate(events) if e == "search")
     assert clock.t >= 20
+
+
+def test_setup_runs_before_window_opens():
+    times, events = [], []
+    clock = Clock()
+
+    class R(Runner):
+        def __call__(self, host, user, command):
+            events.append(command)
+            return super().__call__(host, user, command)
+
+    s = scen()
+    s.setup = [Step("black-host-01", "root", "setup1")]
+
+    def now():
+        times.append(len(events))
+        return NOW
+
+    capture_scenario(s, Index([hit("a", "554")]), run=R(), now=now, clock=clock,
+                     sleep=clock.sleep, poll_s=5, settle_s=10)
+    assert events[0] == "setup1" and times[0] == 1   # window opened after setup
+
+
+def test_match_filters_same_rule_noise():
+    s = scen()
+    s.expected[0].match = {"syscheck.path": "/etc/cron.d/sysupdate"}
+    noise = (("n", {"rule": {"id": "554"}, "syscheck": {"path": "/etc/cron.d/other"},
+                    "timestamp": "t", "full_log": "x"}))
+    real = (("r", {"rule": {"id": "554"}, "syscheck": {"path": "/etc/cron.d/sysupdate"},
+                   "timestamp": "t", "full_log": "x"}))
+    r = run(s, Index([noise, real]))
+    assert r.ok and [c.doc_id for c in r.cases] == ["r"] and r.unlabelled == 1
+
+
+def test_match_not_met_fails():
+    s = scen(wait_s=10)
+    s.expected[0].match = {"full_log": "www-data"}
+    r = run(s, Index([hit("a", "554")]))
+    assert not r.ok and r.missing == ["554"]
