@@ -51,21 +51,26 @@ def _iso(dt: datetime) -> str:
 
 def capture_scenario(s: Scenario, indexer, *, run=docker_exec,
                      now=lambda: datetime.now(timezone.utc), clock=time.monotonic,
-                     sleep=time.sleep, poll_s: float = 5) -> ScenarioResult:
+                     sleep=time.sleep, poll_s: float = 5, settle_s: float = 20) -> ScenarioResult:
     since = _iso(now())
-    wanted = {e.rule_id: e for e in s.expected}
-    error = ""
     try:
         for step in s.steps:
             res = run(step.host, step.user, step.run)
             if res.returncode != 0:
-                error = f"step failed ({res.returncode}): {step.run[:80]}: {res.stderr[-200:]}"
-                break
+                return ScenarioResult(s.name, False, error=f"step failed ({res.returncode}): "
+                                      f"{step.run[:80]}: {res.stderr[-200:]}")
+        return _collect(s, indexer, since, clock=clock, sleep=sleep, poll_s=poll_s)
     finally:
+        # Cleanup only after the alerts are in: FIM can miss a file that is
+        # created and removed within seconds. Then let cleanup's own alerts
+        # land before the next scenario's window opens.
         for step in s.cleanup:
             run(step.host, step.user, step.run)
-    if error:
-        return ScenarioResult(s.name, False, error=error)
+        sleep(settle_s)
+
+
+def _collect(s: Scenario, indexer, since: str, *, clock, sleep, poll_s) -> ScenarioResult:
+    wanted = {e.rule_id: e for e in s.expected}
 
     deadline = clock() + s.wait_s
     while True:
@@ -89,6 +94,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--out", default=os.path.join(EVAL_DIR, "snapshots"))
     p.add_argument("--only", nargs="*", default=None)
     p.add_argument("--poll", type=float, default=5)
+    p.add_argument("--settle", type=float, default=20)
     args = p.parse_args(argv)
 
     env = os.environ
@@ -101,7 +107,8 @@ def main(argv: list[str] | None = None) -> int:
     failed = 0
     for s in scenarios:
         try:
-            r = capture_scenario(s, indexer, poll_s=args.poll)
+            r = capture_scenario(s, indexer, poll_s=args.poll, settle_s=args.settle,
+                                 sleep=time.sleep)
         except IndexerError as exc:
             r = ScenarioResult(s.name, False, error=f"indexer: {exc}")
         if r.ok:

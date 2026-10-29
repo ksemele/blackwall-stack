@@ -117,3 +117,24 @@ def test_main_exit_1_and_no_snapshot_on_failure(tmp_path, monkeypatch):
     out = tmp_path / "out"
     rc = capture.main(["--scenarios", str(tmp_path / "s"), "--out", str(out), "--poll", "0"])
     assert rc == 1 and not out.exists()
+
+
+def test_cleanup_runs_after_alerts_are_collected_then_settles():
+    events = []
+
+    class LoggingIndex(Index):
+        def search(self, query):
+            events.append("search")
+            return super().search(query)
+
+    class LoggingRunner(Runner):
+        def __call__(self, host, user, command):
+            events.append(command)
+            return super().__call__(host, user, command)
+
+    clock = Clock()
+    r = capture_scenario(scen(), LoggingIndex([hit("a", "554")]), run=LoggingRunner(),
+                         now=lambda: NOW, clock=clock, sleep=clock.sleep, poll_s=5, settle_s=20)
+    assert r.ok
+    assert events.index("cleanup") > max(i for i, e in enumerate(events) if e == "search")
+    assert clock.t >= 20
