@@ -18,7 +18,7 @@ from brain.eval.scenarios import Scenario, load_scenarios
 from brain.eval.snapshots import Case, write_snapshot
 from brain.indexer import IndexerClient, IndexerError
 
-EVAL_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "..", "eval")
+EVAL_DIR = os.path.normpath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "eval"))
 
 
 def docker_exec(host: str, user: str, command: str) -> subprocess.CompletedProcess:

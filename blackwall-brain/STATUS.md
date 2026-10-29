@@ -2,13 +2,30 @@
 module: blackwall-brain
 status: in_progress
 stage: 3
-last_updated: 2026-10-28
-last_task: "Brain v2 step 1: structured verdict, vendor-neutral models, HTML message, container, indexer polling"
-next_task: "Brain v2 step 2: eval set and harness (spec 2026-10-28)"
+last_updated: 2026-10-29
+last_task: "Brain v2 step 2: eval set (26 scenarios, 30 alerts) and harness; first results"
+next_task: "Brain v2 step 3: mode-1 context sources, measured with the eval set (spec 2026-10-28 §9.1)"
 blockers: []
 ---
 
 ## Done
+
+- 2026-10-29: Brain v2 step 2, eval set and harness (`eval/`, plan
+  `docs/superpowers/plans/2026-10-29-brain-v2-step2-eval.md`). 26 lab
+  scenarios (attack + benign twin), 30 labelled alerts, 47% benign; snapshots
+  committed; `python -m brain.eval.capture` / `python -m brain.eval.run`.
+  First results (prompt 2026-10-28.1, set 2026-10-29.1, no context):
+
+  | Model, effort | Verdict | Missed threats | Threats not called | Uncertain | Severity | Category | Cost | p50 / p95 |
+  |---|---|---|---|---|---|---|---|---|
+  | claude-haiku-5-5, low | 17% | 0 | 12 / 16 | 83% | 37% | 53% | $0.0064 | 2.1 / 2.7 s |
+  | claude-haiku-5-5, medium | 20% | 0 | 12 / 16 | 80% | 40% | 57% | $0.0080 | 2.7 / 4.0 s |
+
+  Reading: Brain never calls a threat noise, but on one alert it mostly
+  cannot tell an attacker from an admin and says so (`uncertain`). What it
+  asks for most: the user or process behind a file change, file contents or a
+  diff, change records. Effort barely helps: the gap is data, not reasoning.
+  This is the baseline step 3 (context) has to beat.
 
 - 2026-10-28: Brain v2 step 1 (spec `docs/superpowers/specs/2026-10-28-brain-v2-eval-design.md`,
   plan `docs/superpowers/plans/2026-10-28-brain-v2-step1.md`). Python package
