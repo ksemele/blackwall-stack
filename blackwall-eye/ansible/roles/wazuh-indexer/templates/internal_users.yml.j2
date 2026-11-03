@@ -1,18 +1,26 @@
 ---
 # Wazuh / OpenSearch security internal users config.
 # Passwords are bcrypt hashes (templated at deploy time).
+#
+# The salt is derived from the host and user instead of random: a random salt
+# changes the file on every run, and every change re-runs securityadmin.sh,
+# which replaces all users and roles, including the ones other roles create
+# through the REST API (brain-ro for blackwall-brain).
+{% macro bcrypt(password, user) -%}
+{{ password | password_hash('bcrypt', salt=((inventory_hostname ~ ':' ~ user) | hash('sha256'))[:21] ~ 'e') }}
+{%- endmacro %}
 _meta:
   type: "internalusers"
   config_version: 2
 
 {{ wazuh_indexer_admin_user }}:
-  hash: "{{ wazuh_indexer_admin_password | password_hash('bcrypt') }}"
+  hash: "{{ bcrypt(wazuh_indexer_admin_password, wazuh_indexer_admin_user) }}"
   reserved: true
   backend_roles:
     - "admin"
   description: "Wazuh admin user"
 
 kibanaserver:
-  hash: "{{ wazuh_indexer_admin_password | password_hash('bcrypt') }}"
+  hash: "{{ bcrypt(wazuh_indexer_admin_password, 'kibanaserver') }}"
   reserved: true
   description: "Dashboard service user (uses same secret as admin in test env)"
