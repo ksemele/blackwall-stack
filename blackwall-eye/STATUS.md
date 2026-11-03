@@ -2,13 +2,24 @@
 module: blackwall-eye
 status: in_progress
 stage: 1
-last_updated: 2026-10-29
-last_task: "auditd role verified on a real RHEL kernel (Lima VM, bw-check vm 13/13)"
+last_updated: 2026-11-03
+last_task: "Certificates: no silent CA rotation from a controller without the bundle (#34)"
 next_task: "Prod inventory for the stack (backlog: Wazuh server stack prod readiness) — owner decides when"
 blockers: []
 ---
 
 ## Done
+
+- 2026-11-03: `wazuh-certificates.yml` no longer mints a new CA when the
+  controller lacks the bundle (fresh clone, git worktree) but the host already
+  has certificates: the play fails with where to get the bundle; rotation needs
+  `-e wazuh_certs_rotate=true` (#34).
+
+- 2026-11-03: `internal_users.yml` hashes with a salt derived from host and
+  user instead of a random one, so the file and `securityadmin.sh` only change
+  when a password does. Before, every eye run re-pushed the security config and
+  deleted Brain's `brain-ro` user and `brain_read` role (Brain: HTTP 401 after
+  each `bw-lab up`) (#33).
 
 - 2026-10-29: FIM realtime also on `/etc/sudoers.d`, `/etc/cron.d`, `/root/.ssh`
   (common persistence paths; needed by the Brain eval set). Lab: a new file

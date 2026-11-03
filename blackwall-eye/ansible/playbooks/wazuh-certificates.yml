@@ -11,7 +11,11 @@
 # overrides it per host in group_vars).
 #
 # Idempotent: skips generation if <wazuh_certs_local_dir>/wazuh-certificates.tar
-# exists on the controller. To rotate, delete that file and re-run.
+# exists on the controller. When it does not but the host already has
+# certificates (a fresh clone or worktree: the bundle is gitignored), the play
+# stops instead of minting a new CA over the running stack; copy the bundle
+# from the checkout that deployed it. To rotate on purpose, delete the bundle
+# and re-run with -e wazuh_certs_rotate=true.
 
 - name: Generate Wazuh certificate bundle per server host, fetch to controller
   hosts: "{{ wazuh_cert_hosts | default('wazuh_managers') }}"
@@ -23,6 +27,10 @@
     # through default() into private names instead of being defined here.
     _certs_dir: "{{ wazuh_certs_local_dir | default(playbook_dir ~ '/../../../tests/.wazuh-certs') }}"
     _cert_ip: "{{ wazuh_cert_ip | default('172.28.0.10') }}"
+    _rotate: "{{ wazuh_certs_rotate | default(false) | bool }}"
+    # The CA the indexer role deploys; its presence means the host already
+    # runs with some bundle.
+    _deployed_ca: "{{ wazuh_certs_deployed_ca | default('/etc/wazuh-indexer/certs/root-ca.pem') }}"
     wazuh_certs_remote_dir: "/root/wazuh-certs"
     wazuh_certs_tool_url: "https://packages.wazuh.com/4.14/wazuh-certs-tool.sh"
     wazuh_certs_config_url: "https://packages.wazuh.com/4.14/config.yml"
@@ -38,6 +46,22 @@
     - name: Stop here if bundle exists (idempotency)
       meta: end_host
       when: _bundle_local.stat.exists
+
+    - name: Check for certificates already deployed on the host
+      stat:
+        path: "{{ _deployed_ca }}"
+      register: _deployed
+
+    - name: Refuse to replace the CA of a running stack
+      fail:
+        msg: >-
+          {{ inventory_hostname }} already has certificates ({{ _deployed_ca }}),
+          but {{ _certs_dir }}/wazuh-certificates.tar is missing on this
+          controller, so a new CA would be generated and deployed over them.
+          Copy wazuh-certificates.tar from the checkout that provisioned this
+          host (in the lab: tests/.wazuh-certs/ of your main clone), or rotate
+          on purpose with -e wazuh_certs_rotate=true.
+      when: _deployed.stat.exists and not _rotate
 
     - name: Ensure remote work dir exists
       file:

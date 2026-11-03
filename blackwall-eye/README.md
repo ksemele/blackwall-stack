@@ -98,7 +98,9 @@ endpoint on loopback and be reached over an SSH tunnel:
 | `wazuh_indexer_heap` | package default | e.g. `1g` |
 
 Certificates are generated per server host (`wazuh-certificates.yml`, node name =
-inventory hostname, bundle in `wazuh_certs_local_dir`). The lab node
+inventory hostname, bundle in `wazuh_certs_local_dir`). A controller without
+the bundle does not replace the CA of a host that already has one: the play
+fails unless `-e wazuh_certs_rotate=true` is given. The lab node
 `black-sentinel-03` (`ansible/playbooks/sentinel.yml`, group vars in
 `tests/inventory/group_vars/sentinel.yml`) runs this layout on Rocky 9 next to a
 podman nginx on 443, with `nftables` (`nft_podman`, forward policy drop) and
