@@ -108,6 +108,9 @@ Rules that apply to every module:
   what is done, the next task and known issues. Read it before you start; it is
   the best map of what is in flight. Update it when your change completes or
   changes a planned item.
+- **Tasks live in GitHub issues.** Planned work and its progress are tracked
+  as issues, not as plan files in the repo. Reference the issue in your PR
+  (`Closes #N`).
 - **Config as code.** No manual steps that can't be reproduced from files in
   the repo. If a change needs a step, put it in a role, a playbook or a script.
 - **Keep docs in sync.** When you add or change a playbook, role, inventory
