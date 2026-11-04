@@ -39,6 +39,7 @@ Each module is an independent, deployable unit with a single security responsibi
 ## Agent Rules
 
 - **Before touching any module:** read its `STATUS.md` to understand current state. If `STATUS.md` doesn't exist, the module hasn't been started — create it with `status: pending` before doing anything else.
+- **Tasks and progress live in GitHub issues** (`gh issue list`), one issue per task, closed by the PR that does it. Implementation plans are scratch files: keep them in `docs/superpowers/plans/` (gitignored) or the PR description, never commit them. `STATUS.md` stays the map of the module's current state; its `next_task` should name the issue (`#N`).
 - **Naming:** keep the Blackwall/Cyberpunk thematic naming (eye, voice, brain, trap, fang).
 - **Isolation:** each module must remain independently deployable.
 - **Config as code:** no manual steps that can't be reproduced from version-controlled files.

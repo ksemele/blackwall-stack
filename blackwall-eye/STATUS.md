@@ -145,7 +145,7 @@ blockers: []
   three server components. Side effect: fixed a mismatch where the agent was
   actually installed as 4.14.7 while the roles were pinned to 4.14.5.
 
-- 2026-05-16: test environment reworked — `black-master-00` (manager + indexer + dashboard) + `black-host-01` (agent). Added the `wazuh-indexer` and `wazuh-dashboard` roles. The manager ships alerts to the indexer via filebeat. Certificates are generated once via `wazuh-certificates.yml`. The dashboard is at `https://localhost:5601` (admin / Blackwall1!). The agent is fully parametrised: `wazuh_manager_host`/`port`/`protocol`/`enrollment_*` — any master can be targeted via `-e` or group_vars. Spec: `docs/superpowers/specs/2026-05-15-test-env-master-host-dashboard-design.md`. Plan: `docs/superpowers/plans/2026-05-15-test-env-master-host-dashboard.md`.
+- 2026-05-16: test environment reworked — `black-master-00` (manager + indexer + dashboard) + `black-host-01` (agent). Added the `wazuh-indexer` and `wazuh-dashboard` roles. The manager ships alerts to the indexer via filebeat. Certificates are generated once via `wazuh-certificates.yml`. The dashboard is at `https://localhost:5601` (admin / Blackwall1!). The agent is fully parametrised: `wazuh_manager_host`/`port`/`protocol`/`enrollment_*` — any master can be targeted via `-e` or group_vars. Spec: `docs/superpowers/specs/2026-05-15-test-env-master-host-dashboard-design.md`.
 
 - `ansible/roles/wazuh-manager/` — full Ansible role: defaults, tasks, handlers, templates/ossec.conf.j2
   - Installs wazuh-manager from the official apt repository (pinned 4.14.7)

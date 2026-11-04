@@ -10,8 +10,7 @@ blockers: []
 
 ## Done
 
-- 2026-10-29: Brain v2 step 2, eval set and harness (`eval/`, plan
-  `docs/superpowers/plans/2026-10-29-brain-v2-step2-eval.md`). 26 lab
+- 2026-10-29: Brain v2 step 2, eval set and harness (`eval/`, PR #32). 26 lab
   scenarios (attack + benign twin), 30 labelled alerts, 47% benign; snapshots
   committed; `python -m brain.eval.capture` / `python -m brain.eval.run`.
   Baseline (prompt 2026-10-28.1, set 2026-10-29.2, no context):
@@ -34,7 +33,7 @@ blockers: []
     has to move these numbers; the set should also grow at level ≥ 10.
 
 - 2026-10-28: Brain v2 step 1 (spec `docs/superpowers/specs/2026-10-28-brain-v2-eval-design.md`,
-  plan `docs/superpowers/plans/2026-10-28-brain-v2-step1.md`). Python package
+  PR #31). Python package
   `src/brain/` in a container built on the host, run by `brain-analyst.service`
   (`podman run`); polls `wazuh-alerts-*` with a read-only indexer user instead
   of tailing `alerts.json`; structured verdict validated against a schema;

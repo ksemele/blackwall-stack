@@ -21,3 +21,6 @@ __pycache__/
 # Python venvs and build metadata
 .venv/
 *.egg-info/
+
+# Working plans are local only; tasks and progress live in GitHub issues
+docs/superpowers/plans/
