@@ -224,4 +224,47 @@ assert any(l.startswith("WARNING") and "layer 2 skipped" in l for l in logs), lo
 m.cache_save("cf:cfu", CF)
 assert run({"u1": None, "u2": None, "cfu": None}) == 2, logs
 assert "173.245.48.0/20" in applied[0] and "update @ssh_flagged" in applied[0], logs
+
+# 12. stderr_is_journal: JOURNAL_STREAM must match fstat(2) dev:inode exactly
+import io, types
+st = os.stat_result((33188, 7, 2, 1, 0, 0, 100, 0, 0, 0))  # st_ino=7, st_dev=2
+assert m.stderr_is_journal({"JOURNAL_STREAM": "2:7"}, st)
+for env in ({}, {"JOURNAL_STREAM": ""}, {"JOURNAL_STREAM": "journal"},
+            {"JOURNAL_STREAM": "2:"}, {"JOURNAL_STREAM": ":7"},
+            {"JOURNAL_STREAM": "2:7:extra"}, {"JOURNAL_STREAM": "x:y"},
+            {"JOURNAL_STREAM": "9:7"}, {"JOURNAL_STREAM": "2:9"}):
+    assert not m.stderr_is_journal(env, st), env
+# log() honours the helper: journal stderr -> no terminal line, else printed
+# (fresh module copy: section 10 replaced log() with a capture stub)
+import importlib.machinery, importlib.util
+l2 = importlib.machinery.SourceFileLoader("fang_refresh_log", path)
+s2 = importlib.util.spec_from_loader("fang_refresh_log", l2)
+m2 = importlib.util.module_from_spec(s2); l2.exec_module(m2)
+# stub syslog: a real WARNING under this identifier would fire Wazuh rule 100209
+sent = []
+real_syslog = m2.syslog
+m2.syslog = types.SimpleNamespace(
+    LOG_ERR=real_syslog.LOG_ERR, LOG_WARNING=real_syslog.LOG_WARNING,
+    LOG_PID=real_syslog.LOG_PID, LOG_DAEMON=real_syslog.LOG_DAEMON,
+    openlog=lambda *a: None, closelog=lambda: None,
+    syslog=lambda level, msg: sent.append((level, msg)))
+buf = io.StringIO()
+saved = (os.fstat, os.environ, sys.stderr)
+os.fstat = lambda fd: st
+try:
+    sys.stderr = buf
+    os.environ = {"JOURNAL_STREAM": "2:7"}
+    m2.log("WARNING journal-only")
+    assert buf.getvalue() == "", buf.getvalue()
+    assert sent == [(real_syslog.LOG_WARNING, "WARNING journal-only")], sent
+    os.environ = {"JOURNAL_STREAM": "9:9"}
+    m2.log("WARNING mismatch")
+    assert "[blackwall-fang-refresh] WARNING mismatch" in buf.getvalue(), buf.getvalue()
+    assert sent[-1] == (real_syslog.LOG_WARNING, "WARNING mismatch"), sent
+    os.environ = {}
+    m2.log("WARNING inherited-unset")
+    assert "[blackwall-fang-refresh] WARNING inherited-unset" in buf.getvalue(), buf.getvalue()
+    assert sent[-1] == (real_syslog.LOG_WARNING, "WARNING inherited-unset"), sent
+finally:
+    os.fstat, os.environ, sys.stderr = saved
 print("FANG REFRESH OK")

@@ -80,12 +80,29 @@ def log(msg):
         except Exception:
             level = None
         else:
-            if os.environ.get("JOURNAL_STREAM"):
+            try:
+                journal = stderr_is_journal(os.environ, os.fstat(2))
+            except OSError:
+                journal = False
+            if journal:
                 return
     print("[blackwall-fang-refresh] %s" % msg, file=sys.stderr)
 
 
 # ---------- pure helpers (unit-tested) ----------
+
+def stderr_is_journal(environ, fstat_result):
+    """True when stderr really is the journald stream: JOURNAL_STREAM must be
+    "<device>:<inode>" and both must match os.fstat(2) of fd 2 (man systemd.exec,
+    $JOURNAL_STREAM). Unset, malformed or mismatching values all mean "not the
+    journal", so a shell that merely inherited the variable still sees output."""
+    value = environ.get("JOURNAL_STREAM", "")
+    try:
+        dev, ino = value.split(":")
+        return (int(dev), int(ino)) == (fstat_result.st_dev, fstat_result.st_ino)
+    except ValueError:
+        return False
+
 
 def subtract(nets, excl):
     """Remove the address space of `excl` from every network in `nets`."""
