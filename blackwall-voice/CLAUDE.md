@@ -26,6 +26,8 @@ A Python script deployed as a systemd service on the manager host that:
 - Sends via Telegram Bot API to a configured `chat_id`
 - Deduplicates: tracks sent `id` values to avoid resending on restart (state file, capped at `alerter_state_max_ids`, compacted hourly)
 - Optional upper bound `voice_max_level` (one message per alert when Brain is on; lifted at deploy time and, every 15 s, at runtime whenever `brain-analyst` is not active; clamped to the deployed `analysis_threshold - 1`) and `alerter_ignore_rule_ids` (Brain's verify rule)
+- Optional webhook channel (`alerter_webhook_url` + `alerter_webhook_format` `generic` | `slack`): same filter/dedup/retry pipeline, sent alongside Telegram or standing alone when Telegram credentials are empty; an alert's dedup ID is recorded only after every configured channel accepted
+- Secret hygiene: a log filter scrubs the webhook URL and the bot token from every log line (urllib/provider errors can echo the URL back)
 - Restarts automatically on failure (systemd `Restart=on-failure`)
 
 ### 2. Wazuh Dashboard (deferred — not Stage 2)
@@ -50,8 +52,8 @@ Noted here as a future stage item. Stage 2 delivers only the Telegram alerter.
 |---|---|
 | Language | Python 3 (already present on manager host) |
 | Alert source | `/var/ossec/logs/alerts/alerts.json` (line-buffered JSON, one event per line) |
-| Notification sink | Telegram Bot API (`https://api.telegram.org/bot<token>/sendMessage`) |
-| Secrets | `telegram_bot_token` and `telegram_chat_id` — passed as Ansible vars (vault-encrypted in production) |
+| Notification sink | Telegram Bot API (`https://api.telegram.org/bot<token>/sendMessage`); optional generic webhook / Slack incoming webhook (`alerter_webhook_url`, stdlib `urllib.request`) |
+| Secrets | `telegram_bot_token` and `telegram_chat_id` — passed as Ansible vars (vault-encrypted in production); `alerter_webhook_url` is a bearer secret, never logged |
 | Service manager | systemd on manager host |
 | Deployment | Ansible role `telegram-alerter`, playbook `voice.yml` |
 | Target host group | `wazuh_managers` (shared inventory from blackwall-eye) |
@@ -93,8 +95,10 @@ blackwall-voice/
 | `poll_interval` | `5` | Seconds between log tail reads |
 | `alerter_state_file` | `/var/lib/voice-alerter/sent_ids.txt` | Dedup state |
 | `alerter_log_file` | `/var/log/voice-alerter/alerter.log` | Service log |
-| `telegram_bot_token` | `""` | Must be set; use Ansible vault |
-| `telegram_chat_id` | `""` | Must be set |
+| `telegram_bot_token` | `""` | Must be set unless a webhook URL is set; use Ansible vault |
+| `telegram_chat_id` | `""` | Must be set unless a webhook URL is set |
+| `alerter_webhook_url` | `""` | Optional generic webhook / Slack URL (secret); empty = channel off |
+| `alerter_webhook_format` | `generic` | Payload shape: `generic` (JSON object) or `slack` (`{"text": ...}`) |
 
 ---
 

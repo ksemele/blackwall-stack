@@ -25,7 +25,7 @@ own sizing).
 
 | | What it is | Pick it when |
 |---|---|---|
-| **Blackwall Stack** | Wazuh 4 + auditd + nftables with custom rules, opt-in automated blocking (observe first), Telegram alerts | You run Linux hosts and want few, readable alerts |
+| **Blackwall Stack** | Wazuh 4 + auditd + nftables with custom rules, opt-in automated blocking (observe first), Telegram alerts (plus optional Slack/webhook channel) | You run Linux hosts and want few, readable alerts |
 | **Security Onion** 3.x | Full NSM/NDR platform: Suricata, Zeek, packet capture, Elastic, cases. Standalone minimum: 4 cores, 24 GB RAM, 200 GB disk | You need network visibility and have the hardware and analysts |
 | **wazuh-ansible** | Official Ansible roles that install Wazuh; rules, tuning and response are up to you | You want plain Wazuh and will tune it yourself |
 | **SOCFortress**-style stacks | Wazuh, Graylog, Velociraptor, Grafana and more behind the CoPilot web UI | You run a SOC or serve several clients |

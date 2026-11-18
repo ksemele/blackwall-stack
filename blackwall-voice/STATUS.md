@@ -2,13 +2,33 @@
 module: blackwall-voice
 status: in_progress
 stage: 2
-last_updated: 2026-10-28
-last_task: "No alerts lost around alerts.json rotation (#23): drain the old file, read the new one from its start"
-next_task: "Dashboard (OpenSearch) is deferred; next Voice work is channel routing (Slack/webhook)"
+last_updated: 2026-11-18
+last_task: "Generic webhook / Slack channel next to Telegram (#22)"
+next_task: "Confirm the webhook channel in the live lab (bw-check voice with BW_WEBHOOK_URL set); dashboard (OpenSearch) stays deferred"
 blockers: []
 ---
 
 ## Done
+
+### 2026-11-18 — generic webhook / Slack channel next to Telegram (#22)
+
+- `alerter_webhook_url` (empty = off) adds a JSON webhook channel next to
+  Telegram; `alerter_webhook_format`: `generic` (level, rule_id, description,
+  agent, timestamp, 300-char log excerpt) or `slack` (`{"text": ...}` mrkdwn).
+  Payload builders are pure functions; stdlib `urllib.request` only.
+- Two channels share one pipeline: up to 3 attempts per channel, `poll_interval`
+  apart; a still-failing channel is logged as dropped and loses only its copy.
+  The dedup ID is written when *every* configured channel accepted.
+- A webhook may stand alone: the role now requires "a channel", not specifically
+  Telegram credentials. Without webhook vars the old behavior is unchanged.
+- Secret hygiene: a logging filter scrubs the webhook URL and the bot token from
+  every log line (error text and tracebacks included); URL/format validation runs
+  in a `no_log` assert task.
+- Lab: `BW_WEBHOOK_URL` env wiring (`hosts.yml`, `.envrc.example`, tests README);
+  `verify-voice.yml` delivery assert is strict when any channel is configured.
+- Verified offline: `tests/unit/voice_webhook_test.py` (payloads, redaction,
+  multi-channel "sent" rule) + a local-receiver smoke (202 accepted, ID
+  recorded). Live `bw-check voice` with a real receiver still to run in the lab.
 
 ### 2026-10-28 — no alerts lost around rotation (#23)
 
@@ -114,6 +134,16 @@ blockers: []
 
 ## Decisions
 
+- Channel "sent" rule (#22): one dedup set, not per-channel state. An alert is
+  attempted once per configured channel (3 attempts each, in the same inline
+  loop); the ID lands in `sent_ids.txt` only when all channels accepted. A
+  failed channel's copy is unrecoverable anyway — the tail never replays a
+  line it passed — so per-channel state files would add complexity for no
+  delivery gain.
+- The webhook URL is never logged: `_RedactSecrets` on the alerter logger
+  scrubs URL + bot token from formatted messages and tracebacks (urllib's
+  `InvalidURL` / "unknown url type" errors and some providers' error bodies
+  echo the full URL back). Unit tests assert the URL never appears in output.
 - Wazuh exposes no Prometheus metrics natively — no exporter was built for it.
   "Metrics are arriving" is checked via node_exporter, agent health via the
   Wazuh API (`tests/bin/bw-check wazuh`).

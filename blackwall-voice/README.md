@@ -2,11 +2,12 @@
 
 Notification layer for the Blackwall security platform. Consumes Wazuh alerts and
 delivers them to configured channels. Stage 2 delivers a Telegram alerter running
-as a systemd service on the Wazuh manager host.
+as a systemd service on the Wazuh manager host, plus an optional generic webhook /
+Slack channel next to (or instead of) Telegram.
 
 ## Stack
 
-- Python 3 + Telegram Bot API
+- Python 3 + Telegram Bot API + a generic webhook channel (stdlib `urllib.request`)
 - Wazuh alert log: `/var/ossec/logs/alerts/alerts.json`
 - Ansible role `telegram-alerter` deploys to `wazuh_managers` group
 
@@ -29,8 +30,9 @@ See [tests/README.md](../tests/README.md) for full environment documentation.
 
 ## Configure
 
-On the test environment the secrets (telegram_bot_token, telegram_chat_id)
-are read from env vars set in `.envrc` — see [tests/README.md](../tests/README.md#secrets-telegram-claude-api).
+On the test environment the secrets (telegram_bot_token, telegram_chat_id,
+optionally alerter_webhook_url) are read from env vars set in `.envrc` — see
+[tests/README.md](../tests/README.md#secrets-telegram-claude-api).
 For other targets, set these vars before deploying (use Ansible vault for secrets):
 
 ```yaml
@@ -53,6 +55,8 @@ read the id from `https://api.telegram.org/bot<token>/getUpdates`
 | `alerter_state_max_ids` | `10000` | dedup IDs kept in `sent_ids.txt` |
 | `voice_cover_unit` | `brain-analyst` | unit that must be active for the upper bound to apply |
 | `voice_cover_script` | `/etc/brain-analyst/brain.env` | read at deploy time for `BRAIN_ANALYSIS_THRESHOLD` (bound clamp) |
+| `alerter_webhook_url` | `""` (off) | generic webhook / Slack incoming-webhook URL (secret) |
+| `alerter_webhook_format` | `generic` | payload shape: `generic` or `slack` |
 
 ### One message per alert with Brain
 
@@ -90,6 +94,51 @@ check and the threshold read are local.
 args by itself (when Voice is installed; Voice first when Brain is being
 disabled, after Brain otherwise).
 
+### Webhook / Slack channel
+
+`alerter_webhook_url` adds a second channel next to Telegram (empty = off).
+A webhook alone can stand on its own: the role only requires Telegram
+credentials when no webhook URL is set. The URL is POSTed the alert as JSON
+(`Content-Type: application/json`); any 2xx counts as accepted. Point it at a
+Slack incoming webhook or at any endpoint that takes JSON (Mattermost, a
+chat gateway, your own receiver):
+
+```yaml
+# placeholder — a real Slack URL is a bearer secret, keep it out of the repo
+alerter_webhook_url: "https://hooks.example.com/services/T0000000/B0000000/XXXXXXXXXXXXXXXX"
+alerter_webhook_format: slack   # or generic (default)
+```
+
+`generic` payload — the alert's fields as a JSON object (the log excerpt is
+capped at 300 chars):
+
+```json
+{
+  "level": 10,
+  "rule_id": "5710",
+  "description": "First time user login",
+  "agent": "black-host-01",
+  "timestamp": "2026-11-18T12:34:56.789012+00:00",
+  "log": "user 'root' login attempt from 192.0.2.10 ..."
+}
+```
+
+`slack` payload — `{"text": "..."}` with Slack mrkdwn: a `*BLACKWALL ALERT*`
+line, the host and log excerpt in backticks, the same 300-char excerpt.
+
+Both channels share one pipeline (same filter, dedup and retry rules): each
+configured channel gets up to 3 send attempts, `poll_interval` apart; a
+channel that still fails is logged as dropped and only that channel loses the
+alert. The dedup ID is written when **every** configured channel accepted —
+with two channels, one failing keeps the alert out of `sent_ids.txt` (it is
+not retried either: the tail has already moved past the line).
+
+The URL is a secret (Slack-style URLs carry the key in the path): the alerter
+logs channel names, error codes and bodies only, and a log filter scrubs the
+URL and the bot token from every line — including error text and tracebacks
+that echo the URL back (`<redacted>`). The role validates the URL/format with
+a `no_log` task, so a failed run does not echo it either.
+
 ### Dedup state
 
 `sent_ids.txt` keeps only the newest `alerter_state_max_ids` IDs. It is
@@ -113,6 +162,7 @@ cd blackwall-voice
 ansible-playbook ansible/playbooks/voice.yml \
   -e telegram_bot_token=<token> \
   -e telegram_chat_id=<chat_id>
+  # optional webhook channel: -e alerter_webhook_url=https://hooks.example.com/services/...
 ```
 
 ## Verify
@@ -122,12 +172,14 @@ ansible-playbook ansible/playbooks/verify-voice.yml
 ```
 
 Injects a synthetic alert (rule 99999, level 10 by default) and checks that
-Telegram accepted the message (its id lands in the dedup state file). When
-`voice_max_level` leaves no room for it (Brain on in the lab), it checks that
-Voice skipped the alert instead. With a token set, a refused
-send fails the playbook; the Telegram error body is in
-`/var/log/voice-alerter/alerter.log`. A failed send is retried 3 times, then
-logged as dropped.
+every configured channel accepted the message (its id lands in the dedup
+state file). When `voice_max_level` leaves no room for it (Brain on in the
+lab), it checks that Voice skipped the alert instead. With a channel
+configured (token or webhook URL), a refused send fails the playbook; the
+Telegram/webhook error body is in `/var/log/voice-alerter/alerter.log`. A
+failed send is retried 3 times per channel, then logged as dropped. For a
+live webhook check in the lab, point `BW_WEBHOOK_URL` at a local receiver
+(`nc -l 8080` or a few lines of Python) on the manager host.
 
 ## Metrics (node_exporter + Prometheus + Grafana)
 
