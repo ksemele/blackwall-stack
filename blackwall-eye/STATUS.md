@@ -23,6 +23,16 @@ blockers: []
   `<description>`, every `<if_sid>` resolvable to a rule in the file or to stock 530,
   and the README rules table / 100100 prose in sync with the XML (#18).
 
+- 2026-11-18: Debian 12 is in the lab: `black-debian-04` (profile `ubuntu2204`,
+  SSH 2205, `172.28.0.17`, group `debian12` + `wazuh_agents`) on
+  `geerlingguy/docker-debian12-ansible`, which ships **no rsyslog** — so both
+  `ossec.conf.j2` templates now read journald on the RHEL family *and* on
+  Debian 12+ (`distribution_major_version`); a syslog localfile on Debian 12
+  collects nothing, and 100009/100207/100209 would go silent there. Ubuntu and
+  Debian 11 keep `/var/log/{auth.log,syslog}`. Pinned by
+  `tests/unit/ossec_log_sources_test.py`; `verify-agent-events.yml` drives the
+  failed-login event on every live agent, not only the RHEL one (#24).
+
 - 2026-11-03: `wazuh-certificates.yml` no longer mints a new CA when the
   controller lacks the bundle (fresh clone, git worktree) but the host already
   has certificates: the play fails with where to get the bundle; rotation needs

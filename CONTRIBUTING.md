@@ -58,7 +58,7 @@ tests/bin/bw-lab ssh black-host-01      # shell into a node
 and SKIP until their target is provisioned. Every line prints `PASS`, `FAIL` or
 `SKIP`, and the exit code is 0 only when nothing failed.
 
-Unit checks for scripts run without the lab. The Voice checks render
+Unit checks for scripts run without the lab. The Voice and `ossec.conf` checks render
 the role templates and need `jinja2` and `pyyaml`; the Python that runs Ansible
 already has both, a bare system `python3` may not:
 
@@ -68,6 +68,7 @@ PY="$(brew --prefix ansible)/libexec/bin/python"   # Homebrew Ansible; pipx: ~/.
 "$PY" tests/unit/alerts_tail_test.py
 "$PY" tests/unit/fang_refresh_test.py
 python3 tests/unit/rules_lint_test.py              # stdlib only: any python3, no lab
+"$PY" tests/unit/ossec_log_sources_test.py
 ```
 
 Brain is a Python package with its own pytest suite (Python 3.12+):

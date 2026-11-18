@@ -29,13 +29,15 @@
   </client_buffer>
 
   <!-- Log collection -->
-{% if ansible_facts['os_family'] == 'RedHat' %}
-  <!-- RHEL family: system logs live in journald (no rsyslog files) -->
+{% if ansible_facts['os_family'] == 'RedHat' or (ansible_facts['distribution'] == 'Debian' and ansible_facts['distribution_major_version'] is version('12', '>=')) %}
+  <!-- journald: the RHEL family and Debian 12 ship no rsyslog, so the system
+       logs only exist in the journal — a syslog localfile would read nothing -->
   <localfile>
     <location>journald</location>
     <log_format>journald</log_format>
   </localfile>
 {% else %}
+  <!-- rsyslog files: Ubuntu, Debian 11 and older -->
   <localfile>
     <log_format>syslog</log_format>
     <location>/var/log/auth.log</location>

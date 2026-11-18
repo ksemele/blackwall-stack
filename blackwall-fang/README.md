@@ -75,7 +75,7 @@ Health: the script logs its ERROR and WARNING lines to syslog (identifier
 `blackwall-fang-refresh`; stderr goes to the journal as well). Eye's rules turn them into Wazuh
 alerts: 100207 (level 7) for ERROR (stale cache -> empty blocklist, aborted refresh), 100209
 (level 5) for WARNING (applied from cache, fail-open). The Wazuh manager must read system logs
-(journald on the RedHat family, `/var/log/syslog` on Debian; the Eye roles configure both).
+(journald on the RHEL family and Debian 12+, `/var/log/syslog` on Ubuntu and Debian 11; the Eye roles configure both).
 
 Inspect: `nft list table inet blackwall_fang`, `nft list set inet blackwall_fang fang_hits`,
 `journalctl -u blackwall-fang-refresh`.
