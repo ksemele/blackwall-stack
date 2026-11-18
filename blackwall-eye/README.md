@@ -162,7 +162,9 @@ What is counted: packets dropped by the final policy path (input and forward
 drops are not counted. Counters live in the kernel sets, so they reset on every
 firewall reload (the exporter then reports `new = total`), and a source is not
 counted at all once the set reaches its size cap (silent, no error).
-End-to-end proof: `bw-check fw-events` (opt-in).
+End-to-end proof: `bw-check fw-events` (opt-in). Every rule and level in this table is
+also replayed through the manager's logtest from a fixture in `tests/rules/`:
+`bw-check rules` (opt-in, see [tests/README.md](../tests/README.md)).
 
 `burst=yes` is decided by the exporter from `nft_track_scan_threshold`, so rules
 need no numeric comparison. A burst is per export interval: packets from one

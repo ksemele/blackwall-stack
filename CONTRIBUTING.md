@@ -54,7 +54,7 @@ tests/bin/bw-lab ssh black-host-01      # shell into a node
 ```
 
 `tests/bin/bw-check --help` lists every check group. Some groups (`sentinel`,
-`sentinel-agents`, `fw-events`, `fang`, `vm`) are opt-in: they are not part of `all`
+`sentinel-agents`, `fw-events`, `rules`, `fang`, `vm`) are opt-in: they are not part of `all`
 and SKIP until their target is provisioned. Every line prints `PASS`, `FAIL` or
 `SKIP`, and the exit code is 0 only when nothing failed.
 
@@ -67,6 +67,7 @@ PY="$(brew --prefix ansible)/libexec/bin/python"   # Homebrew Ansible; pipx: ~/.
 "$PY" tests/unit/voice_format_test.py
 "$PY" tests/unit/alerts_tail_test.py
 "$PY" tests/unit/fang_refresh_test.py
+"$PY" tests/unit/rules_fixtures_test.py   # stdlib only, also runs on a bare python3
 ```
 
 Brain is a Python package with its own pytest suite (Python 3.12+):
