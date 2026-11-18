@@ -1,15 +1,31 @@
 ---
-# Empty secrets render an alerter that can never deliver (e.g. a lab run
-# without `direnv exec .`). Fail before touching the host.
-- name: Require Telegram credentials
+# An alerter without any channel can never deliver (e.g. a lab run without
+# `direnv exec .`). Fail before touching the host. Telegram stays required
+# while no webhook is configured; a webhook alone may stand on its own.
+- name: Require an alert channel
   ansible.builtin.assert:
     that:
-      - telegram_bot_token | default('') | length > 0
-      - telegram_chat_id | default('') | string | length > 0
+      - alerter_webhook_url | default('') | length > 0
+        or (telegram_bot_token | default('') | length > 0
+            and telegram_chat_id | default('') | string | length > 0)
     fail_msg: >-
-      telegram_bot_token / telegram_chat_id is empty. In the lab run through
-      `direnv exec .` (values come from .envrc), elsewhere use ansible-vault.
+      No alert channel configured: set telegram_bot_token / telegram_chat_id
+      (in the lab run through `direnv exec .`, elsewhere use ansible-vault)
+      or alerter_webhook_url.
     quiet: true
+
+# no_log: a failure must not echo the (secret) URL through the task result.
+- name: Validate the webhook settings
+  ansible.builtin.assert:
+    that:
+      - alerter_webhook_url | default('') | length == 0
+        or alerter_webhook_url | regex('^https?://') is not none
+      - alerter_webhook_format | default('generic') in ['generic', 'slack']
+    fail_msg: >-
+      alerter_webhook_url must start with http:// or https://, and
+      alerter_webhook_format must be 'generic' or 'slack'.
+    quiet: true
+  no_log: true
 
 # Fail-safe: an upper bound only makes sense while Brain covers the alerts above
 # it. If the cover unit is not enabled and active on this host, ignore the bound

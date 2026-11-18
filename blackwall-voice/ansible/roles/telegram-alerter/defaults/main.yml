@@ -41,3 +41,14 @@ alerter_install_dir: /opt/voice-alerter
 # Telegram credentials — MUST be overridden (use ansible-vault in production)
 telegram_bot_token: ""
 telegram_chat_id: ""
+
+# Generic webhook / Slack channel next to Telegram (empty URL = channel off).
+# The URL is a bearer secret (the key is in the path for Slack-style URLs):
+# in the lab it comes from $BW_WEBHOOK_URL, elsewhere from ansible-vault.
+# alerter.py never logs it (_RedactSecrets scrubs every log line).
+alerter_webhook_url: ""
+
+# Payload shape: "generic" — a JSON object (level, rule_id, description,
+# agent, timestamp, log excerpt); "slack" — {"text": ...} mrkdwn.
+# See blackwall-voice/README.md for the exact payload.
+alerter_webhook_format: "generic"

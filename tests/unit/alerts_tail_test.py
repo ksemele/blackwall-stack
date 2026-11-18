@@ -30,7 +30,7 @@ POLL = 0.05
 MODULES = {
     "voice": ("blackwall-voice/ansible/roles/telegram-alerter", "alerter.py.j2",
               {"severity_threshold": 10, "voice_max_level_effective": "",
-               "telegram_bot_token": "t", "telegram_chat_id": "1"}),
+               "telegram_bot_token": "123456:FAKE-BOT-TOKEN", "telegram_chat_id": "1"}),
 }
 
 

@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """
-blackwall-voice — Telegram Alerter
+blackwall-voice — Alert Alerter
 Tails /var/ossec/logs/alerts/alerts.json and forwards high-severity
-alerts to a Telegram chat.
+alerts to Telegram and, when configured, to a generic webhook / Slack
+channel.
 
 Config baked in at deploy time by Ansible.
 """
@@ -12,6 +13,7 @@ import logging
 import os
 import subprocess
 import time
+import traceback
 import http.client
 import urllib.request
 import urllib.error
@@ -35,6 +37,11 @@ SEND_ATTEMPTS  = 3
 BOT_TOKEN      = "{{ telegram_bot_token }}"
 CHAT_ID        = "{{ telegram_chat_id }}"
 TELEGRAM_URL   = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
+# Generic webhook / Slack channel next to Telegram (empty URL = channel off).
+WEBHOOK_URL    = "{{ alerter_webhook_url }}"
+WEBHOOK_FORMAT = "{{ alerter_webhook_format }}"
+TELEGRAM_ON    = bool(BOT_TOKEN and CHAT_ID)
+WEBHOOK_ON     = bool(WEBHOOK_URL)
 
 # --- Logging ---
 # Log to stdout; systemd unit captures stdout → LOG_FILE via StandardOutput=append:
@@ -43,7 +50,32 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s %(levelname)s %(message)s",
 )
+
+
+class _RedactSecrets(logging.Filter):
+    """Keep bearer secrets out of every log line.
+
+    A Slack/Mattermost-style webhook URL is itself the credential (the key
+    lives in the path), and the Telegram URL carries the bot token. urllib
+    errors (InvalidURL, "unknown url type", ...) and some webhook providers'
+    error bodies echo the full URL, so every record — formatted message and
+    traceback — passes through this filter, the single choke point all
+    logging goes through.
+    """
+
+    def filter(self, record):
+        msg = record.getMessage()
+        if record.exc_info:
+            msg += "\n" + "".join(traceback.format_exception(*record.exc_info))
+        for secret in (WEBHOOK_URL, BOT_TOKEN):
+            if secret:
+                msg = msg.replace(secret, "<redacted>")
+        record.msg, record.args, record.exc_info, record.exc_text = msg, None, None, None
+        return True
+
+
 log = logging.getLogger("voice-alerter")
+log.addFilter(_RedactSecrets())
 
 
 def load_sent_ids() -> set:
@@ -158,6 +190,52 @@ def format_message(alert: dict) -> str:
     )
 
 
+WEBHOOK_LOG_CHARS = 300
+
+
+def format_webhook_generic(alert: dict) -> dict:
+    """`generic` webhook payload: the alert's fields as a JSON object.
+
+    Pure function (documented in blackwall-voice/README.md, unit-tested in
+    tests/unit/voice_webhook_test.py): level, rule ID, description, agent,
+    timestamp and a short log excerpt.
+    """
+    rule = alert.get("rule", {})
+    agent = alert.get("agent", {})
+    return {
+        "level": rule.get("level", 0),
+        "rule_id": rule.get("id", ""),
+        "description": rule.get("description", "no description"),
+        "agent": agent.get("name", alert.get("manager", {}).get("name", "unknown")),
+        "timestamp": alert.get("timestamp", ""),
+        "log": alert.get("full_log", "")[:WEBHOOK_LOG_CHARS],
+    }
+
+
+def format_webhook_slack(alert: dict) -> dict:
+    """`slack` payload: {"text": ...}, formatted with Slack mrkdwn.
+
+    No Telegram-style escaping: Slack needs no backslashes here, hosts and
+    the log excerpt go into backticks instead.
+    """
+    g = format_webhook_generic(alert)
+    ts = g["timestamp"][:19].replace("T", " ")
+    log_excerpt = g["log"].replace("```", "` ` `")
+    return {"text": (
+        f"*BLACKWALL ALERT* level {g['level']}\n"
+        f"Host: `{g['agent']}`\n"
+        f"Rule: {g['description']}\n"
+        f"Time: {ts}\n"
+        f"```\n{log_excerpt}\n```"
+    )}
+
+
+def build_webhook_payload(alert: dict) -> dict:
+    if WEBHOOK_FORMAT == "slack":
+        return format_webhook_slack(alert)
+    return format_webhook_generic(alert)
+
+
 def send_telegram(text: str) -> bool:
     payload = json.dumps({
         "chat_id": CHAT_ID,
@@ -181,6 +259,68 @@ def send_telegram(text: str) -> bool:
         # URLError, timeouts, resets, malformed replies: all retryable.
         log.error("Telegram send failed: %s", exc)
         return False
+
+
+def send_webhook(payload: dict) -> bool:
+    """POST the JSON payload to WEBHOOK_URL; any 2xx counts as accepted.
+
+    WEBHOOK_URL is a bearer secret — _RedactSecrets keeps it out of the log
+    even when urllib or the provider echoes it back in an error.
+    """
+    req = urllib.request.Request(
+        WEBHOOK_URL,
+        data=json.dumps(payload).encode(),
+        headers={"Content-Type": "application/json"},
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            return 200 <= resp.status < 300
+    except urllib.error.HTTPError as exc:
+        # The provider explains the refusal in the body (bad payload, ...).
+        body = exc.read().decode(errors="replace")[:300]
+        log.error("Webhook send failed: HTTP %s — %s", exc.code, body)
+        return False
+    except (urllib.error.URLError, http.client.HTTPException, OSError, ValueError) as exc:
+        # URLError, timeouts, resets, malformed replies, malformed URL: retryable.
+        log.error("Webhook send failed: %s", exc)
+        return False
+
+
+def deliver(alert: dict, alert_id: str) -> bool:
+    """Send one alert to every configured channel, retrying failures inline.
+
+    Per-channel rule is unchanged from the single-Telegram days: up to
+    SEND_ATTEMPTS attempts, POLL_INTERVAL apart (a channel that already
+    accepted is not sent to again). Returns True only when every configured
+    channel accepted — that is the moment the alert counts as "sent" and the
+    dedup ID is recorded. A channel still failing after SEND_ATTEMPTS is
+    logged as dropped: the tail has already moved past the line, so only
+    that channel loses this alert.
+    """
+    channels = {}
+    if TELEGRAM_ON:
+        channels["telegram"] = (format_message(alert), send_telegram)
+    if WEBHOOK_ON:
+        channels["webhook"] = (build_webhook_payload(alert), send_webhook)
+    if not channels:
+        log.warning("No alert channel configured "
+                    "(telegram_bot_token/telegram_chat_id and alerter_webhook_url are empty)")
+        return False
+
+    pending = channels
+    for attempt in range(1, SEND_ATTEMPTS + 1):
+        failed = [name for name in pending if not pending[name][1](pending[name][0])]
+        if not failed:
+            return True
+        pending = {name: channels[name] for name in failed}
+        if attempt < SEND_ATTEMPTS:
+            log.warning("Failed to send alert %s on %s (attempt %d/%d) — retrying in %ds",
+                        alert_id, ",".join(failed), attempt, SEND_ATTEMPTS, POLL_INTERVAL)
+            time.sleep(POLL_INTERVAL)
+    for name in pending:
+        log.error("Dropped alert %s on %s after %d failed attempts",
+                  alert_id, name, SEND_ATTEMPTS)
+    return False
 
 
 def handle_line(line: str, sent_ids: set) -> None:
@@ -211,20 +351,11 @@ def handle_line(line: str, sent_ids: set) -> None:
     if alert_id in sent_ids:
         return
 
-    msg = format_message(alert)
-    # The tail has already moved past this line, so retry here or never.
-    for attempt in range(1, SEND_ATTEMPTS + 1):
-        if send_telegram(msg):
-            sent_ids.add(alert_id)
-            save_sent_id(alert_id)
-            log.info("Sent alert %s (level %d)", alert_id, level)
-            break
-        if attempt < SEND_ATTEMPTS:
-            log.warning("Failed to send alert %s (attempt %d/%d) — retrying in %ds",
-                        alert_id, attempt, SEND_ATTEMPTS, POLL_INTERVAL)
-            time.sleep(POLL_INTERVAL)
-    else:
-        log.error("Dropped alert %s after %d failed attempts", alert_id, SEND_ATTEMPTS)
+    # The tail has already moved past this line, so retry within deliver or never.
+    if deliver(alert, alert_id):
+        sent_ids.add(alert_id)
+        save_sent_id(alert_id)
+        log.info("Sent alert %s (level %d)", alert_id, level)
 
 
 
