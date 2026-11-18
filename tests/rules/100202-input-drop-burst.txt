@@ -1,0 +1,9 @@
+# Same decoder line as 100200-input-drop-below-threshold.txt, but burst=yes: the
+# source crossed nft_track_scan_threshold between two exporter runs, so the child
+# rule 100202 wins over its level-0 parent (possible scan).
+rule: 100202
+level: 8
+log_format: syslog
+location: blackwall-fw
+---
+ossec: output: 'blackwall-fw': blackwall-fw: kind=input_drop src=172.28.0.15 new=64 total=140 burst=yes

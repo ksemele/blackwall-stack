@@ -1,0 +1,10 @@
+# Fang in observe: the drop-in set blackwall_fang/would_drop counted a source that
+# is on a blocklist, so it reached the host and would be dropped in enforce.
+# Switching Fang to enforce turns this same line into kind=blocklist_dropped
+# (100208).
+rule: 100206
+level: 5
+log_format: syslog
+location: blackwall-fw
+---
+ossec: output: 'blackwall-fw': blackwall-fw: kind=blocklist_would_drop src=198.51.100.66 new=1 total=1 burst=no

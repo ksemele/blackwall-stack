@@ -1,0 +1,8 @@
+# Fang layer 2 (observe): scan_flagged — new connections to closed ports above
+# fang_scan_rate.
+rule: 100211
+level: 6
+log_format: syslog
+location: blackwall-fw
+---
+ossec: output: 'blackwall-fw': blackwall-fw: kind=scan_attempts src=198.51.100.23 new=60 total=60 burst=no

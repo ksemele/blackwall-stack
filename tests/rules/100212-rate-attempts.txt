@@ -1,0 +1,9 @@
+# Fang layer 2 (observe): rate_flagged — overall new-connection rate above
+# fang_rate. Lower level than the SSH/scan detectors: a high rate alone is weakly
+# suspicious.
+rule: 100212
+level: 5
+log_format: syslog
+location: blackwall-fw
+---
+ossec: output: 'blackwall-fw': blackwall-fw: kind=rate_attempts src=198.51.100.23 new=90 total=90 burst=no
