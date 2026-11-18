@@ -101,6 +101,47 @@ def test_fallback_layout(alert):
     )
 
 
+def test_fallback_cuts_full_log_to_300_chars(alert):
+    alert["full_log"] = "".join(str(i % 10) for i in range(600))
+    msg = format_fallback_message(alert, "d", "boom", "", {})
+    log = msg[msg.index("<pre>") + 5:msg.index("</pre>")]
+    assert len(log) == 300 and log == alert["full_log"][:299] + "…"
+
+
+def test_fallback_log_cannot_close_its_code_block(alert):
+    # HTML parse mode: ` and ``` are plain text, and the escaped </pre> in the
+    # log cannot end the block — nothing the log holds can add markup.
+    alert["full_log"] = "``` </pre> <script>alert(1)</script> a & b"
+    msg = format_fallback_message(alert, "d", "boom", "", {})
+    assert msg.count("<pre>") == msg.count("</pre>") == 1
+    assert "```" in msg and "&lt;/pre&gt;" in msg and "<script>" not in msg
+
+
+def test_markdown_text_keeps_the_message_markers(alert):
+    # The 2026-10-14 bug: a category like privilege_escalation broke Telegram's
+    # Markdown parser. In HTML mode these characters are text, and Brain's own
+    # tags stay intact.
+    alert["agent"]["name"] = "black_host_01"
+    alert["rule"]["description"] = "Sudoers *changed* [privilege_escalation] `90-app`"
+    msg = format_verdict_message(alert, "d", verdict(summary="who: `ops` *why*"), "", {})
+    assert "<code>black_host_01</code>" in msg
+    assert "Sudoers *changed* [privilege_escalation] `90-app`" in msg
+    assert "<b>HIGH</b>" in msg and msg.count("<pre>") == msg.count("</pre>") == 1
+
+
+def test_missing_rule_and_agent_format_with_defaults():
+    bare = {"timestamp": "2026-10-28T14:02:03.123+0000", "full_log": "raw log"}
+    msg = format_verdict_message(bare, "d", verdict(), "", {})
+    assert "<code>unknown</code>" in msg
+    assert "Rule ? (level ?): no description · 2026-10-28 14:02 UTC" in msg
+    fb = format_fallback_message(bare, "d", "timeout", "", {})
+    assert "<code>unknown</code>" in fb
+    assert "Rule ? (level ?): no description · 2026-10-28 14:02 UTC" in fb
+    # No agent but a manager: the manager names the host.
+    assert "<code>black-master-00</code>" in format_fallback_message(
+        {"manager": {"name": "black-master-00"}}, "d", "timeout", "", {})
+
+
 def test_alert_link_empty_without_base():
     assert alert_link("", "abc", "2026-10-28T14:02:03.123+0000") == ""
 
