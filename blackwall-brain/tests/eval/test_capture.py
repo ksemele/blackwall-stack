@@ -119,6 +119,25 @@ def test_main_exit_1_and_no_snapshot_on_failure(tmp_path, monkeypatch):
     assert rc == 1 and not out.exists()
 
 
+def test_main_exit_1_when_docker_binary_missing(tmp_path, monkeypatch):
+    # What subprocess.run raises when `docker` is not on PATH; main must turn it
+    # into exit 1 with a message, not a traceback.
+    (tmp_path / "s").mkdir()
+    (tmp_path / "s" / "a.yml").write_text(
+        "name: a\ndescription: d\nagent: black-host-01\nwait_s: 0\n"
+        "steps: [{host: black-host-01, run: 'true'}]\n"
+        "expected: [{rule_id: '554', verdict: true_positive, severity: high,"
+        " category: persistence, why: w}]\n")
+    def no_docker(host, user, command):
+        raise FileNotFoundError(2, "No such file or directory: 'docker'")
+    monkeypatch.setattr(capture, "docker_exec", no_docker)
+    monkeypatch.setattr(capture, "IndexerClient", lambda *a, **k: Index([]))
+    monkeypatch.setattr(capture.time, "sleep", lambda s: None)
+    out = tmp_path / "out"
+    rc = capture.main(["--scenarios", str(tmp_path / "s"), "--out", str(out), "--poll", "0"])
+    assert rc == 1 and not out.exists()
+
+
 def test_cleanup_runs_after_alerts_are_collected_then_settles():
     events = []
 

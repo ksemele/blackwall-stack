@@ -2,14 +2,20 @@
 module: blackwall-brain
 status: in_progress
 stage: 3
-last_updated: 2026-10-29
-last_task: "Brain v2 step 2: eval set (26 scenarios, 30 alerts) and harness; first results"
+last_updated: 2026-11-18
+last_task: "Brain v2 step 2: eval set (26 scenarios, 30 alerts) and harness; first results. Follow-up: hermetic capture tests (no docker binary needed)"
 next_task: "Brain v2 step 3: mode-1 context sources, measured with the eval set (spec 2026-10-28 §9.1)"
 blockers: []
 ---
 
 ## Done
 
+- 2026-11-18: hermetic eval capture tests. `capture_scenario` bound `docker_exec`
+  as a default argument, so monkeypatching it in `test_main_exit_1_and_no_snapshot_on_failure`
+  did not reach the `main` path and the test ran real `docker` (it only passed on
+  machines where the binary exists). The default is now late-bound, and `main`
+  turns a missing `docker` binary into exit 1 with a message
+  (new `test_main_exit_1_when_docker_binary_missing`).
 - 2026-10-29: Brain v2 step 2, eval set and harness (`eval/`, PR #32). 26 lab
   scenarios (attack + benign twin), 30 labelled alerts, 47% benign; snapshots
   committed; `python -m brain.eval.capture` / `python -m brain.eval.run`.
