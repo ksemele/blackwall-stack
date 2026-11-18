@@ -1,0 +1,19 @@
+# Rule 100100 is stateful: check_diff compares the snapshot with the output the
+# manager stored the last time it evaluated the rule for this host. A fixture for
+# it is only deterministic when that stored output is known, so this one carries
+# `seed: yes`: bw-check sends the log once first (result ignored), which leaves
+# exactly this snapshot stored, and only then asserts the expectation below.
+#
+# Snapshot identical to the stored one -> check_diff refuses 100100 and matching
+# stays on the stock parent rule 530 (level 0, group process_monitor): no alert.
+# This is the negative case of 100100.
+rule: 530
+level: 0
+log_format: syslog
+location: blackwall-sessions
+seed: yes
+---
+ossec: output: 'blackwall-sessions':
+root     pts/0        172.28.0.1       2026-11-18T09:10:01+00:00   still logged in
+reboot   system boot  7.0.0-43-generic 2026-11-18T08:00:00+00:00   still running
+wtmp begins 2026-11-18T08:00:00+00:00

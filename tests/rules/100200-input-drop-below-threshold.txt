@@ -1,0 +1,11 @@
+# Negative case of the firewall group: 3 dropped packets from one source in one
+# export interval is below nft_track_scan_threshold (20), so the exporter reports
+# burst=no. Matching stops at the base rule 100200 (level 0): level 0 produces no
+# alert, so there is no 100202 either — the same thing bw-check fw-events proves
+# with real traffic.
+rule: 100200
+level: 0
+log_format: syslog
+location: blackwall-fw
+---
+ossec: output: 'blackwall-fw': blackwall-fw: kind=input_drop src=172.28.0.15 new=3 total=9 burst=no

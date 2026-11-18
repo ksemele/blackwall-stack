@@ -1,0 +1,9 @@
+# Fang layer 2 (observe): the ssh_flagged detector counted a source whose SSH
+# connection attempts exceed fang_ssh_rate. The exporter reports the counter as a
+# drop-in kind, so this is an ordinary blackwall-fw line.
+rule: 100210
+level: 6
+log_format: syslog
+location: blackwall-fw
+---
+ossec: output: 'blackwall-fw': blackwall-fw: kind=ssh_attempts src=198.51.100.23 new=42 total=42 burst=no
