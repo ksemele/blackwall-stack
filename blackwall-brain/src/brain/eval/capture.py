@@ -49,9 +49,13 @@ def _iso(dt: datetime) -> str:
     return dt.strftime("%Y-%m-%dT%H:%M:%S.") + f"{dt.microsecond // 1000:03d}Z"
 
 
-def capture_scenario(s: Scenario, indexer, *, run=docker_exec,
+def capture_scenario(s: Scenario, indexer, *, run=None,
                      now=lambda: datetime.now(timezone.utc), clock=time.monotonic,
                      sleep=time.sleep, poll_s: float = 5, settle_s: float = 20) -> ScenarioResult:
+    # Late-bound: a default of `docker_exec` would freeze the function object,
+    # so monkeypatching capture.docker_exec would not reach this call.
+    if run is None:
+        run = docker_exec
     try:
         for step in s.setup:
             res = run(step.host, step.user, step.run)
@@ -130,6 +134,11 @@ def main(argv: list[str] | None = None) -> int:
                                  sleep=time.sleep)
         except IndexerError as exc:
             r = ScenarioResult(s.name, False, error=f"indexer: {exc}")
+        except FileNotFoundError as exc:
+            # No docker binary on PATH: every remaining scenario would fail the
+            # same way, so stop with a clear message instead of a traceback.
+            print(f"FAILED  {s.name}: docker not available ({exc})")
+            return 1
         if r.ok:
             try:
                 write_snapshot(args.out, s, r.cases)
