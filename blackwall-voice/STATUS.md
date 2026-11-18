@@ -2,13 +2,24 @@
 module: blackwall-voice
 status: in_progress
 stage: 2
-last_updated: 2026-10-28
-last_task: "No alerts lost around alerts.json rotation (#23): drain the old file, read the new one from its start"
+last_updated: 2026-11-18
+last_task: "Unit check for the alert filters (#19): threshold, ignored rules, upper bound, dedup, retry"
 next_task: "Dashboard (OpenSearch) is deferred; next Voice work is channel routing (Slack/webhook)"
 blockers: []
 ---
 
 ## Done
+
+### 2026-11-18 — unit check for the alert filters (#19)
+
+- `tests/unit/voice_filter_test.py` renders the alerter template with the role
+  defaults (plus `voice_max_level` 9) and calls `handle_line()` with synthetic
+  alerts: non-JSON lines and ignored rule IDs dropped, `severity_threshold` and
+  `voice_max_level` edges, dedup by alert ID (same run and after a restart), a
+  failed send retried 3 times then dropped. `send_telegram`, `save_sent_id`,
+  `current_max_level` and `time.sleep` are stubbed — no Telegram, no host.
+- Before this, only the formatter had a unit test; the filters were verified in
+  the lab only.
 
 ### 2026-10-28 — no alerts lost around rotation (#23)
 
