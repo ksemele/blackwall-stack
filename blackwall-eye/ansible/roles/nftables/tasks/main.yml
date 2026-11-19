@@ -91,6 +91,20 @@
     enabled: true
     state: started
 
+# RHEL's firewalld.service has Conflicts=nftables.service: starting nftables
+# above has already stopped it. Mask it, otherwise with both enabled the boot
+# keeps one of the two, and a later `systemctl start firewalld` stops nftables.
+- name: Collect service facts
+  ansible.builtin.service_facts:
+
+- name: Disable and mask firewalld
+  ansible.builtin.systemd:
+    name: firewalld
+    state: stopped
+    enabled: false
+    masked: true
+  when: "'firewalld.service' in ansible_facts.services"
+
 - name: Create blackwall config and exporter state directories
   ansible.builtin.file:
     path: "{{ item.path }}"
