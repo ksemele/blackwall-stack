@@ -148,7 +148,8 @@ services:
   # Plain containers, not systemd nodes: they need no privileged mode, host
   # cgroup or tmpfs, so they deliberately do not inherit the *black-node anchor.
   # Configs are mounted read-only from the repo — no manual steps inside.
-  # Ports:
+  # Ports (host side; the container side is fixed. Override the host side with
+  # BW_LAB_PROM_PORT / BW_LAB_GRAFANA_PORT when 9090 / 3000 are taken there):
   #   black-metrics-00: 9090 (Prometheus UI + API)
   #   black-grafana-00: 3000 (Grafana, admin / blackwall)
 
@@ -164,7 +165,7 @@ services:
     volumes:
       - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
     ports:
-      - "9090:9090"
+      - "${BW_LAB_PROM_PORT:-9090}:9090"
     networks:
       blackwall-test:
         ipv4_address: 172.28.0.12
@@ -186,7 +187,7 @@ services:
     depends_on:
       - black-metrics-00
     ports:
-      - "3000:3000"
+      - "${BW_LAB_GRAFANA_PORT:-3000}:3000"
     networks:
       blackwall-test:
         ipv4_address: 172.28.0.13

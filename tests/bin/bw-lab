@@ -41,6 +41,9 @@ Commands:
 Environment:
   BW_PROFILE        compose profile (default: ubuntu2204)
   BW_SSH_PASSWORD   root password in the containers (default: blackwall)
+  BW_LAB_PROM_PORT  host port of Prometheus (default: 9090)
+  BW_LAB_GRAFANA_PORT host port of Grafana (default: 3000)
+                    both also drive bw-check's probes and URLs
 
 Examples:
   bw-lab up                     # bring everything up and provision it
