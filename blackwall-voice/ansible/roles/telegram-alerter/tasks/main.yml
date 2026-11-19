@@ -15,17 +15,26 @@
     quiet: true
 
 # no_log: a failure must not echo the (secret) URL through the task result.
-- name: Validate the webhook settings
+# `match` is the Ansible test for a start-anchored regex match (re.match).
+# Do NOT write it as a filter (`| regex(...)`) - there is no `regex` filter
+# and the whole task then dies with "No filter named 'regex'" on every deploy.
+- name: Validate the webhook URL
   ansible.builtin.assert:
     that:
       - alerter_webhook_url | default('') | length == 0
-        or alerter_webhook_url | regex('^https?://') is not none
-      - alerter_webhook_format | default('generic') in ['generic', 'slack']
+        or alerter_webhook_url is match('^https?://')
     fail_msg: >-
-      alerter_webhook_url must start with http:// or https://, and
-      alerter_webhook_format must be 'generic' or 'slack'.
+      alerter_webhook_url must start with http:// or https://.
     quiet: true
   no_log: true
+
+- name: Validate the webhook format
+  ansible.builtin.assert:
+    that:
+      - alerter_webhook_format | default('generic') in ['generic', 'slack']
+    fail_msg: >-
+      alerter_webhook_format must be 'generic' or 'slack'.
+    quiet: true
 
 # Fail-safe: an upper bound only makes sense while Brain covers the alerts above
 # it. If the cover unit is not enabled and active on this host, ignore the bound

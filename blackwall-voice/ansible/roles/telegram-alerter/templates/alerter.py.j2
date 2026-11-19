@@ -61,6 +61,11 @@ class _RedactSecrets(logging.Filter):
     error bodies echo the full URL, so every record — formatted message and
     traceback — passes through this filter, the single choke point all
     logging goes through.
+
+    Caveats of exact-match replacement: a very short secret would also rewrite
+    harmless log text (real bot tokens / hook URLs are long); a URL that a
+    library re-encodes (percent-escaped or non-ASCII) no longer matches the
+    configured string byte-for-byte and is not scrubbed.
     """
 
     def filter(self, record):
@@ -274,7 +279,19 @@ def send_webhook(payload: dict) -> bool:
     )
     try:
         with urllib.request.urlopen(req, timeout=10) as resp:
-            return 200 <= resp.status < 300
+            status = getattr(resp, "status", None) or resp.getcode()
+            if 200 <= status < 300:
+                # Voice's own acceptance rule (see README "Webhook / Slack
+                # channel"): a receiver signals acceptance with 2xx. Chat
+                # providers differ in how they report a rejected payload and
+                # may answer 2xx with error text — the offline reference docs
+                # define no response contract — so log the truncated body on
+                # success too; a refusal then leaves a trace in alerter.log.
+                body = resp.read().decode(errors="replace")[:300]
+                log.info("Webhook accepted (HTTP %d): %s", status, body)
+                return True
+            log.error("Webhook send failed: HTTP %s (not 2xx)", status)
+            return False
     except urllib.error.HTTPError as exc:
         # The provider explains the refusal in the body (bad payload, ...).
         body = exc.read().decode(errors="replace")[:300]
@@ -284,6 +301,9 @@ def send_webhook(payload: dict) -> bool:
         # URLError, timeouts, resets, malformed replies, malformed URL: retryable.
         log.error("Webhook send failed: %s", exc)
         return False
+
+
+_no_channel_warned = False
 
 
 def deliver(alert: dict, alert_id: str) -> bool:
@@ -297,14 +317,19 @@ def deliver(alert: dict, alert_id: str) -> bool:
     logged as dropped: the tail has already moved past the line, so only
     that channel loses this alert.
     """
+    global _no_channel_warned
     channels = {}
     if TELEGRAM_ON:
         channels["telegram"] = (format_message(alert), send_telegram)
     if WEBHOOK_ON:
         channels["webhook"] = (build_webhook_payload(alert), send_webhook)
     if not channels:
-        log.warning("No alert channel configured "
-                    "(telegram_bot_token/telegram_chat_id and alerter_webhook_url are empty)")
+        # Unreachable on a normal deploy (the role asserts a channel); keep
+        # the warning for a hand-deployed script, but say it once per run.
+        if not _no_channel_warned:
+            _no_channel_warned = True
+            log.warning("No alert channel configured "
+                        "(telegram_bot_token/telegram_chat_id and alerter_webhook_url are empty)")
         return False
 
     pending = channels
