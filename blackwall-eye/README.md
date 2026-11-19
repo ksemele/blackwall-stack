@@ -157,6 +157,11 @@ decoder, fields `fw_kind`, `srcip`, `fw_new`, `fw_total`, `fw_burst`,
 | 100211 | 6 | `kind=scan_attempts` (Fang layer 2): a source made new connections to closed ports above the rate |
 | 100212 | 5 | `kind=rate_attempts` (Fang layer 2): a source exceeded the overall new-connection rate |
 
+`tests/unit/rules_lint_test.py` (plain `python3`, no lab) checks this table and the
+100100 prose against `blackwall_rules.xml.j2`: a rule with no row here, a level
+changed in only one of the two files, or an `<if_sid>` pointing at a rule that does
+not exist all fail the check.
+
 What is counted: packets dropped by the final policy path (input and forward
 `policy drop`, and cf-wall's origin-direct drop). Invalid-state and anti-spoof
 drops are not counted. Counters live in the kernel sets, so they reset on every
