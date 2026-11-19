@@ -9,16 +9,24 @@ placeholder URL) and imports it (no network, no host). Checks:
   chosen by alerter_webhook_format;
 - the logging filter keeps the webhook URL and the bot token out of every
   log line, including exception text (a webhook URL is a bearer secret);
-- no channel configured -> deliver() reports failure (ID not recorded).
+- no channel configured -> deliver() reports failure (ID not recorded);
+- the acceptance rule (README "Webhook / Slack channel"): against a local
+  stdlib http.server receiver, 404 -> retried/dropped and the ID is NOT
+  recorded, 2xx -> accepted (response body logged truncated). The fixture
+  implements Voice's own receiver contract; no external provider is involved
+  and no provider response semantics are assumed.
 
 Run with the ansible venv python (needs jinja2, yaml):
     python tests/unit/voice_webhook_test.py
 """
+import http.server
 import importlib.util
 import io
+import json
 import logging
 import os
 import tempfile
+import threading
 
 import jinja2
 import yaml
@@ -39,7 +47,7 @@ ALERT = {
 }
 
 
-def load_alerter(tmp, webhook_format="generic"):
+def load_alerter(tmp, webhook_format="generic", **over):
     d = yaml.safe_load(open(f"{ROLE}/defaults/main.yml"))
     ctx = {}
     for k, v in d.items():
@@ -48,6 +56,7 @@ def load_alerter(tmp, webhook_format="generic"):
                telegram_bot_token=TOKEN, telegram_chat_id="1",
                alerter_webhook_url=URL, alerter_webhook_format=webhook_format,
                alerter_state_file=f"{tmp}/state", alerter_log_file=f"{tmp}/log")
+    ctx.update(over)
     src = jinja2.Template(open(f"{ROLE}/templates/alerter.py.j2").read()).render(**ctx)
     path = f"{tmp}/alerter_{webhook_format}.py"
     open(path, "w").write(src)
@@ -105,9 +114,13 @@ def main():
     # the runtime guard must keep deliver() honest anyway.
     m0.TELEGRAM_ON = False
     m0.WEBHOOK_ON = False
+    m0._no_channel_warned = False
     sent = set()
     m0.handle_line('{"id":"99","rule":{"id":"5710","level":10}}', sent)
     assert "99" not in sent and m0.load_sent_ids() == set()
+    m0.handle_line('{"id":"99b","rule":{"id":"5710","level":10}}', sent)
+    # the no-channel warning is once per run, not once per alert line
+    assert m0._no_channel_warned is True
 
     # --- two channels: ID recorded only when both accept ---
     ok = {"telegram": False, "webhook": False}
@@ -126,6 +139,51 @@ def main():
     m0.handle_line('{"id":"102","rule":{"id":"5710","level":10}}', sent)
     assert "102" in sent  # every configured channel accepted -> recorded
     assert "102" in open(f"{tmp}/state").read()
+
+    # --- acceptance rule against a real local receiver (stdlib http.server) ---
+    # The fixture implements the receiver contract documented in
+    # blackwall-voice/README.md: 2xx accepts, 4xx refuses. No external
+    # provider involved; no provider response semantics assumed.
+    class Receiver(http.server.BaseHTTPRequestHandler):
+        status, body, seen = 200, b"", []
+
+        def do_POST(self):
+            n = int(self.headers.get("Content-Length", 0))
+            Receiver.seen.append(self.rfile.read(n))
+            self.send_response(Receiver.status)
+            self.send_header("Content-Type", "text/plain")
+            self.end_headers()
+            self.wfile.write(Receiver.body)
+
+        def log_message(self, *args):
+            pass
+
+    httpd = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Receiver)
+    threading.Thread(target=httpd.serve_forever, daemon=True).start()
+    port = httpd.server_address[1]
+    m2 = load_alerter(tmp, alerter_webhook_url=f"http://127.0.0.1:{port}",
+                      telegram_bot_token="", telegram_chat_id="", poll_interval=0)
+    m2.SEND_ATTEMPTS = 1
+    buf2 = io.StringIO()
+    m2.log.addHandler(logging.StreamHandler(buf2))
+    sent2 = set()
+
+    Receiver.status, Receiver.body = 404, b"no such endpoint"
+    m2.handle_line('{"id":"777","rule":{"id":"5710","level":10}}', sent2)
+    out2 = buf2.getvalue()
+    assert "777" not in sent2 and "777" not in m2.load_sent_ids()  # refused -> not "sent"
+    assert "Webhook send failed: HTTP 404" in out2 and "no such endpoint" in out2, out2
+    assert "Dropped alert 777 on webhook" in out2, out2
+
+    # 2xx still counts as accepted even with error-looking body — the README
+    # limitation; the truncated body must appear in the log as the trace.
+    Receiver.status, Receiver.body = 200, b"invalid_payload"
+    m2.handle_line('{"id":"778","rule":{"id":"5710","level":10}}', sent2)
+    out3 = buf2.getvalue()[len(out2):]
+    assert "778" in sent2 and "778" in m2.load_sent_ids()
+    assert "Webhook accepted (HTTP 200): invalid_payload" in out3, out3
+    assert json.loads(Receiver.seen[0])["level"] == 10  # documented generic payload arrived
+    httpd.shutdown()
 
     print("WEBHOOK OK")
 
