@@ -12,10 +12,17 @@ BW_INVENTORY="$BW_ROOT/tests/inventory/hosts.yml"
 # Root password inside the test containers. localhost only — see tests/README.md.
 BW_SSH_PASSWORD="${BW_SSH_PASSWORD:-blackwall}"
 
+# Host ports of the monitoring containers. Exported so that bw_compose passes
+# the same values to docker compose, which interpolates them into the published
+# ports; unset means the compose defaults (9090 / 3000). Set them when those
+# ports are taken on the host — e.g. BW_LAB_PROM_PORT=19090 BW_LAB_GRAFANA_PORT=13000.
+export BW_LAB_PROM_PORT="${BW_LAB_PROM_PORT:-9090}"
+export BW_LAB_GRAFANA_PORT="${BW_LAB_GRAFANA_PORT:-3000}"
+
 # Web endpoints of the test environment.
-BW_GRAFANA_URL="http://localhost:3000"
+BW_GRAFANA_URL="http://localhost:${BW_LAB_GRAFANA_PORT}"
 BW_GRAFANA_AUTH="admin:blackwall"
-BW_PROM_URL="http://localhost:9090"
+BW_PROM_URL="http://localhost:${BW_LAB_PROM_PORT}"
 BW_DASHBOARD_URL="https://localhost:5601"
 BW_INDEXER_URL="https://127.0.0.1:9200"
 BW_INDEXER_AUTH="admin:Blackwall1!"

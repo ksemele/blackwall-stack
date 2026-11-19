@@ -95,7 +95,20 @@ Fixtures go last because they stop `black-dead-98`; while it is stopped,
 `provision eye|metrics|nftables` skip it automatically.
 
 Environment variables: `BW_PROFILE` (compose profile, default `ubuntu2204`),
-`BW_SSH_PASSWORD` (root password in the containers, default `blackwall`).
+`BW_SSH_PASSWORD` (root password in the containers, default `blackwall`),
+`BW_LAB_PROM_PORT` (host port of `black-metrics-00`, default `9090`),
+`BW_LAB_GRAFANA_PORT` (host port of `black-grafana-00`, default `3000`).
+
+`BW_LAB_PROM_PORT` / `BW_LAB_GRAFANA_PORT` matter only when 9090 or 3000 are
+already taken on the host — a host-side Prometheus, or another web service.
+`bw-lab`, `bw-check` and the compose published ports read the same two
+variables, so they cannot drift apart. Only the host side moves: on the lab
+network the containers still listen on 9090 and 3000, and Grafana's datasource
+keeps pointing at `black-metrics-00:9090`.
+
+```bash
+BW_LAB_PROM_PORT=19090 BW_LAB_GRAFANA_PORT=13000 tests/bin/bw-lab up   # prometheus on :19090, grafana on :13000
+```
 
 Examples:
 
@@ -171,6 +184,10 @@ fixture stops it deliberately.
 | Wazuh indexer (for blackwall :alerts) | `https://127.0.0.1:9200` | `admin` / `Blackwall1!` |
 | SSH to any node | `tests/bin/bw-lab ssh <host>` | `root` / `blackwall` |
 
+Grafana and Prometheus use the default ports here; with
+`BW_LAB_GRAFANA_PORT` / `BW_LAB_PROM_PORT` set, the same URLs carry those ports
+(see [`bw-lab` environment variables](#2-bw-lab--environment-lifecycle)).
+
 Wazuh dashboard and indexer use a self-signed certificate; browsers show
 "Not Secure". Acceptable on `localhost` only.
 
@@ -213,8 +230,8 @@ Unset variables render as empty strings — playbooks still run, delivery just f
 | `black-dead-98` | agent fixture — disconnected | `2202→22` | — | `172.28.0.98` |
 | `black-rocky-02` | Rocky Linux 9 — agent + firewall roles | `2203→22` | — | `172.28.0.15` |
 | `black-sentinel-03` | Rocky Linux 9 — server node + podman nginx fixture | `2204→22` | — | `172.28.0.16` |
-| `black-metrics-00` | Prometheus | — | `9090→9090` | `172.28.0.12` |
-| `black-grafana-00` | Grafana | — | `3000→3000` | `172.28.0.13` |
+| `black-metrics-00` | Prometheus | — | `${BW_LAB_PROM_PORT:-9090}→9090` | `172.28.0.12` |
+| `black-grafana-00` | Grafana | — | `${BW_LAB_GRAFANA_PORT:-3000}→3000` | `172.28.0.13` |
 | `black-aptcache-00` | apt-cacher-ng | — | — | `172.28.0.14` |
 | `black-ghost-99` | ghost fixture — never_connected | no container | — | `172.28.0.99` |
 
