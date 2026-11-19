@@ -1,6 +1,8 @@
 # Same refresh, milder outcome: the fetch failed but the cache is still inside
 # max_cache_age, so the previous blocklist was applied (exit 3, fail-open path).
-# The line must contain no ERROR, otherwise 100207 matches first.
+# 100207 needs the message to start with "ERROR:" (<match type="pcre2">, case
+# sensitive), so the "HTTP Error 503" text below — real blackwall-fang-refresh
+# output — does not push this WARNING line up to level 7.
 rule: 100209
 level: 5
 log_format: syslog

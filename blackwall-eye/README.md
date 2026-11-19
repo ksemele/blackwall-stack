@@ -150,9 +150,9 @@ decoder, fields `fw_kind`, `srcip`, `fw_new`, `fw_total`, `fw_burst`,
 | 100204 | 3 | `kind=summary`: exporter output was capped, `fw_suppressed` sources dropped |
 | 100205 | 3 | exporter error line (`blackwall-fw-export: ...` on stderr, field `fw_error`) |
 | 100206 | 5 | `kind=blocklist_would_drop` (Fang observe drop-in set): a listed source reached the host, would be dropped in enforce |
-| 100207 | 7 | syslog/journald line from program `blackwall-fang-refresh` containing `ERROR` (Fang refresh failed or degraded: stale cache, empty blocklist) |
+| 100207 | 7 | syslog/journald line from program `blackwall-fang-refresh` whose message starts with `ERROR:` (Fang refresh failed or degraded: stale cache, empty blocklist) |
 | 100208 | 3 | `kind=blocklist_dropped` (Fang enforce drop-in set): a listed source was dropped |
-| 100209 | 5 | program `blackwall-fang-refresh` with `WARNING` (applied from cache, fail-open); the manager reads system logs from journald on the RedHat family, `/var/log/{auth.log,syslog}` on Debian |
+| 100209 | 5 | program `blackwall-fang-refresh` whose message starts with `WARNING:` (applied from cache, fail-open); the manager reads system logs from journald on the RedHat family, `/var/log/{auth.log,syslog}` on Debian |
 | 100210 | 6 | `kind=ssh_attempts` (Fang layer 2 drop-in set, observe): a source exceeded the SSH new-connection rate |
 | 100211 | 6 | `kind=scan_attempts` (Fang layer 2): a source made new connections to closed ports above the rate |
 | 100212 | 5 | `kind=rate_attempts` (Fang layer 2): a source exceeded the overall new-connection rate |

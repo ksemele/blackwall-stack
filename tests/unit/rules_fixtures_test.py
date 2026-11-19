@@ -38,12 +38,21 @@ def load_rules():
     for rid, level, attrs, body in re.findall(r'<rule id="(\d+)" level="(\d+)"([^>]*)>(.*?)</rule>',
                                               open(RULES_XML, encoding="utf-8").read(), re.S):
         def tag(name):
-            m = re.search(rf"<{name}>(.*?)</{name}>", body, re.S)
+            m = re.search(rf"<{name}[^>]*>(.*?)</{name}>", body, re.S)
             return m.group(1) if m else None
+
+        def tag_attr(name, attr):
+            m = re.search(rf"<{name}([^>]*)>", body)
+            a = re.search(rf'{attr}="(\w+)"', m.group(1)) if m else None
+            return a.group(1) if a else ""
         rules[int(rid)] = {
             "level": int(level),
             "if_sid": [int(x) for x in re.findall(r"<if_sid>(\d+)</if_sid>", body)],
             "match": tag("match"),
+            # <match> defaults to OSMatch, which is case-insensitive; type="pcre2"
+            # switches to PCRE2, case-sensitive unless the pattern says (?i)
+            # (wazuh-docs source/user-manual/ruleset/ruleset-xml-syntax/pcre2.rst:35).
+            "match_type": tag_attr("match", "type") or "osmatch",
             "program_name": tag("program_name"),
             "fields": re.findall(r'<field name="([^"]+)">(.*?)</field>', body, re.S),
             "desc_fields": re.findall(r"\$\((\w+)\)", tag("description") or ""),
@@ -120,10 +129,17 @@ def decode(log, decoders):
     return None, {}
 
 
+def match_hit(rule, text):
+    """Apply a rule's <match> the way analysisd does: OSMatch (the default) and
+    OSRegex are case-insensitive, type="pcre2" is case-sensitive."""
+    flags = 0 if rule["match_type"] == "pcre2" else re.IGNORECASE
+    return bool(rule["match"]) and bool(re.search(rule["match"], text, flags))
+
+
 def rule_matches(rule, log, fields):
     if rule["program_name"] and not re.search(rule["program_name"], log):
         return False
-    if rule["match"] and not re.search(rule["match"], log):
+    if rule["match"] and not match_hit(rule, log):
         return False
     for name, pattern in rule["fields"]:
         value = fields.get(name)
@@ -194,11 +210,11 @@ def check_syslog(fx, rules):
         fail(f"{fx['name']}: rule {fx['rule']} is level {rule['level']}, fixture says {fx['level']}")
     if not rule["program_name"] or not re.search(rule["program_name"], program):
         fail(f"{fx['name']}: program_name '{program}' does not match rule {fx['rule']}")
-    if not rule["match"] or not re.search(rule["match"], message):
+    if not rule["match"] or not match_hit(rule, message):
         fail(f"{fx['name']}: rule {fx['rule']} does not match the message")
     # 100207 is evaluated before 100209 in the group: a WARNING line must not
-    # contain ERROR, otherwise the higher-level rule wins.
-    if fx["rule"] == 100209 and re.search(rules[100207]["match"], message):
+    # reach 100207, whose <match> is anchored on the emitter's "ERROR: " prefix.
+    if fx["rule"] == 100209 and match_hit(rules[100207], message):
         fail(f"{fx['name']}: 100209 fixture also matches 100207")
     if not host.startswith("black-"):
         fail(f"{fx['name']}: host {host} is not a lab host (black-*)")
