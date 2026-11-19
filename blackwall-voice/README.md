@@ -99,9 +99,9 @@ disabled, after Brain otherwise).
 `alerter_webhook_url` adds a second channel next to Telegram (empty = off).
 A webhook alone can stand on its own: the role only requires Telegram
 credentials when no webhook URL is set. The URL is POSTed the alert as JSON
-(`Content-Type: application/json`); any 2xx counts as accepted. Point it at a
-Slack incoming webhook or at any endpoint that takes JSON (Mattermost, a
-chat gateway, your own receiver):
+(`Content-Type: application/json`). Point it at a Slack incoming webhook or
+at any endpoint that takes JSON (Mattermost, a chat gateway, your own
+receiver):
 
 ```yaml
 # placeholder — a real Slack URL is a bearer secret, keep it out of the repo
@@ -131,7 +131,23 @@ configured channel gets up to 3 send attempts, `poll_interval` apart; a
 channel that still fails is logged as dropped and only that channel loses the
 alert. The dedup ID is written when **every** configured channel accepted —
 with two channels, one failing keeps the alert out of `sent_ids.txt` (it is
-not retried either: the tail has already moved past the line).
+not retried either: the tail has already moved past the line). One consequence
+of the single dedup set: while one channel keeps failing, the ID is not
+recorded at all, so if the truncation re-read path fires (the alert log was
+rewritten shorter while the alerter was running), alerts the *healthy*
+channel already delivered can be delivered a second time.
+
+**Acceptance is Voice's own contract, not a provider guarantee.** The
+reference docs define only the request side of chat webhooks (OpenSearch
+`webhook` storage type, Wazuh `integration` reference — the offline docs hold
+nothing about how a provider *responds*). Voice treats a send as accepted
+when the receiver answers 2xx: non-2xx (4xx/5xx, transport errors) is retried
+and, if it keeps failing, logged as dropped; a 2xx is logged with its
+truncated response body (`Webhook accepted (HTTP 200): …`), so a receiver
+that reports a rejected payload *inside* a 2xx at least leaves a trace in
+`alerter.log` — but it still counts as sent. If you need stricter
+confirmation, point `alerter_webhook_url` at a receiver you control and check
+`sent_ids.txt` (that is what `verify-voice.yml` does).
 
 The URL is a secret (Slack-style URLs carry the key in the path): the alerter
 logs channel names, error codes and bodies only, and a log filter scrubs the
@@ -164,6 +180,10 @@ ansible-playbook ansible/playbooks/voice.yml \
   -e telegram_chat_id=<chat_id>
   # optional webhook channel: -e alerter_webhook_url=https://hooks.example.com/services/...
 ```
+
+Bearer secrets on the command line land in your shell history and in `ps`;
+prefer passing all of them through a file that is not in the repo:
+`-e @secrets.yml` (or ansible-vault) instead of `-e`.
 
 ## Verify
 

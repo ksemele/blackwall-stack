@@ -27,6 +27,8 @@ A Python script deployed as a systemd service on the manager host that:
 - Deduplicates: tracks sent `id` values to avoid resending on restart (state file, capped at `alerter_state_max_ids`, compacted hourly)
 - Optional upper bound `voice_max_level` (one message per alert when Brain is on; lifted at deploy time and, every 15 s, at runtime whenever `brain-analyst` is not active; clamped to the deployed `analysis_threshold - 1`) and `alerter_ignore_rule_ids` (Brain's verify rule)
 - Optional webhook channel (`alerter_webhook_url` + `alerter_webhook_format` `generic` | `slack`): same filter/dedup/retry pipeline, sent alongside Telegram or standing alone when Telegram credentials are empty; an alert's dedup ID is recorded only after every configured channel accepted
+- Webhook acceptance is Voice's own receiver contract (no provider docs define responses): 2xx = accepted with the truncated response body logged; non-2xx retried then dropped — see README "Webhook / Slack channel"
+- Ansible assert expressions in the role use Ansible *tests* (`alerter_webhook_url is match('^https?://')`) — writing it as a filter (`| regex(...)`) kills every deploy with "No filter named 'regex'"; pinned by `tests/unit/voice_role_asserts_test.py`
 - Secret hygiene: a log filter scrubs the webhook URL and the bot token from every log line (urllib/provider errors can echo the URL back)
 - Restarts automatically on failure (systemd `Restart=on-failure`)
 

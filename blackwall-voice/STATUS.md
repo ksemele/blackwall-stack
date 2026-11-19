@@ -27,8 +27,18 @@ blockers: []
 - Lab: `BW_WEBHOOK_URL` env wiring (`hosts.yml`, `.envrc.example`, tests README);
   `verify-voice.yml` delivery assert is strict when any channel is configured.
 - Verified offline: `tests/unit/voice_webhook_test.py` (payloads, redaction,
-  multi-channel "sent" rule) + a local-receiver smoke (202 accepted, ID
-  recorded). Live `bw-check voice` with a real receiver still to run in the lab.
+  multi-channel "sent" rule, acceptance rule against a stdlib `http.server`
+  fixture: 404 → dropped/not recorded, 2xx → recorded, body logged) and
+  `tests/unit/voice_role_asserts_test.py` (the three guard assert tasks run
+  verbatim on localhost across the five var combinations). Live `bw-check
+  voice` with a real receiver still to run in the lab.
+- Review round 1 (2026-11-19): the URL check used `| regex(...)` — Ansible has
+  no `regex` filter (it is a test), so every deploy failed with
+  "No filter named 'regex'"; now `is match('^https?://')`, split into separate
+  URL/format assert tasks with distinct `fail_msg`s, pinned by the new
+  role-asserts test (real `ansible-playbook -c local` run). Webhook 2xx
+  responses now log their truncated body; "no channel configured" warning is
+  once per run.
 
 ### 2026-10-28 — no alerts lost around rotation (#23)
 
@@ -139,7 +149,17 @@ blockers: []
   loop); the ID lands in `sent_ids.txt` only when all channels accepted. A
   failed channel's copy is unrecoverable anyway — the tail never replays a
   line it passed — so per-channel state files would add complexity for no
-  delivery gain.
+  delivery gain. Accepted limitation: while one channel keeps failing no ID is
+  recorded, so the truncation re-read path can resend what the healthy channel
+  already delivered (documented in README).
+- Webhook acceptance (#22): Voice's own receiver contract, not a sourced
+  provider fact — the offline docs (`opensearch-docs/_security/audit-logs/
+  storage-types.md`, `wazuh-docs/.../ossec-conf/integration.rst`) define only
+  the request side of chat webhooks, nothing about responses. 2xx = accepted
+  (the truncated response body is logged so a refusal inside a 2xx leaves a
+  trace in alerter.log), non-2xx retried then dropped. Operators needing a
+  stronger confirmation point the URL at their own receiver and check
+  `sent_ids.txt` (`verify-voice.yml` does exactly this).
 - The webhook URL is never logged: `_RedactSecrets` on the alerter logger
   scrubs URL + bot token from formatted messages and tracebacks (urllib's
   `InvalidURL` / "unknown url type" errors and some providers' error bodies
