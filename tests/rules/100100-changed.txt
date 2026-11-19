@@ -1,0 +1,14 @@
+# The same agent's next snapshot: the session of 100100-baseline.txt closed and a
+# new one opened. One changed row is enough for check_diff, so 100100 fires
+# (level 3, group blackwall_sessions) — this is the alert the Sessions tab reads.
+# Must run after 100100-baseline.txt (fixtures run in filename order).
+rule: 100100
+level: 3
+log_format: syslog
+location: blackwall-sessions
+---
+ossec: output: 'blackwall-sessions':
+root     pts/0        172.28.0.1       2026-11-18T09:12:44+00:00   still logged in
+root     pts/0        172.28.0.1       2026-11-18T09:10:01+00:00 - 2026-11-18T09:11:50+00:00  (00:01)
+reboot   system boot  7.0.0-43-generic 2026-11-18T08:00:00+00:00   still running
+wtmp begins 2026-11-18T08:00:00+00:00

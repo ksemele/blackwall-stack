@@ -140,16 +140,54 @@ tests/bin/bw-check metrics    # just one group
 | (unit) | `tests/unit/alerts_tail_test.py` (run with the ansible venv python): Voice loses no `alerts.json` line around rotation, truncation or a line written in two parts |
 | (unit) | `blackwall-brain/.venv/bin/pytest` (in `blackwall-brain/`, see CONTRIBUTING): Brain's package — verdict parsing, model adapters, message, indexer intake, config |
 | (unit) | `tests/unit/voice_format_test.py` (run with the ansible venv python): Voice's message formatter Markdown-escapes `_ * [ `` ` ``` in dynamic fields |
+| (unit) | `tests/unit/rules_fixtures_test.py`: every `tests/rules/*.txt` fixture agrees with the deployed ruleset without a lab — the rule id and level exist in `blackwall_rules.xml.j2`, the log is decoded by the decoder it claims (`blackwall_decoders.xml.j2`), the rule's `match`/`program_name`/`field` conditions hold on those fields, sibling rules stay silent, and only lab or documentation addresses appear |
 | `sentinel` | Wazuh stack on `black-sentinel-03`: services active, indexer/API/dashboard answer on 127.0.0.1 but not on 172.28.0.16 (probed from master), agent 000 active, packages excluded, podman nginx on 443, `inet netavark` and container DNS survive `systemctl reload nftables` (opt-in: SKIP until `bw-lab provision sentinel`) |
 | `sentinel-agents` | a throwaway container (`black-probe-90`, 172.28.0.90) installs `wazuh-agent` (version from the `wazuh-repo` role) and enrolls in the sentinel: agent `Active`, input-chain counters for 1514/1515 grew, alerts for it in the sentinel indexer, syscollector OS via the API; the container and the agent entry are removed on exit, including Ctrl+C; alerts must grow over the pre-run count; `BW_PROBE_MANAGER=<ip>` points the probe at a wrong manager to test the failure path |
 | `fw-events` | firewall drops reach Wazuh end to end: `black-rocky-02` (172.28.0.15) sends 3 SYNs to dropped ports on `black-host-01` (no rule 100202; the exporter's state must count them), then 60 (rule 100202, agent `black-host-01`, `srcip` 172.28.0.15, main indexer) and 3 connects to `172.28.0.16:443`, which is not in the sentinel's `cfwall_admin_allow` (rule 100201 in the sentinel indexer); alerts must be newer than the test start; waits for the exporter's baseline state file first; SKIP until the exporter and sentinel are deployed |
 | `fang` | Fang reputation blocklists on `black-sentinel-03` end to end (re-provisions the `fang` group, ~4-6 min): `blocklist_static` holds no private/reserved range and not master; observe: `black-rocky-02` (172.28.0.15, on the lab test list) lands in `fang_hits`, cf-wall `origin_direct` still grows for it, and rule 100206 (`blocklist_would_drop`) for `srcip` 172.28.0.15 appears in the sentinel indexer (newer than the test start); layer 2 (attempt detectors, observe): rocky's 40 quick SSH connects and 60 closed-port connects raise its `ssh_flagged` / `scan_flagged` counters (growth over a baseline taken at the start) and rules 100210 / 100211 for 172.28.0.15 appear in the indexer, `black-host-01` with 2 SSH attempts is not newly flagged, master (allowlisted) with 20 SSH attempts is never in `ssh_flagged`, and flagged rocky still gets an SSH banner (nothing dropped); a forced degraded refresh (fetch fails, cache used, dry run, exit 3) raises rule 100209 in the indexer; enforce (`-e fang_mode=enforce`): the fang counter grows while `origin_direct` stays flat, rule 100208 (`blocklist_dropped`) for 172.28.0.15 appears, `black-host-01` (neither listed nor allowlisted) still reaches cf-wall (`origin_direct` for 172.28.0.11 grows, absent from `fang_hits`), master still gets 200 on 443, podman egress and container DNS work; a refresh with a junk list exits 1 and leaves the live table and `/etc/nftables.d/blackwall-fang.nft` unchanged; finally re-provisions observe (also after a failure or ^C) |
+| `rules` | each `tests/rules/*.txt` fixture replayed through the manager's logtest (`PUT /logtest`, one session for all fixtures): the log in the file must reach the rule id and level written in its header — `100202-input-drop-burst.txt` → 100202 level 8, `100201-origin-direct.txt` → 100201 level 10, `100100-changed.txt` → 100100 level 3 after the `seed: yes` baseline snapshot; level-0 outcomes are asserted too (`100200-input-drop-below-threshold.txt` must stop at 100200 level 0, so no 100202); opt-in, ~1 min, needs `bw-lab up`, SKIP when the manager API does not answer; not in `all` |
 
 `sentinel-agents` is opt-in and not part of `all`: it needs internet (the agent package comes from packages.wazuh.com), takes a few minutes, and skips until `bw-lab provision sentinel`. There is no negative test (a source outside the allowed set being refused on 1514/1515) because the lab firewall allows the whole 172.28.0.0/24 on those ports.
 
 `fang` is opt-in and not part of `all`: it SKIPs until `bw-lab provision fang` has deployed the lab test configuration, and FAILs when a host is unreachable. It briefly switches the sentinel to enforce, so rocky (172.28.0.15) is dropped on the sentinel during the check; the end state is always observe. `bw-lab provision fang [ansible args]` passes extra arguments to the playbook (`-e fang_mode=enforce`). Real-source dry run (internet): `bw-lab provision fang -e '{"fang_test_mode":false,"fang_test_blockable":[],"fang_test_files":[],"fang_min_entries":500,"fang_sources":["https://www.spamhaus.org/drop/drop_v4.json","https://iplists.firehol.org/files/firehol_level1.netset"]}'`, then re-run `bw-lab provision fang` to restore the test lists.
 
 `fw-events` is opt-in and not part of `all` (about a minute, up to ~3 min on failure; the lab exports every 10 s). It does not need internet. Nothing reaches Telegram from this check in the lab: Voice runs only on `black-master-00`, tails that manager's alerts, and the lab sets `severity_threshold: 10`; 100202 is level 8 (below it) and 100201 (level 10) is produced on the sentinel's own separate manager, which has no Voice. On a real host whose manager runs Voice with the default threshold 5, origin-direct (10) and scan (8) alerts are forwarded.
+
+`rules` is opt-in and not part of `all`: it needs the lab up (`bw-lab up`), takes about a
+minute, and SKIPs when the manager's REST API does not answer. One case per file in
+`tests/rules/`, run in filename order:
+
+```text
+# Same decoder line as 100200-input-drop-below-threshold.txt, but burst=yes
+rule: 100202
+level: 8
+log_format: syslog
+location: blackwall-fw
+---
+ossec: output: 'blackwall-fw': blackwall-fw: kind=input_drop src=172.28.0.15 new=64 total=140 burst=yes
+```
+
+Everything below `---` is the log verbatim (multi-line allowed), exactly as the manager reads it:
+the agent's `blackwall-fw` command output for a firewall event, a journald/syslog line of
+`blackwall-fang-refresh` for a Fang refresh failure. `location` and `log_format` are part of the
+logtest request; analysisd matches neither, and logtest always decodes as agent 000 on the
+manager. Adding a case means copying a fixture and changing its header and its log. A changed
+rule level, a changed `fw_kind`/`fw_burst` pattern or a changed exporter line (decoder
+`blackwall-fw`) breaks a fixture, and the FAIL line names the rule and level that were actually
+reached. logtest never writes an alert: nothing lands in the indexer or on Telegram.
+
+Rule 100100 is the stateful exception and the only fixture that needs a partner. Its `check_diff`
+compares the snapshot with the output the manager stored the last time it evaluated the rule for
+this host (`/var/ossec/queue/diff/<manager host>/100100/last-entry`), so `100100-baseline.txt`
+carries `seed: yes`: bw-check sends that log once first and ignores the answer, which makes the
+stored output known. The baseline then lands deterministically on the stock parent rule 530
+(level 0, snapshot unchanged) and `100100-changed.txt`, one login row later, lands on 100100
+(level 3). Those two files must keep that order; `tests/unit/rules_fixtures_test.py` asserts it
+together with the rest of the fixtures.
+
+Manual equivalent of one fixture: `/var/ossec/tools/wazuh-logtest` on `black-master-00` and paste
+the log. The check uses `PUT /logtest` (the same engine as the Dashboard's test engine) because it
+has to run unattended.
 
 Every line is `PASS`, `FAIL` or `SKIP`; the exit code is 0 only when there is no
 `FAIL`, so this is usable straight from CI. Output of a failing step is printed

@@ -1,0 +1,9 @@
+# The exporter printed more sources than max_output_lines allows and replaced the
+# tail with a summary line; its own decoder (blackwall-fw-summary, no src) fills
+# fw_suppressed, which the description quotes.
+rule: 100204
+level: 3
+log_format: syslog
+location: blackwall-fw
+---
+ossec: output: 'blackwall-fw': blackwall-fw: kind=summary suppressed=51 burst=no

@@ -1,0 +1,11 @@
+# Same refresh, milder outcome: the fetch failed but the cache is still inside
+# max_cache_age, so the previous blocklist was applied (exit 3, fail-open path).
+# 100207 needs the message to start with "ERROR:" (<match type="pcre2">, case
+# sensitive), so the "HTTP Error 503" text below — real blackwall-fang-refresh
+# output — does not push this WARNING line up to level 7.
+rule: 100209
+level: 5
+log_format: syslog
+location: /var/log/syslog
+---
+Nov 18 09:15:11 black-sentinel-03 blackwall-fang-refresh[2318]: WARNING: download failed: failed to download https://www.spamhaus.org/drop/drop_v4.json: HTTP Error 503: Service Unavailable; rebuilding from cached data (oldest cache file 3 days old) with the current mode and allowlist

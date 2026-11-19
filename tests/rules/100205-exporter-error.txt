@@ -1,0 +1,10 @@
+# Exporter stderr: a file in /etc/blackwall/fw-export.d/ is not a valid drop-in
+# (here a rules file dropped in by mistake). stderr is merged into the localfile
+# output, decoder blackwall-fw-error captures fw_error, and rule 100205 reports
+# it — the only blackwall-fw rule that is not a child of 100200.
+rule: 100205
+level: 3
+log_format: syslog
+location: blackwall-fw
+---
+ossec: output: 'blackwall-fw': blackwall-fw-export: ignoring '/etc/blackwall/fw-export.d/blackwall-fang.nft': need kind=<word> table=[family ]<table> set=<word>

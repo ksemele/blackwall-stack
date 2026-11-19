@@ -2,13 +2,23 @@
 module: blackwall-eye
 status: in_progress
 stage: 1
-last_updated: 2026-11-03
-last_task: "Certificates: no silent CA rotation from a controller without the bundle (#34)"
+last_updated: 2026-11-18
+last_task: "Logtest fixtures for the custom Wazuh rules (#25)"
 next_task: "Prod inventory for the stack (backlog: Wazuh server stack prod readiness) — owner decides when"
 blockers: []
 ---
 
 ## Done
+
+- 2026-11-18: `bw-check rules` (opt-in, `tests/bin/bw-check`) with fixtures in
+  `tests/rules/`: 15 cases, each one the log exactly as the manager reads it plus the
+  rule id and level it must reach, replayed through `PUT /logtest` against the deployed
+  ruleset — 100200 level 0 (burst=no, so no 100202), 100201-100204, 100205 (exporter
+  stderr), 100206/100208, 100207/100209 (Fang refresh ERROR/WARNING), 100210-100212, and
+  100100 via its `check_diff` pair (`100100-baseline.txt`, `seed: yes` → stock 530 level 0;
+  `100100-changed.txt` → 100100 level 3). `tests/unit/rules_fixtures_test.py` checks every
+  fixture against the rules and decoders templates without a lab. First test for
+  100203/100204/100205/100207, which no check reached before (#25).
 
 - 2026-11-03: `wazuh-certificates.yml` no longer mints a new CA when the
   controller lacks the bundle (fresh clone, git worktree) but the host already
