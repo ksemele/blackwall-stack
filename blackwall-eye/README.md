@@ -257,6 +257,11 @@ Two things to know before changing the port lists:
   `flush ruleset` on both; the role's drop-in
   (`/etc/systemd/system/nftables.service.d/blackwall.conf`) re-reads the config
   on reload and deletes only `blackwall_base` / `blackwall_wall` on stop.
+- **firewalld is stopped and masked where installed.** On RedHat its unit has
+  `Conflicts=nftables.service`, so the two cannot run together; with both
+  enabled the boot keeps one of them. Rollback:
+  `systemctl unmask firewalld && systemctl enable --now firewalld` (this stops
+  nftables).
 - **On a Wazuh manager, 9200 and 9300 must stay open.** filebeat and the
   dashboard reach the indexer over the interface address, not over loopback, so
   closing those ports stops alert delivery while every service stays `active`.
@@ -289,6 +294,16 @@ tools/nft-equiv hosts/prod.yml <host> hosts/<host>/nftables/blackwall-base.nft
 
 It renders the role template for that host, loads both files into a throwaway
 container and diffs nft's own listing (exit 0 = equal). Needs Docker.
+
+EL8 hosts (Rocky/RHEL 8) only ship Python 3.6 (`/usr/libexec/platform-python`),
+which ansible-core 2.17 and later no longer support on the target. For them, set
+`ansible_python_interpreter: /usr/libexec/platform-python` in the inventory and
+run the playbooks with ansible-core 2.16. On a fresh host create
+`/etc/nftables.d` before a `--check` run: the role renders into it.
+
+```bash
+pipx run --spec 'ansible-core>=2.16,<2.17' ansible-playbook -i hosts/prod.yml ansible/playbooks/nftables.yml
+```
 
 ### Firewall event exporter
 

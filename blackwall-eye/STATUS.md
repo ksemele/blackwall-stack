@@ -2,13 +2,21 @@
 module: blackwall-eye
 status: in_progress
 stage: 1
-last_updated: 2026-11-03
-last_task: "Certificates: no silent CA rotation from a controller without the bundle (#34)"
+last_updated: 2026-11-19
+last_task: "nftables role masks firewalld; nftables + cf-wall on an EL8 docker host (#48)"
 next_task: "Prod inventory for the stack (backlog: Wazuh server stack prod readiness) — owner decides when"
 blockers: []
 ---
 
 ## Done
+
+- 2026-11-19: the `nftables` role stops and masks firewalld where it is
+  installed: RHEL's `firewalld.service` has `Conflicts=nftables.service`, so
+  with both enabled the boot keeps only one of them. Applied with `cf-wall` to a
+  second prod host (Rocky 8.10, Docker, nginx in a container with host
+  network): base input 22/80/443, the wall on 80/443/8080 (a Docker-published
+  port). EL8 targets have only Python 3.6 and need ansible-core 2.16 (README)
+  (#48).
 
 - 2026-11-03: `wazuh-certificates.yml` no longer mints a new CA when the
   controller lacks the bundle (fresh clone, git worktree) but the host already
