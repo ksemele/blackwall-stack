@@ -67,6 +67,7 @@ PY="$(brew --prefix ansible)/libexec/bin/python"   # Homebrew Ansible; pipx: ~/.
 "$PY" tests/unit/voice_format_test.py
 "$PY" tests/unit/alerts_tail_test.py
 "$PY" tests/unit/fang_refresh_test.py
+python3 tests/unit/rules_lint_test.py              # stdlib only: any python3, no lab
 ```
 
 Brain is a Python package with its own pytest suite (Python 3.12+):

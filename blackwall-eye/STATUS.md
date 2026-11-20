@@ -18,6 +18,11 @@ blockers: []
   port). EL8 targets have only Python 3.6 and need ansible-core 2.16 (README)
   (#48).
 
+- 2026-11-19: `tests/unit/rules_lint_test.py` (plain `python3`, no lab) guards this
+  module's rules: IDs unique and inside 100000-120000, level inside Wazuh's 0-16, a
+  `<description>`, every `<if_sid>` resolvable to a rule in the file or to stock 530,
+  and the README rules table / 100100 prose in sync with the XML (#18).
+
 - 2026-11-03: `wazuh-certificates.yml` no longer mints a new CA when the
   controller lacks the bundle (fresh clone, git worktree) but the host already
   has certificates: the play fails with where to get the bundle; rotation needs
