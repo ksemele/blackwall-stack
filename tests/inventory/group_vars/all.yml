@@ -19,3 +19,20 @@ wazuh_fw_events_interval: 10
 
 # Report every growth: the fw-events check sends traffic from the same source twice.
 nft_track_report_cooldown: 0
+
+# Real-time FIM off in the lab: wazuh-syscheckd needs an inotify instance, and a
+# rootless-podman host charges that instance to the host user's single budget
+# (fs.inotify.max_user_instances, 128 on Ubuntu) together with conmon, pasta and
+# the systemd inside every lab container. The budget runs out, syscheckd logs
+# "Unable to initialize inotify", its scan blocks, and wazuh-agent.service dies
+# at its 45 s start timeout. Containers cannot raise the sysctl themselves
+# (podman: "sysctl 'fs.inotify.max_user_instances' is not allowed"), so the lab
+# monitors by scheduled scan instead. Role defaults keep real-time FIM on real
+# hosts; set this back to true on a host with room for the instances (Docker's
+# Linux VM has its own budget; on a rootless-podman host it needs
+# `sudo sysctl fs.inotify.max_user_instances=524288`).
+wazuh_fim_realtime: false
+
+# FIM then has to catch a change on a scan, so scan often: bw-trigger passwd and
+# the other file triggers should show up in minutes, not in 12 hours.
+wazuh_syscheck_frequency: 600

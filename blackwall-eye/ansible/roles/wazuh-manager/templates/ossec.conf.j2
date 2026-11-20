@@ -102,10 +102,11 @@
     <alert_new_files>yes</alert_new_files>
     <auto_ignore frequency="10" timeframe="3600">no</auto_ignore>
 
-    <directories realtime="yes">/etc/passwd</directories>
-    <directories realtime="yes">/etc/shadow</directories>
-    <directories realtime="yes">/etc/sudoers</directories>
-    <directories realtime="yes">/etc/ssh/sshd_config</directories>
+{% set fim_realtime = 'yes' if wazuh_fim_realtime else 'no' %}
+    <directories realtime="{{ fim_realtime }}">/etc/passwd</directories>
+    <directories realtime="{{ fim_realtime }}">/etc/shadow</directories>
+    <directories realtime="{{ fim_realtime }}">/etc/sudoers</directories>
+    <directories realtime="{{ fim_realtime }}">/etc/ssh/sshd_config</directories>
 
     <!-- Ignore volatile paths -->
     <ignore>/etc/mtab</ignore>

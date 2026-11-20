@@ -35,7 +35,7 @@ tests/triggers/bw-trigger clean               # undo persistent side effects
 | `passwd-change` | chpasswd × 2 on a temp user | 5901 password changed |
 | `ssh-key` | Append fake key to `/root/.ssh/authorized_keys`, revert | requires extending FIM `<directories>` to cover it |
 | `sudoers` | Drop file in `/etc/sudoers.d/`, remove | FIM if `/etc/sudoers.d/` added to syscheck |
-| `passwd` | `touch /etc/passwd` | FIM realtime on `/etc/passwd` |
+| `passwd` | `touch /etc/passwd` | FIM alert on `/etc/passwd` — the lab scans every `wazuh_syscheck_frequency` (600 s) instead of watching in real time, see section 20 of `tests/README.md` |
 | `sudo` | non-root user runs `sudo cat /etc/shadow` | 5402 sudo executed |
 | `ssh-fail` | 4 bad SSH attempts from inside container | 5503 failed login → 5712 brute force (needs `sshpass` in container) |
 | `daemon` | Background `sleep` + nc-listener on :4444 | rootcheck (next scan) |
