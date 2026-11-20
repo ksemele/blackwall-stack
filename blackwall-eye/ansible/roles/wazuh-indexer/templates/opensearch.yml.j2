@@ -10,7 +10,7 @@ path.logs: /var/log/wazuh-indexer
 # Decided in tasks/main.yml from the locked-memory ceiling of this host
 # (wazuh_indexer_memory_lock overrides it).
 bootstrap.memory_lock: {{ _indexer_memory_lock | bool | lower }}
-{% if bw_sso_enabled | bool %}
+{% if bw_sso_enabled | default(false) | bool %}
 # The lab adds the OIDC auth domain through the security REST API instead of
 # rewriting config.yml + running securityadmin.sh (that would replace the users
 # and roles the lab creates over REST). Patching securityconfig over REST is an
