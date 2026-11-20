@@ -6,19 +6,28 @@ name: blackwall-test
 #   docker compose --profile ubuntu2204 up -d --build
 #
 # This keeps one compose file and makes distro selection explicit via CLI flag.
-# Each profile group uses services with the same black-NN naming; services for
-# different distros never run simultaneously (port conflicts would occur otherwise).
+# Profile ubuntu2204 (the default) is the full lab: one Ubuntu manager plus agents
+# of every family. Profile rockylinux9 swaps in a Rocky manager stack. Only the
+# manager stacks are exclusive — they share the dashboard/API ports — so agent
+# nodes of other distros (black-rocky-02, black-sentinel-03, black-debian-04)
+# live in the default profile and run side by side.
 #
-# Port ranges by distro:
-#   ubuntu2204:  2200–2202
-#   debian12:    2210–2212  (future)
+# Host SSH port ranges by distro:
+#   ubuntu2204:  2200 master, 2201 host-01, 2202 dead-98, 2203 rocky-02,
+#                2204 sentinel-03, 2205 debian-04
+#   rockylinux9: 2200 master, 2201 host-01
+#   debian12:    2210–2212  (reserved for a Debian manager stack)
 #   centos9:     2220–2222  (future)
 #   alpine:      N/A — OpenRC only; incompatible with systemd roles (Wazuh, auditd)
 #
-# To add a new distro:
-#   1. Create tests/docker/images/<distro>/Dockerfile
-#   2. Uncomment the corresponding service block below
-#   3. Add host entries to tests/inventory/hosts.yml
+# To add a node of a new distro to the default lab:
+#   1. Create tests/docker/images/<distro>/Dockerfile (systemd + sshd + apt proxy)
+#   2. Add a service block to the profile that provisions it; a manager stack of
+#      that distro needs its own profile and port range
+#   3. Add the host to tests/inventory/hosts.yml: a distro group and membership
+#      in wazuh_agents
+#   4. Add it to tests/docker/ssh_config, tests/docker/prometheus/prometheus.yml
+#      and the container list of the hosts check in tests/bin/bw-check
 
 networks:
   blackwall-test:
@@ -154,6 +163,21 @@ services:
       blackwall-test:
         ipv4_address: 172.28.0.16
 
+  # Debian 12 node: the base image ships without rsyslog, so this node exercises
+  # the journald branch of the Wazuh log sources (roles/wazuh-agent/defaults).
+  black-debian-04:
+    <<: *black-node
+    profiles: [ubuntu2204]
+    build:
+      context: ./images/debian12
+    container_name: black-debian-04
+    hostname: black-debian-04
+    ports:
+      - "2205:22"
+    networks:
+      blackwall-test:
+        ipv4_address: 172.28.0.17
+
   # ── Monitoring stack: Prometheus + Grafana ────────────────────────────────
   # Profile: ubuntu2204
   # Plain containers, not systemd nodes: they need no privileged mode, host
@@ -204,9 +228,12 @@ services:
         ipv4_address: 172.28.0.13
     restart: "no"
 
-  # ── Debian 12 (future) ────────────────────────────────────────────────────
-  # Profile: debian12 — uncomment when tests/docker/images/debian12/Dockerfile exists.
-  # Ports: 2210 (SSH), 5611 (dashboard) for master; 2211 (SSH) for host.
+  # ── Debian 12 ─────────────────────────────────────────────────────────────
+  # The Debian 12 agent node (black-debian-04, port 2205) is part of the default
+  # ubuntu2204 lab above. The block below stays reserved for a Debian *manager*
+  # stack, which needs its own profile because it shares the dashboard/API ports
+  # with the Ubuntu and Rocky managers: 2210 (SSH) and 5611 (dashboard) for the
+  # master, 2211 (SSH) for its host.
   #
   # black-master-00-debian:
   #   <<: *black-node

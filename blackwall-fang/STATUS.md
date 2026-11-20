@@ -70,9 +70,6 @@ nothing is dropped) before enforcement is switched on.
   an exporter run in that window can report existing `fang_hits` once under the
   new kind, and the old kind's exporter state is never pruned. Fix: render the
   drop-in after the refresh, or prune state for kinds no drop-in declares.
-- Debian 12+ ships without rsyslog: the Debian branch of the Wazuh ossec.conf
-  templates reads `/var/log/syslog`, so Fang's syslog lines (rules 100207/100209)
-  would not be collected there. Switch Debian to journald too (Eye).
 - A source URL change drops its cache entry; a failed fetch right after the
   change exits 1 (visible) instead of using older cached data.
 - The per-source floor is `fang_min_entries / sources`; raising

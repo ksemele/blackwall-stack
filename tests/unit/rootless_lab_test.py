@@ -36,7 +36,14 @@ COMPOSE = "tests/docker/docker-compose.yml"
 # Set by the roles' tasks or by fact gathering, not by defaults/main.yml.
 RUNTIME_FACTS = {
     "_wazuh_enroll_groups": "docker",
-    "ansible_facts": {"os_family": "Debian"},
+    # The lab's Debian-family nodes are Ubuntu 22.04. The ossec.conf templates
+    # pick the system-log source by distribution too, not only by os_family
+    # (Debian 12 ships no rsyslog), so they need these two keys as well.
+    "ansible_facts": {
+        "os_family": "Debian",
+        "distribution": "Ubuntu",
+        "distribution_major_version": "22",
+    },
 }
 
 env = jinja2.Environment(undefined=jinja2.StrictUndefined)

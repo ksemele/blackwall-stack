@@ -7,7 +7,7 @@ Host monitoring core for the Blackwall security platform. Stage 1: Wazuh manager
 - Wazuh Manager + Agent (HIDS, FIM, log collection)
 - auditd (kernel-level syscall audit)
 - Ansible IaC — no manual steps
-- Target OS: Ubuntu 22.04 LTS / Debian 12 (primary), Rocky Linux 9 (secondary): agent, auditd and the whole server stack (indexer, manager + filebeat, dashboard); on RHEL the agent reads system logs from journald
+- Target OS: Ubuntu 22.04 LTS / Debian 12 (primary), Rocky Linux 9 (secondary): agent, auditd and the whole server stack (indexer, manager + filebeat, dashboard); the agent reads system logs from journald on the RHEL family and on Debian 12+ (no rsyslog there), from `/var/log/auth.log` + `/var/log/syslog` on Ubuntu and Debian 11
 
 ## Test Environment
 
@@ -152,7 +152,7 @@ decoder, fields `fw_kind`, `srcip`, `fw_new`, `fw_total`, `fw_burst`,
 | 100206 | 5 | `kind=blocklist_would_drop` (Fang observe drop-in set): a listed source reached the host, would be dropped in enforce |
 | 100207 | 7 | syslog/journald line from program `blackwall-fang-refresh` containing `ERROR` (Fang refresh failed or degraded: stale cache, empty blocklist) |
 | 100208 | 3 | `kind=blocklist_dropped` (Fang enforce drop-in set): a listed source was dropped |
-| 100209 | 5 | program `blackwall-fang-refresh` with `WARNING` (applied from cache, fail-open); the manager reads system logs from journald on the RedHat family, `/var/log/{auth.log,syslog}` on Debian |
+| 100209 | 5 | program `blackwall-fang-refresh` with `WARNING` (applied from cache, fail-open); the manager reads system logs from journald on the RedHat family and Debian 12+, `/var/log/{auth.log,syslog}` on Ubuntu and Debian 11 |
 | 100210 | 6 | `kind=ssh_attempts` (Fang layer 2 drop-in set, observe): a source exceeded the SSH new-connection rate |
 | 100211 | 6 | `kind=scan_attempts` (Fang layer 2): a source made new connections to closed ports above the rate |
 | 100212 | 5 | `kind=rate_attempts` (Fang layer 2): a source exceeded the overall new-connection rate |
@@ -220,7 +220,8 @@ Rocky 9 VM with `tests/bin/bw-check vm` (see `tests/README.md`).
 The `nftables` role renders `/etc/nftables.d/blackwall-base.nft`, owns the main
 config (`nft_conf_path`, which includes `/etc/nftables.d/*.nft`) and installs a
 `nftables.service` drop-in. Debian and RedHat families are supported (the lab
-has `black-host-01` on Ubuntu and `black-rocky-02` on Rocky Linux 9).
+has `black-host-01` on Ubuntu, `black-debian-04` on Debian 12 and
+`black-rocky-02` on Rocky Linux 9).
 
 ```bash
 ansible-playbook ansible/playbooks/nftables.yml

@@ -41,3 +41,11 @@ Host black-sentinel-03
     StrictHostKeyChecking no
     UserKnownHostsFile /dev/null
     LogLevel ERROR
+
+Host black-debian-04
+    HostName localhost
+    Port 2205
+    User root
+    StrictHostKeyChecking no
+    UserKnownHostsFile /dev/null
+    LogLevel ERROR

@@ -108,7 +108,7 @@ check_hosts() {
   local running
   running="$(docker ps --format '{{.Names}}')"
   local name
-  for name in black-master-00 black-host-01 black-metrics-00 black-grafana-00 black-aptcache-00; do
+  for name in black-master-00 black-host-01 black-debian-04 black-metrics-00 black-grafana-00 black-aptcache-00; do
     if grep -qx "$name" <<<"$running"; then
       bw_pass "container $name is running"
     else
@@ -200,7 +200,7 @@ check_ports() {
   # Published ports are probed from the Mac itself: docker NAT sits between the
   # host and the container, and a break in it is invisible from the inside.
   local entry port label
-  for entry in "2200:ssh black-master-00" "2201:ssh black-host-01" \
+  for entry in "2200:ssh black-master-00" "2201:ssh black-host-01" "2205:ssh black-debian-04" \
                "5601:wazuh-dashboard" "55000:wazuh-api" "9200:wazuh-indexer" \
                "${BW_LAB_PROM_PORT}:prometheus" "${BW_LAB_GRAFANA_PORT}:grafana"; do
     port="${entry%%:*}"
@@ -293,7 +293,7 @@ check_metrics() {
   fi
 
   local host
-  for host in black-master-00 black-host-01; do
+  for host in black-master-00 black-host-01 black-debian-04; do
     if bw_json_true "any(t['labels']['instance'] == '$host:9100' and t['health'] == 'up'
                          for t in d['data']['activeTargets'])" <<<"$targets"; then
       bw_pass "prometheus scrapes $host"

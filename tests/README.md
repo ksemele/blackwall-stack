@@ -9,6 +9,7 @@ Docker environment shared by all Blackwall modules.
 | `black-dead-98` | agent fixture, stopped on purpose (`disconnected` status) |
 | `black-rocky-02` | Rocky Linux 9: Wazuh agent (journald) + firewall roles on the RHEL family |
 | `black-sentinel-03` | Rocky Linux 9: Wazuh server stack node (podman nginx fixture on 443) |
+| `black-debian-04` | Debian 12: Wazuh agent — journald log sources (Debian 12 ships no rsyslog) |
 | `black-metrics-00` | Prometheus |
 | `black-grafana-00` | Grafana |
 | `black-aptcache-00` | apt-cacher-ng — apt cache for the nodes, lab only |
@@ -30,10 +31,10 @@ Two scripts drive everything:
 > which has an `ansible.cfg` pointing at `../tests/inventory/`.
 >
 > Inventory layout (`tests/inventory/hosts.yml`): OS groups (`ubuntu2204`,
-> `rhel9`) list hosts by distribution; functional groups (`wazuh_managers`,
-> `wazuh_agents`, `cf_wall`) sit beside them, so a host can be both. Agents that
-> are broken on purpose are listed in `wazuh_fixture_agents` and skipped by the
-> agent checks.
+> `rhel9`, `debian12`) list hosts by distribution; functional groups
+> (`wazuh_managers`, `wazuh_agents`, `cf_wall`) sit beside them, so a host can be
+> both. Agents that are broken on purpose are listed in `wazuh_fixture_agents`
+> and skipped by the agent checks.
 
 ---
 
@@ -197,12 +198,12 @@ tests/bin/bw-check metrics    # just one group
 
 | Check | What it asserts |
 |---|---|
-| `hosts` | the five running containers exist (incl. the apt cache); ansible reaches every systemd node |
+| `hosts` | the running containers exist (master, host-01, debian-04, metrics, grafana, apt cache); ansible reaches every systemd node |
 | `versions` | `wazuh-*`, `filebeat`, `auditd`, `nftables` are installed (prints versions); `wazuh-agent` version equals `wazuh-manager` |
 | `nft` | `chain input` is `policy drop` and every expected port is in `set public_tcp` |
 | `cf-wall` | table `inet blackwall_wall` loaded with Cloudflare prefixes, timer enabled, a refresh that fetches junk leaves the live rules untouched (opt-in: SKIP until `bw-lab provision cf-wall`) |
 | `ports` | expected listeners inside the containers, plus published ports probed from the Mac |
-| `wazuh` | every agent in `wazuh_agents` (minus `wazuh_fixture_agents`) is `Active` on the manager, RHEL-family agent events (a failed SSH login) reach the indexer, REST API answers, indexer answers, `black-ghost-99` is `never_connected` and `black-dead-98` is `disconnected`, dashboard responds |
+| `wazuh` | every agent in `wazuh_agents` (minus `wazuh_fixture_agents`) is `Active` on the manager, agent events (a failed SSH login) reach the indexer over both collection paths — journald (`black-rocky-02`, `black-debian-04`) and the rsyslog files (`black-host-01`), REST API answers, indexer answers, `black-ghost-99` is `never_connected` and `black-dead-98` is `disconnected`, dashboard responds |
 | `metrics` | node_exporter serves metrics, Prometheus targets are `up`, `node_load1` returns data, Grafana is healthy with its datasource and dashboard |
 | `voice` | `telegram-alerter` is running and Telegram accepted a synthetic alert; when the deployed `voice_max_level` leaves no room for it (Brain on in the lab), it asserts Voice skipped the alert instead |
 | `brain` | the Brain image is built, `brain-analyst` (container) is running; a synthetic level-10 alert injected into `alerts.json` reached the indexer and was delivered to Telegram within 120 s (without credentials: picked up) |
@@ -211,6 +212,7 @@ tests/bin/bw-check metrics    # just one group
 | (unit) | `blackwall-brain/.venv/bin/pytest` (in `blackwall-brain/`, see CONTRIBUTING): Brain's package — verdict parsing, model adapters, message, indexer intake, config |
 | (unit) | `tests/unit/voice_format_test.py` (run with the ansible venv python): Voice's message formatter Markdown-escapes `_ * [ `` ` ``` in dynamic fields |
 | (unit) | `tests/unit/rules_lint_test.py` (plain `python3`, no lab): the custom Wazuh rules in `blackwall_rules.xml.j2` — unique IDs inside 100000-120000, level inside 0-16 (Wazuh's allowed range), a `<description>`, every `<if_sid>` (comma- or space-separated) pointing at a rule in the file or at stock 530, and `blackwall-eye/README.md` in sync with them |
+| (unit) | `tests/unit/ossec_log_sources_test.py` (run with the ansible venv python): the `ossec.conf` templates of `wazuh-agent` and `wazuh-manager` read journald on the RHEL family and Debian 12+, and `/var/log/auth.log` + `/var/log/syslog` on Ubuntu and Debian 11 |
 | `sentinel` | Wazuh stack on `black-sentinel-03`: services active, indexer/API/dashboard answer on 127.0.0.1 but not on 172.28.0.16 (probed from master), agent 000 active, packages excluded, podman nginx on 443, `inet netavark` and container DNS survive `systemctl reload nftables` (opt-in: SKIP until `bw-lab provision sentinel`) |
 | `sentinel-agents` | a throwaway container (`black-probe-90`, 172.28.0.90) installs `wazuh-agent` (version from the `wazuh-repo` role) and enrolls in the sentinel: agent `Active`, input-chain counters for 1514/1515 grew, alerts for it in the sentinel indexer, syscollector OS via the API; the container and the agent entry are removed on exit, including Ctrl+C; alerts must grow over the pre-run count; `BW_PROBE_MANAGER=<ip>` points the probe at a wrong manager to test the failure path |
 | `fw-events` | firewall drops reach Wazuh end to end: `black-rocky-02` (172.28.0.15) sends 3 SYNs to dropped ports on `black-host-01` (no rule 100202; the exporter's state must count them), then 60 (rule 100202, agent `black-host-01`, `srcip` 172.28.0.15, main indexer) and 3 connects to `172.28.0.16:443`, which is not in the sentinel's `cfwall_admin_allow` (rule 100201 in the sentinel indexer); alerts must be newer than the test start; waits for the exporter's baseline state file first; SKIP until the exporter and sentinel are deployed |
@@ -288,6 +290,7 @@ Unset variables render as empty strings — playbooks still run, delivery just f
 | `black-dead-98` | agent fixture — disconnected | `2202→22` | — | `172.28.0.98` |
 | `black-rocky-02` | Rocky Linux 9 — agent + firewall roles | `2203→22` | — | `172.28.0.15` |
 | `black-sentinel-03` | Rocky Linux 9 — server node + podman nginx fixture | `2204→22` | — | `172.28.0.16` |
+| `black-debian-04` | Debian 12 — agent (journald, no rsyslog) | `2205→22` | — | `172.28.0.17` |
 | `black-metrics-00` | Prometheus | — | `${BW_LAB_PROM_PORT:-9090}→9090` | `172.28.0.12` |
 | `black-grafana-00` | Grafana | — | `${BW_LAB_GRAFANA_PORT:-3000}→3000` | `172.28.0.13` |
 | `black-aptcache-00` | apt-cacher-ng | — | — | `172.28.0.14` |
@@ -376,10 +379,10 @@ tests/docker/
     └── ../dashboards/blackwall-hosts.json           # the dashboard itself
 ```
 
-Prometheus scrapes `node_exporter` on `black-master-00`, `black-host-01` and
-`black-dead-98` (that last target stays `down` while the fixture is stopped —
-expected), plus itself. Grafana ships one dashboard, **Blackwall hosts**: hosts
-up, 1-minute load average, memory used.
+Prometheus scrapes `node_exporter` on `black-master-00`, `black-host-01`,
+`black-debian-04` and `black-dead-98` (that last target stays `down` while the
+fixture is stopped — expected), plus itself. Grafana ships one dashboard,
+**Blackwall hosts**: hosts up, 1-minute load average, memory used.
 
 node_exporter is deployed by the Ansible role
 `blackwall-voice/ansible/roles/node-exporter`:
@@ -466,10 +469,13 @@ docker ps --format '{{.Names}}' | sort
 # Expect:
 #   black-aptcache-00
 #   black-dead-98
+#   black-debian-04
 #   black-grafana-00
 #   black-host-01
 #   black-master-00
 #   black-metrics-00
+#   black-rocky-02
+#   black-sentinel-03
 
 docker compose -f tests/docker/docker-compose.yml --profile ubuntu2204 config --quiet
 # Expect: exit 0, no output
@@ -481,7 +487,7 @@ ssh -F tests/docker/ssh_config black-master-00 hostname    # → black-master-00
 ssh -F tests/docker/ssh_config black-host-01 hostname      # → black-host-01
 
 ansible all -m wait_for_connection -T 30
-# Expect: SUCCESS for all three systemd nodes
+# Expect: SUCCESS for all six systemd nodes of the default lab
 ```
 
 ### Wazuh indexer
@@ -828,19 +834,26 @@ ansible-playbook ansible/playbooks/wazuh-certificates.yml -e wazuh_certs_rotate=
 ## 18. Multi-distro support
 
 The compose file uses [Compose profiles](https://docs.docker.com/compose/profiles/) to select a distro.
+Only the *manager* stacks are exclusive: they share the dashboard and API ports. Agent nodes of
+other distros run inside the default profile next to the Ubuntu manager.
 
 | Profile | Base image | systemd | SSH ports | Dashboard | Status |
 |---|---|---|---|---|---|
-| `ubuntu2204` | geerlingguy/docker-ubuntu2204-ansible | yes | 2200, 2201 | 5601 | Active |
-| `debian12` | (planned) | yes | 2210, 2211 | 5611 | Not implemented |
+| `ubuntu2204` | geerlingguy/docker-ubuntu2204-ansible | yes | 2200 master, 2201 host-01, 2202 dead-98, 2203 rocky-02, 2204 sentinel-03, 2205 debian-04 | 5601 | Active (default) |
+| `debian12` | geerlingguy/docker-debian12-ansible | yes | 2210, 2211 | 5611 | Reserved for a Debian manager stack; the Debian 12 agent (`black-debian-04`) runs in `ubuntu2204` |
 | `centos9` | (planned) | yes | 2220, 2221 | 5621 | Not implemented |
 | `alpine` | n/a — OpenRC | **no** | n/a | n/a | Not supported |
 
-To add a new distro:
+To add a node of a new distro:
 
-1. Create `tests/docker/images/<distro>/Dockerfile`.
-2. Uncomment the corresponding service block in `tests/docker/docker-compose.yml`.
-3. Add host entries to `tests/inventory/hosts.yml`.
+1. Create `tests/docker/images/<distro>/Dockerfile` (systemd as PID 1, sshd with the
+   lab root password, apt pointed at the cache).
+2. Add a service block to `tests/docker/docker-compose.yml` in the profile that
+   provisions it; a manager stack of that distro needs its own profile and port range.
+3. Add the host to `tests/inventory/hosts.yml`: distro group plus membership in
+   `wazuh_agents` (`group_vars/wazuh_agents` then supplies its firewall ports).
+4. Add it to `tests/docker/ssh_config`, `tests/docker/prometheus/prometheus.yml` and
+   the container list of the `hosts` check in `tests/bin/bw-check`.
 
 ---
 
@@ -910,6 +923,8 @@ blackwall/                                  # repo root
 │   ├── docker/
 │   │   ├── docker-compose.yml
 │   │   ├── images/ubuntu2204/Dockerfile    # nodes; apt goes through the cache
+│   │   ├── images/rockylinux9/Dockerfile   # Rocky 9 nodes
+│   │   ├── images/debian12/Dockerfile      # Debian 12 node (no rsyslog → journald)
 │   │   ├── images/aptcache/                # apt-cacher-ng: Dockerfile + blackwall.conf
 │   │   ├── ssh_config
 │   │   ├── prometheus/prometheus.yml

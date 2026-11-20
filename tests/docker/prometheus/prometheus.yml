@@ -21,6 +21,7 @@ scrape_configs:
       - targets:
           - "black-master-00:9100"
           - "black-host-01:9100"
+          - "black-debian-04:9100"
           - "black-dead-98:9100"
         labels:
           env: test
