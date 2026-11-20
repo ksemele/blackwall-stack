@@ -3,13 +3,15 @@
 # blackwall-scan — external attack surface pipeline
 # Runs INSIDE the container. Reads /targets/targets.txt, writes /output/<ts>/.
 #
-# Pipeline: subfinder -> (+direct IPs) -> dnsx -> naabu -> httpx -> tlsx -> nuclei
+# Pipeline: subfinder -> (+direct IPs) -> dnsx -> naabu -> confirm -> httpx -> tlsx -> nuclei
 #
 # Env knobs:
-#   PORTS        naabu port spec (default: "-top-ports 1000"; e.g. "-p -" for all 65535)
-#   RUN_NUCLEI   "1" to run nuclei vuln/exposure checks (default: 0)
-#   NUCLEI_TAGS  nuclei -tags (default: exposure,misconfig,takeover,default-login)
-#   RATE         naabu -rate (default: 1000)
+#   PORTS           naabu port spec (default: "-top-ports 1000"; e.g. "-p -" for all 65535)
+#   RUN_NUCLEI      "1" to run nuclei vuln/exposure checks (default: 0)
+#   NUCLEI_TAGS     nuclei -tags (default: exposure,misconfig,takeover,default-login)
+#   RATE            naabu -rate (default: 1000)
+#   RUN_CONFIRM     "0" to skip the confirmation pass (default: 1)
+#   CONFIRM_TIMEOUT per-pair probe timeout in the confirm pass, seconds (default: 3)
 #
 set -euo pipefail
 
@@ -18,6 +20,11 @@ PORTS="${PORTS:--top-ports 1000}"
 RUN_NUCLEI="${RUN_NUCLEI:-0}"
 NUCLEI_TAGS="${NUCLEI_TAGS:-exposure,misconfig,takeover,default-login}"
 RATE="${RATE:-1000}"
+RUN_CONFIRM="${RUN_CONFIRM:-1}"
+CONFIRM_TIMEOUT="${CONFIRM_TIMEOUT:-3}"
+
+# confirm.py sits next to scan.sh both in the image and in the repo
+CONFIRM_SCRIPT="$(dirname "$0")/confirm.py"
 
 TS="$(date -u +%Y%m%dT%H%M%SZ)"
 OUT="/output/${TS}"
@@ -66,6 +73,25 @@ else
 fi
 log "open host:port pairs: $(wc -l < "$OUT/hostports.txt")"
 
+# --- 4b. confirm: second pass to drop connect-scan false positives ---
+# Some NAT/ISP middleboxes answer SYNs for closed ports: naabu reports the
+# pair open, but the connection never carries a byte. confirm.py probes every
+# pair at the application level (banner grab, then a plain HTTP GET) and
+# splits them into ports.confirmed.jsonl / ports.unconfirmed.jsonl.
+: > "$OUT/ports.confirmed.jsonl"
+: > "$OUT/ports.unconfirmed.jsonl"
+if [[ "$RUN_CONFIRM" == "1" ]]; then
+  if [[ -s "$OUT/ports.jsonl" ]]; then
+    log "confirm: probing $(wc -l < "$OUT/hostports.txt") host:port pairs (timeout ${CONFIRM_TIMEOUT}s)"
+    python3 "$CONFIRM_SCRIPT" "$OUT/hostports.txt" "$OUT/ports.confirmed.jsonl" \
+      "$OUT/ports.unconfirmed.jsonl" "$CONFIRM_TIMEOUT" || true
+  else
+    log "confirm: nothing to confirm (naabu reported no open ports)"
+  fi
+else
+  log "confirm: skipped (RUN_CONFIRM=0)"
+fi
+
 # --- 5. httpx: probe HTTP services ---
 log "httpx: probing HTTP(S)"
 httpx -l "$OUT/hostports.txt" \
@@ -103,9 +129,20 @@ SUMMARY="$OUT/SUMMARY.txt"
   echo "Subdomains:     $(wc -l < "$OUT/subs.txt")"
   echo "Hosts scanned:  $(wc -l < "$OUT/hosts.txt")"
   echo "Open host:port: $(wc -l < "$OUT/hostports.txt")"
-  echo
-  echo "--- Open ports ---"
-  [[ -s "$OUT/ports.jsonl" ]] && jq -r '"\(.host // .ip):\(.port)"' "$OUT/ports.jsonl" | sort -u || echo "(none)"
+  if [[ "$RUN_CONFIRM" == "1" ]]; then
+    echo "Confirmed:      $(wc -l < "$OUT/ports.confirmed.jsonl")"
+    echo "Unconfirmed:    $(wc -l < "$OUT/ports.unconfirmed.jsonl")"
+    echo
+    echo "--- Confirmed ports (naabu + application-level probe) ---"
+    [[ -s "$OUT/ports.confirmed.jsonl" ]] && jq -r '"\(.host):\(.port)  [\(.method)] \(.evidence)"' "$OUT/ports.confirmed.jsonl" || echo "(none)"
+    echo
+    echo "--- Unconfirmed ports (connect OK, no application-level reply — NAT/ISP faking? check before trusting) ---"
+    [[ -s "$OUT/ports.unconfirmed.jsonl" ]] && jq -r '"\(.host):\(.port)  \(.reason)"' "$OUT/ports.unconfirmed.jsonl" || echo "(none)"
+  else
+    echo
+    echo "--- Open ports (unconfirmed — confirm pass skipped, RUN_CONFIRM=0) ---"
+    [[ -s "$OUT/ports.jsonl" ]] && jq -r '"\(.host // .ip):\(.port)"' "$OUT/ports.jsonl" | sort -u || echo "(none)"
+  fi
   echo
   echo "--- HTTP services (status | title | tech) ---"
   [[ -s "$OUT/http.jsonl" ]] && jq -r '"\(.url)  [\(.status_code // "?")]  \(.title // "")  \((.tech // [])|join(","))"' "$OUT/http.jsonl" || echo "(none)"

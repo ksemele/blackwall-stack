@@ -26,7 +26,7 @@ RUN go install github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest && 
 FROM debian:bookworm-slim
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    nmap masscan libpcap0.8 ca-certificates curl jq dnsutils bash \
+    nmap masscan libpcap0.8 ca-certificates curl jq dnsutils bash python3 \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /go/bin/subfinder /usr/local/bin/
@@ -42,7 +42,8 @@ COPY --from=builder /go/bin/nuclei    /usr/local/bin/
 RUN nuclei -update-templates -silent || true
 
 COPY scan.sh /usr/local/bin/scan.sh
-RUN chmod +x /usr/local/bin/scan.sh
+COPY confirm.py /usr/local/bin/confirm.py
+RUN chmod +x /usr/local/bin/scan.sh /usr/local/bin/confirm.py
 
 VOLUME ["/targets", "/output"]
 WORKDIR /output
