@@ -3,7 +3,7 @@
 # Agent identity
 wazuh_agent_name: "{{ inventory_hostname }}"
 wazuh_agent_groups: "default"
-# Replaces wazuh_agent_groups when the host runs in a container (/.dockerenv).
+# Replaces wazuh_agent_groups when the host runs in a container (Docker or podman).
 # Must exist on the manager (wazuh_manager_agent_groups); the blackwall TUI
 # flags such agents, since container kernels may lack audit support.
 wazuh_agent_container_group: "docker"
@@ -20,6 +20,14 @@ wazuh_enrollment_password: ""
 
 # Syscollector (system inventory)
 wazuh_syscollector_interval: "5m"
+
+# Real-time file integrity monitoring. Real-time needs one inotify instance per
+# wazuh-syscheckd; a real host has plenty. Set it to false where the instance
+# budget is not the host's own — the lab does, because container runtimes eat the
+# host budget (tests/inventory/group_vars/all.yml). With false, syscheck still
+# scans every wazuh_syscheck_frequency seconds.
+wazuh_fim_realtime: true
+wazuh_syscheck_frequency: 43200
 
 # Rootcheck (rootkit / anomaly scan) and SCA (CIS benchmark policies bundled
 # with the agent, picked automatically for the host OS)

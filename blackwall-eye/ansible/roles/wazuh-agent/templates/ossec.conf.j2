@@ -67,18 +67,19 @@
 
   <!-- File Integrity Monitoring -->
   <syscheck>
+{% set fim_realtime = 'yes' if wazuh_fim_realtime else 'no' %}
     <disabled>no</disabled>
-    <frequency>43200</frequency>
+    <frequency>{{ wazuh_syscheck_frequency }}</frequency>
     <scan_on_start>yes</scan_on_start>
 
-    <directories realtime="yes">/etc/passwd</directories>
-    <directories realtime="yes">/etc/shadow</directories>
-    <directories realtime="yes">/etc/sudoers</directories>
-    <directories realtime="yes">/etc/ssh/sshd_config</directories>
+    <directories realtime="{{ fim_realtime }}">/etc/passwd</directories>
+    <directories realtime="{{ fim_realtime }}">/etc/shadow</directories>
+    <directories realtime="{{ fim_realtime }}">/etc/sudoers</directories>
+    <directories realtime="{{ fim_realtime }}">/etc/ssh/sshd_config</directories>
     <!-- Common persistence paths: privilege grants, scheduled jobs, root's keys -->
-    <directories realtime="yes">/etc/sudoers.d</directories>
-    <directories realtime="yes">/etc/cron.d</directories>
-    <directories realtime="yes">/root/.ssh</directories>
+    <directories realtime="{{ fim_realtime }}">/etc/sudoers.d</directories>
+    <directories realtime="{{ fim_realtime }}">/etc/cron.d</directories>
+    <directories realtime="{{ fim_realtime }}">/root/.ssh</directories>
   </syscheck>
 
   <!-- Rootkit and system anomaly detection -->

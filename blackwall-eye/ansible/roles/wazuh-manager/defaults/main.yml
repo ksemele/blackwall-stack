@@ -30,8 +30,10 @@ wazuh_manager_agent_groups:
 # How long an agent may stay silent before it is marked disconnected
 wazuh_agents_disconnection_time: 10m
 
-# Syscheck settings
+# Syscheck settings. wazuh_fim_realtime works like in the wazuh-agent role:
+# real-time FIM costs wazuh-syscheckd an inotify instance.
 wazuh_syscheck_frequency: 43200
+wazuh_fim_realtime: true
 
 # Inventory and posture of the manager host itself (agent 000), same knobs as
 # the wazuh-agent role

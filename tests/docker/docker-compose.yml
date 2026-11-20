@@ -31,7 +31,18 @@ networks:
 # Override 'build.context' in each service to point at the right image directory.
 x-black-node: &black-node
   privileged: true
-  cgroup: host        # cgroup v2 (Docker Desktop macOS) — systemd needs host cgroup ns
+  # cgroup ns for systemd as PID 1. Default `host` (Docker Desktop / OrbStack on
+  # macOS, where the VM cgroup is already a private one and systemd mounts it fine).
+  # On Linux with rootless podman it must be `private`: with the host cgroup ns,
+  # systemd cannot mount /sys/fs/cgroup and exits 255 (see tests/README.md).
+  cgroup: ${BW_LAB_CGROUP:-host}
+  # systemd sizes every service's TasksMax as 15% of the cgroup pids limit.
+  # Rootless podman runs the nodes with the pids controller enabled and a default
+  # limit of 2048, so wazuh-manager dies at 307 tasks ("Unable to create new
+  # pthread"); 32768 raises DefaultTasksMax to 4915. Where the runtime hands the
+  # container no pids limit at all — the macOS runtimes this lab ran on before —
+  # systemd leaves TasksMax unlimited and this value changes nothing.
+  pids_limit: 32768
   tmpfs:
     - /run
     - /run/lock

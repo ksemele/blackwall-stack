@@ -44,6 +44,8 @@ Environment:
   BW_LAB_PROM_PORT  host port of Prometheus (default: 9090)
   BW_LAB_GRAFANA_PORT host port of Grafana (default: 3000)
                     both also drive bw-check's probes and URLs
+  BW_LAB_CGROUP     cgroup namespace of the systemd nodes (default: host;
+                    Linux + rootless podman needs private — see tests/README.md)
 
 Examples:
   bw-lab up                     # bring everything up and provision it

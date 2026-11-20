@@ -1235,7 +1235,7 @@ check_vm() {
   fi
 
   # 5 (before 4: on an immutable kernel nothing is loaded, so nothing can fail).
-  # A broken rule must fail the play: there is no /.dockerenv to ignore it.
+  # A broken rule must fail the play: a real host has no container marker to ignore it.
   if _vm_apply -e "$(_vm_rules "$bad")"; then
     bw_fail "5. broken rule (-p zz) did not fail the play"
   else

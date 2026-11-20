@@ -7,7 +7,9 @@ node.max_local_storage_nodes: "3"
 path.data: /var/lib/wazuh-indexer
 path.logs: /var/log/wazuh-indexer
 
-bootstrap.memory_lock: true
+# Decided in tasks/main.yml from the locked-memory ceiling of this host
+# (wazuh_indexer_memory_lock overrides it).
+bootstrap.memory_lock: {{ _indexer_memory_lock | bool | lower }}
 
 # ES 7.x compatibility — required for filebeat 7.10.2 (Wazuh-shipped) to write
 # alerts. OpenSearch otherwise rejects bulk requests containing `_type: _doc`.

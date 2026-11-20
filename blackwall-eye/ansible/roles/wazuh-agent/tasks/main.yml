@@ -1,8 +1,16 @@
 ---
-- name: Detect container environment (/.dockerenv)
-  stat:
-    path: /.dockerenv
-  register: _agent_dockerenv
+# Docker creates /.dockerenv, podman creates /run/.containerenv.
+- name: Detect container environment
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  loop:
+    - /.dockerenv
+    - /run/.containerenv
+  register: _container_markers
+
+- name: Note whether this host runs in a container
+  ansible.builtin.set_fact:
+    _in_container: "{{ _container_markers.results | selectattr('stat.exists') | list | length > 0 }}"
 
 # A single group, not "default,docker": agents enrolling at the same moment
 # into a not-yet-existing multigroup race inside wazuh-db, and the loser is left
@@ -10,7 +18,7 @@
 - name: Resolve enrollment groups
   set_fact:
     _wazuh_enroll_groups: >-
-      {{ wazuh_agent_container_group if _agent_dockerenv.stat.exists
+      {{ wazuh_agent_container_group if _in_container
          else wazuh_agent_groups }}
 
 # Rocky ships curl-minimal, which conflicts with the curl package: only
@@ -41,6 +49,7 @@
     allow_change_held_packages: true
     state: present
     update_cache: true
+    cache_valid_time: 3600
   when: ansible_facts['os_family'] == 'Debian'
 
 - name: Hold wazuh-agent (apt)
