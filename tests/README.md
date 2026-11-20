@@ -97,7 +97,49 @@ Fixtures go last because they stop `black-dead-98`; while it is stopped,
 Environment variables: `BW_PROFILE` (compose profile, default `ubuntu2204`),
 `BW_SSH_PASSWORD` (root password in the containers, default `blackwall`),
 `BW_LAB_PROM_PORT` (host port of `black-metrics-00`, default `9090`),
-`BW_LAB_GRAFANA_PORT` (host port of `black-grafana-00`, default `3000`).
+`BW_LAB_GRAFANA_PORT` (host port of `black-grafana-00`, default `3000`),
+`BW_LAB_CGROUP` (cgroup namespace of the systemd nodes, default `host`).
+
+**Linux with rootless podman: set `BW_LAB_CGROUP=private`.** The compose anchor
+`x-black-node` asks for the host cgroup namespace, which is what Docker Desktop
+and OrbStack need on macOS. Rootless podman on Linux gives that namespace to the
+container without granting it the mounts, and systemd dies at startup —
+`Failed to mount cgroup at /sys/fs/cgroup/systemd: Operation not permitted`,
+then `Failed to mount API filesystems`, exit 255 within seconds. `private` puts
+the node in its own cgroup namespace, and systemd reaches
+`Reached target Multi-User System`. Run it without sudo:
+
+```bash
+export BW_LAB_CGROUP=private     # put it in the shell profile so every run has it
+BW_LAB_PROM_PORT=19090 BW_LAB_GRAFANA_PORT=13000 tests/bin/bw-lab up
+```
+
+`sudo podman` does not fix the host namespace either (systemd then fails with
+`Failed to allocate manager object`), so rootless + `private` is the supported
+combination on Linux.
+
+Two more limits of rootless podman are handled in the lab itself, with no switch
+to remember:
+
+- **Task budget.** `pids_limit: 32768` sits in the same `x-black-node` anchor.
+  Rootless podman enables the cgroup pids controller and defaults it to 2048, and
+  systemd sizes every service's `TasksMax` as 15% of that: 307 tasks. The manager
+  needs more threads than that and aborts with
+  `wazuh-analysisd: CRITICAL: (1109): Unable to create new pthread`. 32768 raises
+  `DefaultTasksMax` to 4915. A runtime that caps nothing leaves `TasksMax`
+  unlimited, which is where this lab came from, and the value changes nothing
+  there.
+- **Memory locking.** The `wazuh-indexer` role now decides
+  `bootstrap.memory_lock` instead of hardcoding it: outside a container it stays
+  `true`, inside one it is `true` only when `/proc/1/limits` reports
+  `Max locked memory ... unlimited`. Rootless podman clamps a container to the
+  host user's ulimit (8 MB on Ubuntu; `--ulimit memlock=-1:-1` is answered with
+  `Operation not permitted`), and OpenSearch then fails its own bootstrap check
+  (`memory locking requested ... but memory is not locked`) with exit 78 — so in
+  these containers it is off, and the lab keeps working the way it did on
+  runtimes that grant unlimited. Override with `wazuh_indexer_memory_lock=true|false`.
+- **Real-time FIM.** `wazuh_fim_realtime: false` in
+  `tests/inventory/group_vars/all.yml`: see section 20.
 
 `BW_LAB_PROM_PORT` / `BW_LAB_GRAFANA_PORT` matter only when 9090 or 3000 are
 already taken on the host — a host-side Prometheus, or another web service.
@@ -292,7 +334,7 @@ Docker Desktop). What that kernel lacks, the lab cannot test:
 
 | Component | In the lab | Why |
 |---|---|---|
-| `auditd` | installed, rules deployed, **service fails to start** | no kernel audit support (`audit support not in kernel`); the role ignores the failure only when `/.dockerenv` exists |
+| `auditd` | installed, rules deployed, **service fails to start** | no kernel audit support (`audit support not in kernel`); the role ignores the failure only when a container marker (`/.dockerenv` or podman's `/run/.containerenv`) exists |
 | `nftables` | works on OrbStack; `bw-check nft` SKIPs on kernels without `nf_tables` | depends on the VM kernel |
 | FIM, rootcheck, SCA, syscollector | work | user-space only |
 
@@ -807,7 +849,7 @@ the rest of the lab does not.
 
 ## 20. Known limitations
 
-**auditd:** kernel audit netlink is not accessible inside Docker. The role installs rules correctly, but the service won't start in containers (detected via `/.dockerenv`). The role is tested on the Lima VM instead (`bw-lab vm`, `bw-check vm`).
+**auditd:** kernel audit netlink is not accessible inside containers. The role installs rules correctly, but the service won't start in them (detected via the container markers `/.dockerenv` / `/run/.containerenv`). The role is tested on the Lima VM instead (`bw-lab vm`, `bw-check vm`).
 
 **Dashboard cert:** self-signed; browsers show "Not Secure". Acceptable for `localhost` only. Never expose port 5601 beyond `localhost`.
 
@@ -819,6 +861,22 @@ dies and apt fails with `Temporary failure resolving ...`. Restarting the
 container restores those rules. See section 7.
 
 **Indexer/dashboard re-template:** Because bcrypt salts are random, the `internal_users.yml` template renders a new hash every run, so the indexer security config is re-pushed on every `security-node.yml` execution. Functionally idempotent (same password verifies) but not byte-idempotent. Acceptable.
+
+**Real-time FIM:** disabled in the lab (`wazuh_fim_realtime: false` in
+`tests/inventory/group_vars/all.yml`, role default is `yes`). Real-time monitoring
+costs `wazuh-syscheckd` one inotify instance, and a rootless-podman host bills it
+against the host user's single `fs.inotify.max_user_instances` budget (128 on
+Ubuntu) together with `conmon`, `pasta` and the systemd running inside every lab
+container. The budget is gone before the agents start: syscheckd logs
+`ERROR: (6607): Unable to initialize inotify`, its first scan blocks, and
+`wazuh-agent.service` is killed at its 45 s start timeout. A container cannot fix
+this itself — podman refuses the sysctl (`sysctl 'fs.inotify.max_user_instances'
+is not allowed`) because it is not namespaced, so raising it is a host-side change
+that needs root (`sudo sysctl fs.inotify.max_user_instances=524288`), after which
+the variable can go back to `true`. FIM itself still runs in the lab: it scans on
+`<frequency>` (`wazuh_syscheck_frequency`, 600 s here instead of the 12 h default)
+and at start-up instead of on every write, so `bw-trigger passwd` shows its alert
+on the next scan rather than immediately.
 
 ---
 
