@@ -10,6 +10,13 @@ path.logs: /var/log/wazuh-indexer
 # Decided in tasks/main.yml from the locked-memory ceiling of this host
 # (wazuh_indexer_memory_lock overrides it).
 bootstrap.memory_lock: {{ _indexer_memory_lock | bool | lower }}
+{% if bw_sso_enabled | default(false) | bool %}
+# The lab adds the OIDC auth domain through the security REST API instead of
+# rewriting config.yml + running securityadmin.sh (that would replace the users
+# and roles the lab creates over REST). Patching securityconfig over REST is an
+# explicitly unsupported operation and has to be switched on here.
+plugins.security.unsupported.restapi.allow_securityconfig_modification: true
+{% endif %}
 
 # ES 7.x compatibility — required for filebeat 7.10.2 (Wazuh-shipped) to write
 # alerts. OpenSearch otherwise rejects bulk requests containing `_type: _doc`.

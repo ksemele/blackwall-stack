@@ -1,0 +1,187 @@
+---
+# OIDC part of the indexer security config (lab only: bw_sso_enabled, i.e.
+# `bw-lab up --sso`).
+#
+# Why through the REST API and not through the config files in
+# /etc/wazuh-indexer/opensearch-security/: securityadmin.sh replaces every
+# config it is given, so shipping an auth domain or a role mapping there would
+# delete the users and roles other roles create over REST (brain-analyst's
+# brain_read/brain_ro) and the ones the package ships. This role runs
+# securityadmin.sh only when internal_users.yml changed.
+#
+# The auth domain is added with a JSON-Patch, which the API documents as an
+# explicitly unsupported operation: it needs
+# plugins.security.unsupported.restapi.allow_securityconfig_modification in
+# opensearch.yml (deployed by templates/opensearch.yml.j2, only with
+# bw_sso_enabled).
+#
+# Offline sources:
+#   opensearch-docs/_security/authentication-backends/openid-connect.md
+#     (openid_auth_domain, order, subject_key/roles_key/openid_connect_url,
+#      transport_enabled: false, issuer must be identical everywhere)
+#   opensearch-docs/_security/access-control/api.md
+#     (GET + JSON-Patch PATCH on /_plugins/_security/api/securityconfig,
+#      PUT /roles/<role>, PUT /rolesmapping/<role>)
+#
+# Content type: the docs post this JSON-Patch array as plain JSON
+# (opensearch-docs/_security/access-control/api.md, "Modify the security
+# configuration"), so `body_format: json` is what the task sends. A PUT on an
+# existing role answers 200 {"status":"OK"}, a new one 201 {"status":"CREATED"}
+# (api.md, "Create or replace roles") — used below so a second run reports no
+# changes.
+
+- name: Require the OIDC variables
+  ansible.builtin.assert:
+    that:
+      - wazuh_indexer_oidc_discovery_url | length > 0
+      - wazuh_indexer_oidc_group | length > 0
+    fail_msg: >-
+      bw_sso_enabled is set but wazuh_indexer_oidc_discovery_url /
+      wazuh_indexer_oidc_group are empty. Start the IdP first: bw-lab up --sso.
+
+- name: Wait for the IdP discovery document
+  ansible.builtin.uri:
+    url: "{{ wazuh_indexer_oidc_discovery_url }}"
+    method: GET
+    status_code: [200]
+  register: _oidc_discovery
+  retries: 12
+  delay: 5
+  until: _oidc_discovery.status is defined and _oidc_discovery.status == 200
+
+- name: Check the discovery document is an OIDC one
+  ansible.builtin.assert:
+    that:
+      - _oidc_discovery.json.issuer is defined
+      - _oidc_discovery.json.jwks_uri is defined
+    fail_msg: >-
+      {{ wazuh_indexer_oidc_discovery_url }} answered without issuer/jwks_uri:
+      check the IdP's --hostname / --hostname-backchannel-dynamic flags and the
+      realm name (bw_idp_realm).
+
+# securityadmin.sh may have pushed a config a moment ago, and while the security
+# index is being reloaded every security API call answers 503 — briefly also 401.
+# Those codes are therefore accepted by the module and judged by `until`, which
+# retries them; a code the module would raise on ends the task after one attempt.
+- name: Apply the OIDC wiring through the security REST API
+  module_defaults:
+    ansible.builtin.uri:
+      user: "{{ wazuh_indexer_admin_user }}"
+      password: "{{ wazuh_indexer_admin_password }}"
+      force_basic_auth: true
+      validate_certs: "{{ wazuh_indexer_oidc_verify_tls | bool }}"
+      ca_path: "{{ wazuh_indexer_oidc_ca_file if wazuh_indexer_oidc_verify_tls | bool else omit }}"
+  block:
+    - name: Read the indexer security config
+      ansible.builtin.uri:
+        url: "{{ wazuh_indexer_url }}/_plugins/_security/api/securityconfig"
+        method: GET
+        status_code: [200, 401, 503]
+      register: _security_config
+      retries: 18
+      delay: 5
+      until: _security_config.status is defined and _security_config.status == 200
+      no_log: true
+
+    - name: Remember the auth domain as the indexer has it now
+      ansible.builtin.set_fact:
+        _oidc_current_domain: >-
+          {{ (_security_config.json.config.dynamic.authc | default({}, true))
+             [wazuh_indexer_oidc_auth_domain] | default({}, true) }}
+
+    # Re-applied when the IdP moved (different realm name, different container,
+    # different port): the URLs stored in the domain would otherwise keep
+    # pointing at the old discovery document and every token would be rejected.
+    - name: Add {{ wazuh_indexer_oidc_auth_domain }} next to the basic auth domain
+      ansible.builtin.uri:
+        url: "{{ wazuh_indexer_url }}/_plugins/_security/api/securityconfig"
+        method: PATCH
+        body_format: json
+        # JSON-Patch array posted as plain JSON, exactly as api.md shows it.
+        status_code: [200, 201, 503]
+        body:
+          - op: add
+            path: "/config/dynamic/authc/{{ wazuh_indexer_oidc_auth_domain }}"
+            value:
+              description: "Authenticate OpenID Connect bearer tokens (lab: Keycloak)"
+              http_enabled: true
+              # REST only: agent and dashboard traffic keeps using the domains
+              # the package ships.
+              transport_enabled: false
+              # Tried first: a bearer ID token authenticates here, HTTP basic
+              # still works through the shipped domains (order 4).
+              order: 1
+              http_authenticator:
+                type: openid
+                # No WWW-Authenticate challenge: blackwall sends its own
+                # Authorization header, and a 401 has to stay a 401.
+                challenge: false
+                config:
+                  subject_key: "{{ wazuh_indexer_oidc_subject_key }}"
+                  roles_key: "{{ wazuh_indexer_oidc_roles_key }}"
+                  openid_connect_url: "{{ wazuh_indexer_oidc_discovery_url }}"
+              authentication_backend:
+                type: noop
+      register: _oidc_patch
+      retries: 18
+      delay: 5
+      until: _oidc_patch.status is defined and _oidc_patch.status in [200, 201]
+      # Every field this task's PATCH body hard-codes is compared here too, so a
+      # domain left behind by an older run (different order, a challenge a browser
+      # would be asked for) is rewritten instead of kept.
+      when: >-
+        _oidc_current_domain | length == 0
+        or _oidc_current_domain.http_authenticator.config.openid_connect_url | default('') != wazuh_indexer_oidc_discovery_url
+        or _oidc_current_domain.http_authenticator.config.subject_key | default('') != wazuh_indexer_oidc_subject_key
+        or _oidc_current_domain.http_authenticator.config.roles_key | default('') != wazuh_indexer_oidc_roles_key
+        or _oidc_current_domain.order | default(0) != 1
+        or _oidc_current_domain.http_enabled | default(false) != true
+        or _oidc_current_domain.http_authenticator.challenge | default(true) != false
+      no_log: true
+
+    - name: Create the read role for indexer alerts
+      ansible.builtin.uri:
+        url: "{{ wazuh_indexer_url }}/_plugins/_security/api/roles/{{ wazuh_indexer_oidc_read_role }}"
+        method: PUT
+        body_format: json
+        status_code: [200, 201, 503]
+        body:
+          description: "Read alerts written by filebeat (SSO lab)"
+          cluster_permissions: ["cluster_composite_ops_ro"]
+          index_permissions:
+            - index_patterns:
+                - "{{ wazuh_indexer_oidc_index_pattern }}"
+              allowed_actions:
+                - "read"
+      register: _oidc_role
+      retries: 18
+      delay: 5
+      until: _oidc_role.status is defined and _oidc_role.status in [200, 201]
+      changed_when: _oidc_role.status == 201
+      no_log: true
+
+    - name: Map the IdP group to that role
+      ansible.builtin.uri:
+        url: "{{ wazuh_indexer_url }}/_plugins/_security/api/rolesmapping/{{ wazuh_indexer_oidc_read_role }}"
+        method: PUT
+        body_format: json
+        status_code: [200, 201, 503]
+        body:
+          backend_roles:
+            - "{{ wazuh_indexer_oidc_group }}"
+      register: _oidc_mapping
+      retries: 18
+      delay: 5
+      until: _oidc_mapping.status is defined and _oidc_mapping.status in [200, 201]
+      changed_when: _oidc_mapping.status == 201
+      no_log: true
+
+- name: Show the OIDC auth domain in effect
+  ansible.builtin.debug:
+    msg: >-
+      {{ wazuh_indexer_oidc_auth_domain }} (order 1, before basic auth): issuer
+      {{ _oidc_discovery.json.issuer }}, subject_key
+      {{ wazuh_indexer_oidc_subject_key }}, roles_key
+      {{ wazuh_indexer_oidc_roles_key }}; group {{ wazuh_indexer_oidc_group }}
+      maps to role {{ wazuh_indexer_oidc_read_role }} on
+      {{ wazuh_indexer_oidc_index_pattern }}

@@ -174,3 +174,9 @@
     JAVA_HOME: /usr/share/wazuh-indexer/jdk
   when: _internal_users.changed
   changed_when: true
+
+# bw-lab up --sso exports BW_SSO=1, which group_vars/all.yml turns into
+# bw_sso_enabled. Without it nothing below runs.
+- name: Apply the indexer OIDC (SSO) wiring
+  include_tasks: sso.yml
+  when: bw_sso_enabled | default(false) | bool

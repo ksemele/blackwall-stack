@@ -154,6 +154,46 @@ services:
       blackwall-test:
         ipv4_address: 172.28.0.16
 
+  # ── OIDC identity provider (Keycloak) ─────────────────────────────────────
+  # Profile: sso — started only by `bw-lab up --sso`, never by a plain up.
+  # Realm and clients come from ./keycloak/blackwall-lab-realm.json, imported on
+  # first start; see ./keycloak/README.md for the issuer design.
+  # Ports:
+  #   black-idp-00: 18080 on loopback (BW_LAB_IDP_PORT), container :8080
+  #                 (8080/9090/3000 are taken on the shared lab host)
+
+  black-idp-00:
+    image: quay.io/keycloak/keycloak:26.8.2
+    profiles: [sso]
+    container_name: black-idp-00
+    hostname: black-idp-00
+    # Dev mode: plain HTTP, embedded database, no TLS keystore to build
+    # (keycloak/docs/guides/server/containers.adoc).
+    #
+    # One issuer for everyone: --hostname fixes the frontchannel URL (that is the
+    # issuer in the discovery document and in every ID token), while
+    # --hostname-backchannel-dynamic resolves the backend URLs (token endpoint,
+    # JWKS) per request, so the indexer can follow jwks_uri through the container
+    # name and still validate tokens whose iss is the loopback URL blackwall
+    # uses. Option names and the "hostname must be a full URL with dynamic
+    # backchannel" rule: keycloak/docs/guides/server/hostname.adoc.
+    command:
+      - start-dev
+      - --import-realm
+      - --hostname=http://127.0.0.1:${BW_LAB_IDP_PORT:-18080}
+      - --hostname-backchannel-dynamic=true
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: labadmin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: labadmin   # lab-only
+    volumes:
+      - ./keycloak/blackwall-lab-realm.json:/opt/keycloak/data/import/blackwall-lab-realm.json:ro
+    ports:
+      - "127.0.0.1:${BW_LAB_IDP_PORT:-18080}:8080"
+    networks:
+      blackwall-test:
+        ipv4_address: 172.28.0.30
+    restart: "no"
+
   # ── Monitoring stack: Prometheus + Grafana ────────────────────────────────
   # Profile: ubuntu2204
   # Plain containers, not systemd nodes: they need no privileged mode, host

@@ -1,0 +1,231 @@
+---
+# SSO part of the Wazuh API RBAC (lab only: bw_sso_enabled, i.e. `bw-lab up
+# --sso`).
+#
+# What blackwall does against the Wazuh API is: HTTP Basic as a service user,
+# then POST /security/user/authenticate/run_as with the ID token's claims, then
+# plain Bearer on every call. For that to be observable the service user must
+# have no roles of its own — otherwise the run_as token inherits whatever the
+# service user already could do. The packaged `wazuh` user holds the
+# administrator role in every context, so it cannot show the claim mapping at
+# all; this creates a dedicated user instead.
+#
+# Entities (names come from group_vars/wazuh_managers.yml):
+#   user    svc-blackwall         Basic identity, allow_run_as=true, no roles
+#   policy  blackwall_agents_read   agent:read on agent:id:*
+#   role    blackwall_readonly      policy above + rule below
+#   rule    blackwall_groups_analysts   FIND groups == <IdP group>
+# A run_as context whose groups claim matches the rule gets the role, and only
+# then the policy. A context from another group still authenticates: Wazuh runs
+# RBAC in white-list mode (api/api/configuration.py "rbac_mode": "white"), where
+# a call with no policy behind it answers 200 with an empty item list rather
+# than 403 — which is why bw-check sso asserts the number of items an unmapped
+# context reads, not the status code.
+#
+# Offline sources:
+#   wazuh-api-spec/api/api/spec/spec.yaml — POST /security/users (username +
+#     password only), PUT /security/users/{user_id}/run_as?allow_run_as=,
+#     POST /security/policies {name, policy:{actions, resources, effect}},
+#     POST /security/roles {name}, POST /security/rules {name, rule},
+#     POST /security/roles/{role_id}/policies?policy_ids=,
+#     POST /security/roles/{role_id}/rules?rule_ids=
+#   wazuh-docs/source/user-manual/api/rbac/reference.rst — GET /agents applies
+#     agent:read on agent:id / agent:group
+#   wazuh-docs/source/user-manual/api/rbac/auth-context.rst + configuration.rst
+#     — run_as requires allow_run_as and an auth context of username/groups;
+#     changing RBAC *mode* revokes issued tokens (creating entities does not)
+
+- name: Log in to the Wazuh API as the packaged admin user
+  ansible.builtin.uri:
+    url: "{{ wazuh_api_url }}/security/user/authenticate"
+    method: POST
+    user: "{{ wazuh_manager_api_user }}"
+    password: "{{ wazuh_manager_api_password }}"
+    force_basic_auth: true
+    validate_certs: "{{ wazuh_api_verify_tls | bool }}"
+    # Accepted while the manager is still coming up: 500 "Some Wazuh daemons are
+    # not ready yet in node "node01"" (very often wazuh-analysisd) and 401 while
+    # the RBAC users are not initialized yet. `until` decides when it is ready.
+    status_code: [200, 401, 500, 503]
+  register: _api_login
+  until: _api_login.status is defined and _api_login.status == 200
+  retries: 24
+  delay: 5
+  no_log: true
+
+- name: Remember the admin token
+  ansible.builtin.set_fact:
+    _api_token: "{{ _api_login.json.data.token }}"
+
+- name: List current API users, roles, policies and rules
+  ansible.builtin.uri:
+    url: "{{ wazuh_api_url }}/security/{{ item }}?limit=500"
+    method: GET
+    headers:
+      Authorization: "Bearer {{ _api_token }}"
+    validate_certs: "{{ wazuh_api_verify_tls | bool }}"
+    status_code: [200]
+  loop: [users, roles, policies, rules]
+  register: _rbac_current
+  changed_when: false
+
+- name: Pick the entities that already exist
+  ansible.builtin.set_fact:
+    _rbac: >-
+      {{ dict(
+           users=(_rbac_current.results[0].json.data.affected_items | default([])),
+           roles=(_rbac_current.results[1].json.data.affected_items | default([])),
+           policies=(_rbac_current.results[2].json.data.affected_items | default([])),
+           rules=(_rbac_current.results[3].json.data.affected_items | default([]))
+         ) }}
+
+- name: Create the service user blackwall authenticates as
+  ansible.builtin.uri:
+    url: "{{ wazuh_api_url }}/security/users"
+    method: POST
+    body_format: json
+    headers:
+      Authorization: "Bearer {{ _api_token }}"
+    validate_certs: "{{ wazuh_api_verify_tls | bool }}"
+    status_code: [200, 201]
+    body:
+      username: "{{ wazuh_api_run_as_user }}"
+      password: "{{ wazuh_api_run_as_password }}"
+  when: _rbac.users | selectattr('username', 'equalto', wazuh_api_run_as_user) | list | length == 0
+  no_log: true
+
+- name: Find the service user again
+  ansible.builtin.uri:
+    url: "{{ wazuh_api_url }}/security/users?limit=500"
+    method: GET
+    headers:
+      Authorization: "Bearer {{ _api_token }}"
+    validate_certs: "{{ wazuh_api_verify_tls | bool }}"
+    status_code: [200]
+  register: _svc_user
+  changed_when: false
+
+- name: Set the service user fact
+  ansible.builtin.set_fact:
+    _svc: "{{ (_svc_user.json.data.affected_items | selectattr('username', 'equalto', wazuh_api_run_as_user) | list) | first }}"
+
+- name: Allow the service user to be used for run_as
+  ansible.builtin.uri:
+    url: "{{ wazuh_api_url }}/security/users/{{ _svc.id }}/run_as?allow_run_as=true"
+    method: PUT
+    headers:
+      Authorization: "Bearer {{ _api_token }}"
+    validate_certs: "{{ wazuh_api_verify_tls | bool }}"
+    status_code: [200]
+  when: not (_svc.allow_run_as | default(false))
+
+- name: Create the agent-read policy
+  ansible.builtin.uri:
+    url: "{{ wazuh_api_url }}/security/policies"
+    method: POST
+    body_format: json
+    headers:
+      Authorization: "Bearer {{ _api_token }}"
+    validate_certs: "{{ wazuh_api_verify_tls | bool }}"
+    status_code: [200, 201]
+    body:
+      name: "{{ wazuh_api_run_as_policy }}"
+      policy:
+        actions: ["agent:read"]
+        resources: ["agent:id:*"]
+        effect: "allow"
+  when: _rbac.policies | selectattr('name', 'equalto', wazuh_api_run_as_policy) | list | length == 0
+
+- name: Create the read-only role
+  ansible.builtin.uri:
+    url: "{{ wazuh_api_url }}/security/roles"
+    method: POST
+    body_format: json
+    headers:
+      Authorization: "Bearer {{ _api_token }}"
+    validate_certs: "{{ wazuh_api_verify_tls | bool }}"
+    status_code: [200, 201]
+    body:
+      name: "{{ wazuh_api_run_as_role }}"
+  when: _rbac.roles | selectattr('name', 'equalto', wazuh_api_run_as_role) | list | length == 0
+
+- name: Create the rule that matches the IdP groups claim
+  ansible.builtin.uri:
+    url: "{{ wazuh_api_url }}/security/rules"
+    method: POST
+    body_format: json
+    headers:
+      Authorization: "Bearer {{ _api_token }}"
+    validate_certs: "{{ wazuh_api_verify_tls | bool }}"
+    status_code: [200, 201]
+    body:
+      name: "{{ wazuh_api_run_as_rule }}"
+      # FIND compares a scalar against every element of a list-valued context
+      # field (framework/wazuh/rbac/auth_context.py), so a run_as context of
+      # {"groups": ["analysts"]} matches this rule.
+      rule:
+        FIND:
+          groups: "{{ wazuh_api_run_as_group }}"
+  when: _rbac.rules | selectattr('name', 'equalto', wazuh_api_run_as_rule) | list | length == 0
+
+- name: Read the role back with its bindings
+  ansible.builtin.uri:
+    url: "{{ wazuh_api_url }}/security/roles?limit=500"
+    method: GET
+    headers:
+      Authorization: "Bearer {{ _api_token }}"
+    validate_certs: "{{ wazuh_api_verify_tls | bool }}"
+    status_code: [200]
+  register: _roles
+  changed_when: false
+
+- name: Set the role fact
+  ansible.builtin.set_fact:
+    _role: "{{ (_roles.json.data.affected_items | selectattr('name', 'equalto', wazuh_api_run_as_role) | list) | first }}"
+
+- name: List the policies and rules with their internal ids
+  ansible.builtin.uri:
+    url: "{{ wazuh_api_url }}/security/{{ item }}?limit=500"
+    method: GET
+    headers:
+      Authorization: "Bearer {{ _api_token }}"
+    validate_certs: "{{ wazuh_api_verify_tls | bool }}"
+    status_code: [200]
+  loop: [policies, rules]
+  register: _rbac_ids
+  changed_when: false
+
+- name: Set the id facts
+  ansible.builtin.set_fact:
+    _policy_id: "{{ ((_rbac_ids.results[0].json.data.affected_items | selectattr('name', 'equalto', wazuh_api_run_as_policy) | list) | first).id }}"
+    _rule_id: "{{ ((_rbac_ids.results[1].json.data.affected_items | selectattr('name', 'equalto', wazuh_api_run_as_rule) | list) | first).id }}"
+
+- name: Attach the policy to the role
+  ansible.builtin.uri:
+    url: "{{ wazuh_api_url }}/security/roles/{{ _role.id }}/policies?policy_ids={{ _policy_id }}"
+    method: POST
+    headers:
+      Authorization: "Bearer {{ _api_token }}"
+    validate_certs: "{{ wazuh_api_verify_tls | bool }}"
+    status_code: [200, 201]
+  when: _policy_id not in (_role.policies | default([], true))
+
+- name: Attach the rule to the role
+  ansible.builtin.uri:
+    url: "{{ wazuh_api_url }}/security/roles/{{ _role.id }}/rules?rule_ids={{ _rule_id }}"
+    method: POST
+    headers:
+      Authorization: "Bearer {{ _api_token }}"
+    validate_certs: "{{ wazuh_api_verify_tls | bool }}"
+    status_code: [200, 201]
+  when: _rule_id not in (_role.rules | default([], true))
+
+- name: Check that the service user carries no roles of its own
+  ansible.builtin.assert:
+    that:
+      - _svc.roles | default([]) | length == 0
+    fail_msg: >-
+      {{ wazuh_api_run_as_user }} already has roles
+      {{ _svc.roles | default([]) | list }} (GET /security/users reports role
+      ids): a run_as token would inherit them and the groups claim would not
+      decide anything.

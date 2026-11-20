@@ -8,6 +8,24 @@ wazuh_indexer_admin_password: "Blackwall1!"
 wazuh_manager_api_user: "wazuh"
 wazuh_manager_api_password: "wazuh"
 
+# Indexer OIDC part (bw-lab up --sso): the IdP container answers on the lab
+# network under its own name; Keycloak publishes one issuer for both sides.
+# See tests/docker/keycloak/README.md.
+wazuh_indexer_oidc_discovery_url: "http://black-idp-00:8080/realms/{{ bw_idp_realm }}/.well-known/openid-configuration"
+wazuh_indexer_oidc_group: "analysts"
+wazuh_indexer_oidc_read_role: "blackwall_read"
+
+# Wazuh API: the service user blackwall logs in as (Basic) before run_as, and
+# the RBAC entities that map the token's groups claim to a read-only role.
+# The password follows the API's own policy — 8-64 chars with an uppercase, a
+# lowercase, a number and a symbol (wazuh-docs/source/user-manual/api/securing-api.rst).
+wazuh_api_run_as_user: "svc-blackwall"
+wazuh_api_run_as_password: "Blackwall-Lab1!"   # lab-only
+wazuh_api_run_as_group: "analysts"
+wazuh_api_run_as_role: "blackwall_readonly"
+wazuh_api_run_as_policy: "blackwall_agents_read"
+wazuh_api_run_as_rule: "blackwall_groups_analysts"
+
 # Lab: the stopped black-dead-98 fixture should read as disconnected right
 # after `bw-lab up`, not ten minutes later.
 wazuh_agents_disconnection_time: 1m
