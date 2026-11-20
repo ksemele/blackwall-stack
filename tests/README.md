@@ -487,7 +487,7 @@ ssh -F tests/docker/ssh_config black-master-00 hostname    # → black-master-00
 ssh -F tests/docker/ssh_config black-host-01 hostname      # → black-host-01
 
 ansible all -m wait_for_connection -T 30
-# Expect: SUCCESS for all three systemd nodes
+# Expect: SUCCESS for all six systemd nodes of the default lab
 ```
 
 ### Wazuh indexer
