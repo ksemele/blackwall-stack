@@ -10,6 +10,16 @@ blockers: []
 
 ## Done
 
+- 2026-11-18: unit coverage for Brain's Telegram message text (#20).
+  `blackwall-brain/tests/test_message.py` pins the fallback log at 300 characters,
+  keeps backticks, `</pre>` or `<script>` inside `full_log` from closing or adding
+  markup to the `<pre>` block, keeps Markdown-ish text (`privilege_escalation`, `*`,
+  brackets, backticks — the bug of 2026-10-14) harmless next to Brain's own tags, and
+  formats an alert with no `rule`/`agent` as `unknown` / `no description` / `?` instead
+  of raising — the last one needed `no description` added to `_rule_line`. The
+  `brain.py.j2` Markdown escaping the issue names is gone: `2c3aa42` deleted the
+  template, `a80002f` moved Telegram to HTML parse mode, so the checks live in the
+  package suite.
 - 2026-11-18: hermetic eval capture tests. `capture_scenario` bound `docker_exec`
   as a default argument, so monkeypatching it in `test_main_exit_1_and_no_snapshot_on_failure`
   did not reach the `main` path and the test ran real `docker` (it only passed on

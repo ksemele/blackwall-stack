@@ -73,10 +73,11 @@ def _host(alert: dict) -> str:
 
 def _rule_line(alert: dict, limit: int | None) -> str:
     rule = alert.get("rule", {})
+    desc = rule.get("description") or "no description"
     when = _parse_ts(alert.get("timestamp", ""))
     ts = when.strftime("%Y-%m-%d %H:%M UTC") if when else escape(alert.get("timestamp", "?"))
     return (f"Rule {escape(str(rule.get('id', '?')))} (level {escape(str(rule.get('level', '?')))}): "
-            f"{escape(_cut(rule.get('description', ''), limit))} · {ts}")
+            f"{escape(_cut(desc, limit))} · {ts}")
 
 
 def _links_line(alert: dict, doc_id: str, dashboard_url: str, links: dict) -> list[str]:
