@@ -19,6 +19,11 @@ BW_SSH_PASSWORD="${BW_SSH_PASSWORD:-blackwall}"
 export BW_LAB_PROM_PORT="${BW_LAB_PROM_PORT:-9090}"
 export BW_LAB_GRAFANA_PORT="${BW_LAB_GRAFANA_PORT:-3000}"
 
+# cgroup namespace of the systemd nodes, interpolated into the compose anchor.
+# Exported for the same reason as the two ports. Default `host` (macOS container
+# runtimes); Linux + rootless podman needs `private` — see tests/README.md.
+export BW_LAB_CGROUP="${BW_LAB_CGROUP:-host}"
+
 # Web endpoints of the test environment.
 BW_GRAFANA_URL="http://localhost:${BW_LAB_GRAFANA_PORT}"
 BW_GRAFANA_AUTH="admin:blackwall"
