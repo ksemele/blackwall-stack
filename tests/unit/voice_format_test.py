@@ -9,7 +9,7 @@ import os; os.chdir(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..
 role="blackwall-voice/ansible/roles/telegram-alerter"
 d=yaml.safe_load(open(f"{role}/defaults/main.yml")); ctx={}
 for k,v in d.items(): ctx[k]=jinja2.Template(v).render(**ctx) if isinstance(v,str) else v
-ctx.update(severity_threshold=10, voice_max_level_effective="9", telegram_bot_token="t", telegram_chat_id="1")
+ctx.update(severity_threshold=10, voice_max_level_effective="9", telegram_bot_token="123456:FAKE-BOT-TOKEN", telegram_chat_id="1")
 src=jinja2.Template(open(f"{role}/templates/alerter.py.j2").read()).render(**ctx)
 t=tempfile.mkdtemp(); open(t+"/m.py","w").write(src)
 spec=importlib.util.spec_from_file_location("m",t+"/m.py"); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
