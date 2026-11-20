@@ -13,6 +13,11 @@ wazuh_api_port: 55000
 wazuh_api_enabled: "yes"
 # API bind address; 0.0.0.0 keeps the packaged default (all interfaces)
 wazuh_api_host: "0.0.0.0"
+# Endpoint the manager's own REST API answers on, from the manager host itself.
+# The API ships a self-signed certificate, so TLS verification is off here;
+# ansible/playbooks/verify-api.yml does the same.
+wazuh_api_url: "https://127.0.0.1:{{ wazuh_api_port }}"
+wazuh_api_verify_tls: false
 
 # Wazuh-shipped filebeat release (same string for deb and rpm)
 wazuh_filebeat_version: "7.10.2-2"

@@ -185,3 +185,9 @@
     enabled: true
     state: started
     daemon_reload: true
+
+# bw-lab up --sso exports BW_SSO=1, which group_vars/all.yml turns into
+# bw_sso_enabled. Without it nothing below runs.
+- name: Apply the Wazuh API run_as (SSO) wiring
+  include_tasks: sso.yml
+  when: bw_sso_enabled | default(false) | bool

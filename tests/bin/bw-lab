@@ -22,7 +22,10 @@ bw-lab — lifecycle of the Blackwall test environment
 Usage: bw-lab <command> [args]
 
 Commands:
-  up [--no-provision] [--profile P]   start containers, then provision them
+  up [--no-provision] [--profile P] [--sso]
+                                      start containers, then provision them;
+                                      --sso also starts the Keycloak IdP and
+                                      provisions the OIDC parts (see tests/README.md)
   down [--keep-data]                  stop the environment (volumes removed by default)
   reset                               down -v + wipe Wazuh certs + up
   status                              containers, ports, monitoring health
@@ -46,10 +49,14 @@ Environment:
                     both also drive bw-check's probes and URLs
   BW_LAB_CGROUP     cgroup namespace of the systemd nodes (default: host;
                     Linux + rootless podman needs private — see tests/README.md)
+  BW_SSO            1 makes `provision` apply the OIDC parts; `up --sso` sets it
+                    (run `BW_SSO=1 bw-lab provision eye` to re-apply them by hand)
+  BW_LAB_IDP_PORT   loopback port of the IdP (default: 18080)
 
 Examples:
   bw-lab up                     # bring everything up and provision it
   bw-lab up --no-provision      # containers only, run ansible by hand
+  bw-lab up --sso               # same, plus the Keycloak IdP and OIDC wiring
   bw-lab provision nftables     # re-apply the firewall role
   bw-lab ssh black-host-01 'nft list ruleset'
 USAGE
@@ -145,12 +152,17 @@ cmd_up() {
     case "$1" in
       --no-provision) provision=0; shift ;;
       --profile)      BW_PROFILE="${2:?--profile needs a value}"; shift 2 ;;
+      --sso)          BW_SSO=1; export BW_SSO; shift ;;
       *)              bw_die "unknown flag: $1" ;;
     esac
   done
 
   bw_require_docker
-  bw_info "starting containers (profile $BW_PROFILE)"
+  if [[ "$BW_SSO" == "1" ]]; then
+    bw_info "starting containers (profile $BW_PROFILE, SSO on — IdP on $BW_IDP_URL)"
+  else
+    bw_info "starting containers (profile $BW_PROFILE)"
+  fi
   bw_compose up -d --build
 
   bw_require_ansible
@@ -173,10 +185,10 @@ cmd_down() {
   bw_require_docker
   if (( keep_data )); then
     bw_info "stopping the environment, keeping volumes"
-    bw_compose down
+    bw_compose_all_profiles down
   else
     bw_info "stopping the environment and removing volumes"
-    bw_compose down -v
+    bw_compose_all_profiles down -v
   fi
 }
 
@@ -197,7 +209,15 @@ cmd_status() {
   printf '\n'
   bw_info "web endpoints"
 
-  local label url auth curl_args
+  local label url auth curl_args targets
+  targets="prometheus $BW_PROM_URL/-/ready -
+grafana $BW_GRAFANA_URL/api/health $BW_GRAFANA_AUTH
+dashboard $BW_DASHBOARD_URL/ -"
+  # The IdP only exists in an SSO lab; listing it always would read as a failure.
+  if docker inspect black-idp-00 >/dev/null 2>&1; then
+    targets="${targets}
+idp ${BW_IDP_DISCOVERY} -"
+  fi
   while read -r label url auth; do
     curl_args=(-sf -k -m 3 -o /dev/null)
     [[ "$auth" != "-" ]] && curl_args+=(-u "$auth")
@@ -206,11 +226,7 @@ cmd_status() {
     else
       printf '  %sdown%s  %-11s %s\n' "$BW_RED" "$BW_RESET" "$label" "$url"
     fi
-  done <<STATUS_TARGETS
-prometheus $BW_PROM_URL/-/ready -
-grafana $BW_GRAFANA_URL/api/health $BW_GRAFANA_AUTH
-dashboard $BW_DASHBOARD_URL/ -
-STATUS_TARGETS
+  done <<< "$targets"
 }
 
 cmd_ssh() {
