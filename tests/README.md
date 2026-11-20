@@ -1045,7 +1045,9 @@ Two consequences worth knowing:
 ### `bw-check sso`
 
 `tests/bin/bw-check sso` runs the whole chain and prints one line per assertion;
-it SKIPs (does not fail) when the lab has no `black-idp-00`. It checks: the
+it SKIPs (does not fail) when the lab has no `black-idp-00` — including the case
+where the IdP was started with `--sso` and died later, so a SKIP here means "no
+IdP to talk to", and `tests/bin/bw-lab logs black-idp-00` says why. It checks: the
 discovery document from the host and from inside `black-master-00` (same issuer,
 JWKS following the caller, PKCE `S256`, `device_authorization_endpoint`
 published), a real device-grant request for `blackwall-cli` answering with
