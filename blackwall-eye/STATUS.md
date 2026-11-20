@@ -28,7 +28,7 @@ blockers: []
   `geerlingguy/docker-debian12-ansible`, which ships **no rsyslog** — so both
   `ossec.conf.j2` templates now read journald on the RHEL family *and* on
   Debian 12+ (`distribution_major_version`); a syslog localfile on Debian 12
-  collects nothing, and 100009/100207/100209 would go silent there. Ubuntu and
+  collects nothing, and 5710/100207/100209 would go silent there. Ubuntu and
   Debian 11 keep `/var/log/{auth.log,syslog}`. Pinned by
   `tests/unit/ossec_log_sources_test.py`; `verify-agent-events.yml` drives the
   failed-login event on every live agent, not only the RHEL one (#24).
