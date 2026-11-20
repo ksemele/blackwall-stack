@@ -1,8 +1,17 @@
 ---
-- name: Detect container environment (/.dockerenv)
+# Docker creates /.dockerenv, podman creates /run/.containerenv. The lab runs on
+# both, and each marker is present only under its own runtime.
+- name: Detect container environment
   ansible.builtin.stat:
-    path: /.dockerenv
-  register: _dockerenv
+    path: "{{ item }}"
+  loop:
+    - /.dockerenv
+    - /run/.containerenv
+  register: _container_markers
+
+- name: Note whether this host runs in a container
+  ansible.builtin.set_fact:
+    _in_container: "{{ _container_markers.results | selectattr('stat.exists') | list | length > 0 }}"
 
 - name: Wait for dpkg lock to be released
   when: ansible_facts['os_family'] == 'Debian'
@@ -45,7 +54,7 @@
   register: _auditctl_status
   changed_when: false
   failed_when: false
-  when: not _dockerenv.stat.exists
+  when: not _in_container
 
 - name: Note whether audit rules are immutable
   ansible.builtin.set_fact:
@@ -59,4 +68,4 @@
     enabled: true
     state: started
     daemon_reload: true
-  ignore_errors: "{{ _dockerenv.stat.exists }}"
+  ignore_errors: "{{ _in_container }}"
