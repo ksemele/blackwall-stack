@@ -126,11 +126,17 @@
       retries: 18
       delay: 5
       until: _oidc_patch.status is defined and _oidc_patch.status in [200, 201]
+      # Every field this task's PATCH body hard-codes is compared here too, so a
+      # domain left behind by an older run (different order, a challenge a browser
+      # would be asked for) is rewritten instead of kept.
       when: >-
         _oidc_current_domain | length == 0
         or _oidc_current_domain.http_authenticator.config.openid_connect_url | default('') != wazuh_indexer_oidc_discovery_url
         or _oidc_current_domain.http_authenticator.config.subject_key | default('') != wazuh_indexer_oidc_subject_key
         or _oidc_current_domain.http_authenticator.config.roles_key | default('') != wazuh_indexer_oidc_roles_key
+        or _oidc_current_domain.order | default(0) != 1
+        or _oidc_current_domain.http_enabled | default(false) != true
+        or _oidc_current_domain.http_authenticator.challenge | default(true) != false
       no_log: true
 
     - name: Create the read role for indexer alerts
