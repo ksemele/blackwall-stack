@@ -21,3 +21,21 @@ wazuh_certs_local_dir: "{{ playbook_dir }}/../../../tests/.wazuh-certs"
 # Credentials (override in group_vars/wazuh_managers.yml)
 wazuh_indexer_admin_user: "admin"
 wazuh_indexer_admin_password: "Blackwall1!"
+
+# Indexer REST endpoint (the address the node publishes; see network.host above)
+wazuh_indexer_url: "https://{{ wazuh_indexer_network_host }}:{{ wazuh_indexer_http_port }}"
+
+# OIDC (SSO). Only applied when bw_sso_enabled is true — the lab's
+# `bw-lab up --sso`. The discovery URL and the group name come from the
+# inventory, nothing here points at a lab container.
+wazuh_indexer_oidc_auth_domain: "openid_auth_domain"
+wazuh_indexer_oidc_discovery_url: ""
+wazuh_indexer_oidc_subject_key: "preferred_username"
+wazuh_indexer_oidc_roles_key: "groups"
+wazuh_indexer_oidc_group: ""
+wazuh_indexer_oidc_read_role: "blackwall_read"
+wazuh_indexer_oidc_index_pattern: "wazuh-alerts-*"
+# The indexer serves a self-signed bundle; the node's own root CA is used to
+# verify it when this is on.
+wazuh_indexer_oidc_verify_tls: false
+wazuh_indexer_oidc_ca_file: "/etc/wazuh-indexer/certs/root-ca.pem"

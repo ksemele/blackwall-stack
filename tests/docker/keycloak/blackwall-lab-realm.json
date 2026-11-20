@@ -1,0 +1,122 @@
+{
+  "realm": "blackwall-lab",
+  "enabled": true,
+  "sslRequired": "none",
+  "registrationAllowed": false,
+  "rememberMe": false,
+  "passwordPolicy": "length(12)",
+  "accessTokenLifespan": 900,
+  "accessTokenLifespanForImplicitFlow": 900,
+  "ssoSessionIdleTimeout": 1800,
+  "ssoSessionMaxLifespan": 7200,
+  "refreshTokenMaxReuse": 0,
+  "offlineSessionMaxLifespanEnabled": true,
+  "offlineSessionMaxLifespan": 3600,
+
+  "groups": [
+    {
+      "name": "analysts",
+      "description": "Read access to wazuh-alerts-* and to the Wazuh API through run_as"
+    },
+    {
+      "name": "read-only",
+      "description": "Lab user with no indexer or Wazuh API role mapped"
+    }
+  ],
+
+  "users": [
+    {
+      "username": "alice",
+      "enabled": true,
+      "firstName": "Lab",
+      "lastName": "Analyst",
+      "email": "alice@lab.invalid",
+      "emailVerified": true,
+      "credentials": [{ "type": "password", "value": "blackwall-lab" }],
+      "groups": ["analysts"],
+      "realmRoles": ["offline_access"]
+    },
+    {
+      "username": "bob",
+      "enabled": true,
+      "firstName": "Lab",
+      "lastName": "Observer",
+      "email": "bob@lab.invalid",
+      "emailVerified": true,
+      "credentials": [{ "type": "password", "value": "blackwall-lab" }],
+      "groups": ["read-only"],
+      "realmRoles": ["offline_access"]
+    }
+  ],
+
+  "clients": [
+    {
+      "clientId": "blackwall-cli",
+      "name": "blackwall CLI",
+      "description": "Public client used by blackwall: device code flow, plus auth code with PKCE and a loopback redirect",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": true,
+      "bearerOnly": false,
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "fullScopeAllowed": true,
+      "redirectUris": ["http://127.0.0.1:*"],
+      "webOrigins": ["*"],
+      "attributes": {
+        "oauth2.device.authorization.grant.enabled": "true"
+      },
+      "protocolMappers": [
+        {
+          "name": "lab groups",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-group-membership-mapper",
+          "consentRequired": false,
+          "config": {
+            "full.path": "false",
+            "claim.name": "groups",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        }
+      ]
+    },
+    {
+      "clientId": "blackwall-test",
+      "name": "blackwall lab test client",
+      "description": "Confidential client with direct access grants, so bw-check sso can mint a token without a browser",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "bearerOnly": false,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "blackwall-lab-test-secret",
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": true,
+      "serviceAccountsEnabled": false,
+      "fullScopeAllowed": true,
+      "redirectUris": [],
+      "webOrigins": [],
+      "attributes": {},
+      "protocolMappers": [
+        {
+          "name": "lab groups",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-group-membership-mapper",
+          "consentRequired": false,
+          "config": {
+            "full.path": "false",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true",
+            "claim.name": "groups"
+          }
+        }
+      ]
+    }
+  ]
+}

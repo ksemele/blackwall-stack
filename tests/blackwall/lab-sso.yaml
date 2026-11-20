@@ -1,0 +1,49 @@
+# blackwall config for the bw-lab SSO lab: `tests/bin/bw-lab up --sso`.
+# Everything here is a lab-only credential (see tests/docker/keycloak/README.md),
+# never a production secret.
+#
+# Field names are blackwall's own (internal/config/config.go): the indexer's
+# `auth` block replaces user/password, the wazuh `auth` block adds an SSO
+# identity on top of the service user's password, and `run_as` maps ID token
+# claims onto the Wazuh authorization context.
+current: lab-sso
+contexts:
+    lab-sso:
+        description: "blackwall-stack Docker lab with the Keycloak IdP (bw-lab up --sso)"
+        wazuh:
+            server: 127.0.0.1
+            port: 55000
+            # API user provisioned by the lab: allow_run_as=true, no roles of its
+            # own, so every permission comes from the claim-mapped RBAC rule.
+            user: svc-blackwall
+            password: Blackwall-Lab1!            # lab-only
+            tls:
+                insecure_skip_verify: true
+            auth:
+                type: oidc
+                # The issuer Keycloak publishes for both the host and the lab
+                # network; the indexer's openid_connect_url points at the same
+                # realm from inside the lab (see tests/docker/keycloak/README.md).
+                issuer: http://127.0.0.1:18080/realms/blackwall-lab
+                client_id: blackwall-cli
+                run_as:
+                    # groups -> the RBAC rule {"FIND": {"groups": "analysts"}}.
+                    - name: groups
+                      claim: groups
+                    # A readable name in the authorization context, for the
+                    # manager's audit log and for rules that match a user.
+                    - name: user_name
+                      claim: preferred_username
+        indexer:
+            server: 127.0.0.1
+            port: 9200
+            tls:
+                insecure_skip_verify: true
+            auth:                                 # replaces user/password
+                type: oidc
+                issuer: http://127.0.0.1:18080/realms/blackwall-lab
+                client_id: blackwall-cli
+ui:
+    refresh_interval: 3s
+logging:
+    level: warn

@@ -73,7 +73,7 @@ tests/bin/bw-lab reset
 
 | Command | What it does |
 |---|---|
-| `bw-lab up [--no-provision] [--profile P]` | `compose up -d --build`, wait for SSH, then provision |
+| `bw-lab up [--no-provision] [--profile P] [--sso]` | `compose up -d --build`, wait for SSH, then provision; `--sso` also starts the Keycloak IdP and provisions the OIDC wiring (see [SSO lab](#22-sso-lab-an-oidc-identity-provider-bw-lab-up--sso)) |
 | `bw-lab down [--keep-data]` | stop the environment; volumes are removed unless `--keep-data` |
 | `bw-lab reset` | `down -v` + wipe Wazuh certificates + `up` |
 | `bw-lab status` | containers, published ports, health of Prometheus/Grafana/dashboard |
@@ -99,7 +99,9 @@ Environment variables: `BW_PROFILE` (compose profile, default `ubuntu2204`),
 `BW_SSH_PASSWORD` (root password in the containers, default `blackwall`),
 `BW_LAB_PROM_PORT` (host port of `black-metrics-00`, default `9090`),
 `BW_LAB_GRAFANA_PORT` (host port of `black-grafana-00`, default `3000`),
-`BW_LAB_CGROUP` (cgroup namespace of the systemd nodes, default `host`).
+`BW_LAB_CGROUP` (cgroup namespace of the systemd nodes, default `host`),
+`BW_SSO` (`1` turns on the OIDC parts of the eye roles; `bw-lab up --sso` exports
+it), `BW_LAB_IDP_PORT` (host port of the IdP, default `18080`).
 
 **Linux with rootless podman: set `BW_LAB_CGROUP=private`.** The compose anchor
 `x-black-node` asks for the host cgroup namespace, which is what Docker Desktop
@@ -167,6 +169,9 @@ keeps pointing at `black-metrics-00:9090`.
 ```bash
 BW_LAB_PROM_PORT=19090 BW_LAB_GRAFANA_PORT=13000 tests/bin/bw-lab up   # prometheus on :19090, grafana on :13000
 ```
+`BW_SSO` / `BW_LAB_IDP_PORT` belong to the SSO lab ([§22](#22-sso-lab-an-oidc-identity-provider-bw-lab-up--sso)):
+without `BW_SSO=1` the IdP container never starts and the eye roles provision no
+OIDC at all.
 
 Examples:
 
@@ -204,6 +209,7 @@ tests/bin/bw-check metrics    # just one group
 | `cf-wall` | table `inet blackwall_wall` loaded with Cloudflare prefixes, timer enabled, a refresh that fetches junk leaves the live rules untouched (opt-in: SKIP until `bw-lab provision cf-wall`) |
 | `ports` | expected listeners inside the containers, plus published ports probed from the Mac |
 | `wazuh` | every agent in `wazuh_agents` (minus `wazuh_fixture_agents`) is `Active` on the manager, agent events (a failed SSH login) reach the indexer over both collection paths — journald (`black-rocky-02`, `black-debian-04`) and the rsyslog files (`black-host-01`); on rocky the journald line comes from OpenSSH 9.9 program `sshd-session`, which the stock `sshd` decoder covers → native rule 5710 (no custom decoder needed, see `blackwall-eye/STATUS.md` 2026-11-21), REST API answers, indexer answers, `black-ghost-99` is `never_connected` and `black-dead-98` is `disconnected`, dashboard responds |
+| `sso` | the OIDC lab end to end: IdP discovery publishes one issuer for the host and for the indexer, the device grant answers for the public client `blackwall-cli`, ID tokens carry `iss` + `groups`, the offline (refresh) token is issued, `openid_auth_domain` is enabled before HTTP basic, `authinfo` maps `analysts` to `blackwall_read` (and `read-only` to nothing), a bearer ID token searches `wazuh-alerts-*` (200 for the analyst, 403 for the unmapped group), a garbage token and a missing header give 401, basic auth still works, and `run_as` with the claim-mapped context reads every agent while an unmapped group reads none and cannot read `/security/users` (opt-in: needs `bw-lab up --sso`, see [SSO lab](#22-sso-lab-an-oidc-identity-provider-bw-lab-up--sso)) |
 | `metrics` | node_exporter serves metrics, Prometheus targets are `up`, `node_load1` returns data, Grafana is healthy with its datasource and dashboard |
 | `voice` | `telegram-alerter` is running and Telegram accepted a synthetic alert; when the deployed `voice_max_level` leaves no room for it (Brain on in the lab), it asserts Voice skipped the alert instead |
 | `brain` | the Brain image is built, `brain-analyst` (container) is running; a synthetic level-10 alert injected into `alerts.json` reached the indexer and was delivered to Telegram within 120 s (without credentials: picked up) |
@@ -214,6 +220,7 @@ tests/bin/bw-check metrics    # just one group
 | (unit) | `tests/unit/rules_lint_test.py` (plain `python3`, no lab): the custom Wazuh rules in `blackwall_rules.xml.j2` — unique IDs inside 100000-120000, level inside 0-16 (Wazuh's allowed range), a `<description>`, every `<if_sid>` (comma- or space-separated) pointing at a rule in the file or at stock 530, and `blackwall-eye/README.md` in sync with them |
 | (unit) | `tests/unit/ossec_log_sources_test.py` (run with the ansible venv python): the `ossec.conf` templates of `wazuh-agent` and `wazuh-manager` read journald on the RHEL family and Debian 12+, and `/var/log/auth.log` + `/var/log/syslog` on Ubuntu and Debian 11 |
 | (unit) | `tests/unit/rules_fixtures_test.py`: every `tests/rules/*.txt` fixture agrees with the deployed ruleset without a lab — the rule id and level exist in `blackwall_rules.xml.j2`, the log is decoded by the decoder it claims (`blackwall_decoders.xml.j2`), the rule's `match`/`program_name`/`field` conditions hold on those fields, sibling rules stay silent, and only lab or documentation addresses appear |
+| (unit) | `tests/unit/sso_lab_test.py`: the SSO lab's names stay one story — realm, client, group, claim and service user as the realm import, the compose IdP service, the eye group_vars and `tests/blackwall/lab-sso.yaml` all use them; the IdP stays in profile `sso` on loopback, and `sso` stays out of `bw-check all` (see [SSO lab](#22-sso-lab-an-oidc-identity-provider-bw-lab-up--sso)) |
 | `sentinel` | Wazuh stack on `black-sentinel-03`: services active, indexer/API/dashboard answer on 127.0.0.1 but not on 172.28.0.16 (probed from master), agent 000 active, packages excluded, podman nginx on 443, `inet netavark` and container DNS survive `systemctl reload nftables` (opt-in: SKIP until `bw-lab provision sentinel`) |
 | `sentinel-agents` | a throwaway container (`black-probe-90`, 172.28.0.90) installs `wazuh-agent` (version from the `wazuh-repo` role) and enrolls in the sentinel: agent `Active`, input-chain counters for 1514/1515 grew, alerts for it in the sentinel indexer, syscollector OS via the API; the container and the agent entry are removed on exit, including Ctrl+C; alerts must grow over the pre-run count; `BW_PROBE_MANAGER=<ip>` points the probe at a wrong manager to test the failure path |
 | `fw-events` | firewall drops reach Wazuh end to end: `black-rocky-02` (172.28.0.15) sends 3 SYNs to dropped ports on `black-host-01` (no rule 100202; the exporter's state must count them), then 60 (rule 100202, agent `black-host-01`, `srcip` 172.28.0.15, main indexer) and 3 connects to `172.28.0.16:443`, which is not in the sentinel's `cfwall_admin_allow` (rule 100201 in the sentinel indexer); alerts must be newer than the test start; waits for the exporter's baseline state file first; SKIP until the exporter and sentinel are deployed |
@@ -280,6 +287,7 @@ fixture stops it deliberately.
 | Prometheus | `http://localhost:9090` | none |
 | Wazuh API (for `blackwall` TUI) | `https://127.0.0.1:55000` | `wazuh` / `wazuh` |
 | Wazuh indexer (for blackwall :alerts) | `https://127.0.0.1:9200` | `admin` / `Blackwall1!` |
+| Keycloak IdP (SSO lab only, `bw-lab up --sso`) | `http://127.0.0.1:${BW_LAB_IDP_PORT:-18080}` | users `alice` / `blackwall-lab`, `bob` / `blackwall-lab`; admin console `labadmin` / `labadmin` |
 | SSH to any node | `tests/bin/bw-lab ssh <host>` | `root` / `blackwall` |
 
 Grafana and Prometheus use the default ports here; with
@@ -333,6 +341,7 @@ Unset variables render as empty strings — playbooks still run, delivery just f
 | `black-metrics-00` | Prometheus | — | `${BW_LAB_PROM_PORT:-9090}→9090` | `172.28.0.12` |
 | `black-grafana-00` | Grafana | — | `${BW_LAB_GRAFANA_PORT:-3000}→3000` | `172.28.0.13` |
 | `black-aptcache-00` | apt-cacher-ng | — | — | `172.28.0.14` |
+| `black-idp-00` | Keycloak IdP — only in an SSO lab (`bw-lab up --sso`, profile `sso`) | — | `127.0.0.1:${BW_LAB_IDP_PORT:-18080}→8080` | `172.28.0.30` |
 | `black-ghost-99` | ghost fixture — never_connected | no container | — | `172.28.0.99` |
 
 `black-ghost-99` is a manager-side registration only (no container). It is
@@ -965,12 +974,15 @@ blackwall/                                  # repo root
 │   │   ├── images/rockylinux9/Dockerfile   # Rocky 9 nodes
 │   │   ├── images/debian12/Dockerfile      # Debian 12 node (no rsyslog → journald)
 │   │   ├── images/aptcache/                # apt-cacher-ng: Dockerfile + blackwall.conf
+│   │   ├── keycloak/                       # SSO lab: blackwall-lab-realm.json + README (issuer design)
 │   │   ├── ssh_config
 │   │   ├── prometheus/prometheus.yml
 │   │   └── grafana/
 │   │       ├── provisioning/datasources/prometheus.yml
 │   │       ├── provisioning/dashboards/dashboards.yml
 │   │       └── dashboards/blackwall-hosts.json
+│   ├── blackwall/
+│   │   └── lab-sso.yaml                    # blackwall config for the SSO lab (--context lab-sso)
 │   ├── inventory/
 │   │   ├── hosts.yml
 │   │   ├── vm.yml                          # black-vm-05 (Lima), bw-lab vm / bw-check vm
@@ -1023,6 +1035,148 @@ blackwall/                                  # repo root
 > Ansible resolves group variables relative to the inventory file or the
 > playbook directory; a `group_vars/` under `blackwall-eye/ansible/` matches
 > neither and is silently ignored.
+
+---
+
+## 22. SSO lab: an OIDC identity provider (`bw-lab up --sso`)
+
+blackwall logs in with an OIDC identity instead of a password (ksemele/blackwall
+PR #23): a device-code sign-in at the IdP, a bearer ID token on the indexer, and
+a Wazuh `run_as` login whose authorization context is built from the token's
+claims. Testing that needs a real IdP, so the lab can start one.
+
+Everything here is **opt-in**. A plain `tests/bin/bw-lab up` starts no IdP and
+provisions no OIDC: the IdP lives in compose profile `sso`, and the two role
+tasks that touch the security config and the API RBAC run only under
+`bw_sso_enabled` (which reads `BW_SSO`).
+
+```bash
+tests/bin/bw-lab up --sso        # lab + Keycloak, then provisioning with BW_SSO=1
+tests/bin/bw-check sso           # the OIDC checks (not part of `all`)
+tests/bin/bw-lab down            # removes the IdP too
+```
+
+`BW_LAB_IDP_PORT` (default `18080`) is the loopback port of the IdP; `8080` is
+taken on the shared lab host by `gpu-model`, `9090`/`3000` by the host's own
+Prometheus and Grafana.
+
+| Piece | What the lab creates |
+|---|---|
+| IdP | `black-idp-00` — Keycloak 26.8.2 in dev mode, HTTP only, `172.28.0.30` inside the lab |
+| Realm | `blackwall-lab`, imported from `tests/docker/keycloak/blackwall-lab-realm.json` at IdP start |
+| Users | `alice` (group `analysts`), `bob` (group `read-only`, deliberately unmapped so a denial is visible); password `blackwall-lab`; both carry the realm-level `offline_access` role, which is what makes blackwall's `openid offline_access` scopes produce a refresh token |
+| Clients | `blackwall-cli` — public, standard flow with PKCE, device authorization grant on, redirects `http://127.0.0.1:*`; `blackwall-test` — confidential, direct access grants, used only by `bw-check sso` to mint tokens without a browser |
+| Indexer | `openid_auth_domain` (`type: openid`, `challenge: false`, `authentication_backend: noop`) ordered **before** the shipped basic domain; `subject_key: preferred_username`, `roles_key: groups`, `openid_connect_url` = the realm discovery document over the lab network; role `blackwall_read` (index `wazuh-alerts-*`: `read`), roles mapping `analysts` → `blackwall_read` |
+| Manager | API user `svc-blackwall` (`allow_run_as=true`, no roles of its own), policy `blackwall_agents_read` (`agent:read` on `agent:id:*`), role `blackwall_readonly` bound to that policy and to rule `blackwall_groups_analysts` (`{"FIND": {"groups": "analysts"}}`) |
+
+All names and passwords above are lab-only credentials, in
+`tests/bin/_bw-common.sh` and `tests/inventory/group_vars/`.
+
+Two consequences worth knowing:
+
+- **One issuer, two addresses.** Keycloak fixes the frontchannel URL
+  (`--hostname http://127.0.0.1:18080`) so the discovery document and every ID
+  token say the same `issuer` for a host client and for the indexer, while
+  `--hostname-backchannel-dynamic true` lets the *backend* URLs (token endpoint,
+  JWKS) follow the caller, so the indexer can fetch `jwks_uri` through
+  `black-idp-00:8080`. `bw-check sso` reads the discovery document from both
+  sides and asserts exactly that. Design and references:
+  [`tests/docker/keycloak/README.md`](docker/keycloak/README.md).
+- **Modifying the security config through the REST API is an explicitly
+  unsupported operation.** The indexer role adds
+  `plugins.security.unsupported.restapi.allow_securityconfig_modification: true`
+  to `opensearch.yml` *only* when `bw_sso_enabled` (`BW_SSO=1`), so the default
+  lab keeps the stock setting absent
+  (`opensearch-docs/_security/access-control/api.md`: "Changing the security
+  configuration through the REST API is not supported"). Roles and roles
+  mappings use the documented `PUT _plugins/_security/api/roles/…` and
+  `…/rolesmapping/…`. `securityadmin.sh` in the indexer role runs only when
+  `internal_users.yml` changed (its bcrypt salt is derived from host+user, so the
+  file is stable across runs), and it pushes the whole config directory — which
+  is why the OIDC `include_tasks` is the **last** task of `tasks/main.yml`: a
+  re-push in the same run is re-applied by `sso.yml` right after it.
+
+### `bw-check sso`
+
+`tests/bin/bw-check sso` runs the whole chain and prints one line per assertion;
+it SKIPs (does not fail) when the lab has no `black-idp-00`. It checks: the
+discovery document from the host and from inside `black-master-00` (same issuer,
+JWKS following the caller, PKCE `S256`, `device_authorization_endpoint`
+published), a real device-grant request for `blackwall-cli` answering with
+`device_code`/`user_code`/`verification_uri`, ID tokens carrying `iss` + `groups`
+for both lab users, an offline (refresh) token for `openid offline_access`, the
+indexer's `openid_auth_domain` being enabled and ordered before basic auth,
+`_plugins/_security/authinfo` mapping `alice` → `blackwall_read` and `bob` →
+nothing, a bearer `/_search` on `wazuh-alerts-*` answering 200 for `alice` and
+403 for `bob`, 401 for a garbage token and for no header at all, HTTP basic still
+working, and on the manager: `run_as` with the claim-mapped context reading every
+agent, `0` of the API users readable with that role, and an unmapped group
+reading no agents.
+
+### Running blackwall (OIDC login, PR #23) against the lab
+
+```bash
+# 1. Lab with the IdP (first run pulls quay.io/keycloak/keycloak:26.8.2)
+tests/bin/bw-lab up --sso
+
+# 2. Proof the IdP, the indexer and the manager are wired up
+tests/bin/bw-check sso
+
+# 3. blackwall itself, from the blackwall checkout of PR #23
+cd ../blackwall
+go build -o /tmp/blackwall ./cmd/blackwall
+/tmp/blackwall --config ../blackwall-stack/tests/blackwall/lab-sso.yaml --context lab-sso
+```
+
+What should happen, in order:
+
+1. `blackwall` prints a device code and the URL to open
+   (`http://127.0.0.1:18080/realms/blackwall-lab/device`; Keycloak's verification
+   URI is `/realms/<realm>/device`). Open it, sign in as **`alice` /
+   `blackwall-lab`**, type the user code. `blackwall` polls the token endpoint and
+   stores the ID token (plus the refresh token) in the OS keyring.
+2. The TUI starts. `:alerts` renders hits from `wazuh-alerts-*` — those requests
+   carry `Authorization: Bearer <ID token>` and are authorized by the indexer's
+   `openid_auth_domain` + `blackwall_read` (`groups: analysts`). With no alerts in
+   the index the view is empty but not an error; `bw-check sso` is the assertion
+   that the search itself is authorized.
+3. The agents view renders the agents. Those calls use `run_as`: `blackwall`
+   posts `{"user_name": "alice", "groups": ["analysts"]}` built from
+   `auth.run_as` in `tests/blackwall/lab-sso.yaml`, as user `svc-blackwall`, and
+   the RBAC rule `blackwall_groups_analysts` grants `blackwall_readonly`. The
+   manager's audit log shows the run_as context.
+4. Sign in as **`bob`** instead (same config, different browser session): the
+   indexer refuses his token (`403` on `wazuh-alerts-*` — `read-only` maps to no
+   role), and `run_as` matches no rule, so the agents list comes back empty. Wazuh
+   RBAC runs in white-list mode (`wazuh-api-spec/api/api/configuration.py`
+   `"rbac_mode": "white"`), so an unauthorized call answers `200` with an empty
+   item list rather than `403` — which is why `bw-check sso` asserts item counts,
+   not status codes, for the negative case.
+5. Re-run `blackwall`: the second startup is silent (keyring session, refreshed
+   before it expires). Expire it at the IdP —
+   `docker compose -f tests/docker/docker-compose.yml --profile ubuntu2204 --profile sso up -d
+   --force-recreate black-idp-00` drops Keycloak's in-memory sessions — and the
+   next run should still work by refreshing, because the realm maps both users to
+   `offline_access`.
+
+To use blackwall's own config location instead of `--config`, copy
+`tests/blackwall/lab-sso.yaml` to `~/.config/blackwall/config.yaml`.
+
+### When the IdP misbehaves
+
+```bash
+tests/bin/bw-lab logs black-idp-00            # realm import errors show here
+tests/bin/bw-lab status                        # shows the IdP issuer when it is up
+BW_SSO=1 tests/bin/bw-lab provision eye        # re-apply the OIDC wiring
+```
+
+Keycloak needs ~20-40 s to boot and imports the realm before it answers;
+`bw-check sso` and the ansible tasks wait on the discovery document rather than a
+health endpoint (Keycloak's health lives on its management port 9000, not on
+8080). The realm file is imported on the **first** start of a container and a
+recreate is what re-imports it: after editing `blackwall-lab-realm.json`, recreate
+`black-idp-00` and re-run `BW_SSO=1 tests/bin/bw-lab provision eye` (the indexer
+caches signing keys, and role mappings must match the new realm).
 
 ---
 
