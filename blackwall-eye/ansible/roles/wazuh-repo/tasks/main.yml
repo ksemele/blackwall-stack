@@ -41,6 +41,10 @@
         regexp: '^deb\s+[^\[\s]'
         state: absent
 
+    # The one unbounded apt refresh in the eye roles: it is what picks up a new
+    # Wazuh release, and every other refresh in these roles passes
+    # cache_valid_time: 3600 so it reuses this one instead of pulling the Ubuntu
+    # index through the lab proxy again (see tests/README.md).
     - name: Wazuh apt repository
       ansible.builtin.apt_repository:
         repo: "deb [signed-by=/etc/apt/keyrings/wazuh.asc] {{ wazuh_apt_repo_url }} stable main"

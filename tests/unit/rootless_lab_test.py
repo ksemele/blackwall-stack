@@ -120,10 +120,15 @@ for value, expected in ((True, "bootstrap.memory_lock: true"), (False, "bootstra
     if expected not in line:
         fails.append(f"opensearch.yml.j2 with _indexer_memory_lock={value}: {expected!r} missing")
 
-# 5. apt goes through apt-cacher-ng with one request per connection. apt pipelines
-#    5 requests by default, a pipeline the proxy abandoned mid-flight leaves
-#    apt's methods/http in CLOSE_WAIT, and the task waiting for them never
-#    returns (measured: 24 minutes, index stuck in /var/lib/apt/lists/partial).
+# 5. apt goes through apt-cacher-ng with one request per connection, and the nodes
+#    do not re-pull the Ubuntu index for every package they install. Measured on
+#    2026-11-20: black-host-01 started with an empty /var/lib/apt/lists, left
+#    38649899 bytes of half-written index in /var/lib/apt/lists/partial with three
+#    /usr/lib/apt/methods/http in CLOSE_WAIT on 172.28.0.14:3142, and its
+#    apt_repository task hung for 29 minutes; black-master-00 and black-dead-98 got
+#    through the same index set with the same client config. The lab keeps the index
+#    the image built (a refresh revalidates it instead of moving ~40 MB through the
+#    proxy) and refreshes it unbounded in one role only.
 aptconf = open("tests/docker/images/ubuntu2204/Dockerfile").read()
 for knob in ('Acquire::http::Proxy "http://172.28.0.14:3142";',
              'Acquire::http::Pipeline-Depth "0";',
@@ -131,10 +136,30 @@ for knob in ('Acquire::http::Proxy "http://172.28.0.14:3142";',
     if knob not in aptconf:
         fails.append(f"ubuntu2204 image: {knob} missing from the generated "
                      "/etc/apt/apt.conf.d/01blackwall-aptcache")
+if "rm -rf /var/lib/apt/lists" in aptconf:
+    fails.append("ubuntu2204 image: deleting /var/lib/apt/lists makes every node "
+                 "re-download the Ubuntu index through the proxy on bw-lab up")
+
+roles_root = f"{EYE}/roles"
+unbounded = []
+for role in sorted(os.listdir(roles_root)):
+    tasks = os.path.join(roles_root, role, "tasks", "main.yml")
+    if not os.path.isfile(tasks):
+        continue
+    lines = open(tasks).read().splitlines()
+    for n, line in enumerate(lines):
+        if line.strip() != "update_cache: true":
+            continue
+        if not any(l.strip().startswith("cache_valid_time") for l in lines[n + 1:n + 4]):
+            unbounded.append(role)
+if unbounded != ["wazuh-repo"]:
+    fails.append(f"eye roles: only wazuh-repo may refresh the apt cache without "
+                 f"cache_valid_time, found {unbounded}")
 
 if fails:
     raise SystemExit("rootless-lab check failed:\n  " + "\n  ".join(fails))
 print(f"ROOTLESS LAB OK: realtime on by default / off in the lab ({LAB_VARS}); "
       f"scan {lab['wazuh_syscheck_frequency']}s; cgroup {node['cgroup']}; "
       f"pids_limit {node['pids_limit']}; memory_lock decided by the role; "
-      "apt through the proxy without pipelining")
+      "apt through the proxy without pipelining; index kept in the image; "
+      "one unbounded refresh (wazuh-repo)")

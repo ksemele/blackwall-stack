@@ -10,6 +10,7 @@
           - adduser
         state: present
         update_cache: true
+        cache_valid_time: 3600
 
     - name: Install wazuh-indexer package
       apt:
@@ -17,6 +18,7 @@
         allow_change_held_packages: true
         state: present
         update_cache: true
+        cache_valid_time: 3600
 
     - name: Hold wazuh-indexer
       ansible.builtin.dpkg_selections:

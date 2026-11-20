@@ -140,13 +140,21 @@ to remember:
   runtimes that grant unlimited. Override with `wazuh_indexer_memory_lock=true|false`.
 - **Real-time FIM.** `wazuh_fim_realtime: false` in
   `tests/inventory/group_vars/all.yml`: see section 20.
-- **apt through the proxy.** The node image writes `Acquire::http::Pipeline-Depth
-  "0"` and `Acquire::Retries "5"` next to the proxy line in
-  `/etc/apt/apt.conf.d/01blackwall-aptcache`. apt puts 5 requests on one
-  connection by default, apt-cacher-ng can abandon such a pipeline mid-flight, and
-  the client then waits on sockets stuck in `CLOSE_WAIT` forever: on a cold cache
-  `wazuh-repo : Wazuh apt repository` hung for 24 minutes (index files never left
-  `/var/lib/apt/lists/partial`) until the pipeline was switched off.
+- **apt through the proxy.** Two things keep the lab's index traffic small. The
+  node image keeps the apt index it built (`/var/lib/apt/lists` is no longer
+  deleted in `tests/docker/images/ubuntu2204/Dockerfile`), so the first refresh in
+  a fresh container revalidates `InRelease` instead of moving ~40 MB of Ubuntu and
+  jammy-security index files through `black-aptcache-00`; and only the `wazuh-repo`
+  role refreshes the cache unbounded — every other eye role passes
+  `cache_valid_time: 3600`, so that one refresh covers the whole node. Measured,
+  not inferred: on 2026-11-20 a node that started with an empty `/var/lib/apt/lists`
+  left 38649899 bytes half-written in `/var/lib/apt/lists/partial` with three
+  `/usr/lib/apt/methods/http` stuck in `CLOSE_WAIT` on `172.28.0.14:3142`, and
+  `wazuh-repo : Wazuh apt repository` hung for 29 minutes. That node already had
+  `Acquire::http::Pipeline-Depth "0"` and `Acquire::Retries "5"` (apt puts 5
+  requests on one connection by default) and they did not save it — those two
+  knobs reduce what one stalled connection can cost, they are not what the lab
+  relies on.
 
 `BW_LAB_PROM_PORT` / `BW_LAB_GRAFANA_PORT` matter only when 9090 or 3000 are
 already taken on the host — a host-side Prometheus, or another web service.
