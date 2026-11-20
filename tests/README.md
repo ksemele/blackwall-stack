@@ -140,6 +140,13 @@ to remember:
   runtimes that grant unlimited. Override with `wazuh_indexer_memory_lock=true|false`.
 - **Real-time FIM.** `wazuh_fim_realtime: false` in
   `tests/inventory/group_vars/all.yml`: see section 20.
+- **apt through the proxy.** The node image writes `Acquire::http::Pipeline-Depth
+  "0"` and `Acquire::Retries "5"` next to the proxy line in
+  `/etc/apt/apt.conf.d/01blackwall-aptcache`. apt puts 5 requests on one
+  connection by default, apt-cacher-ng can abandon such a pipeline mid-flight, and
+  the client then waits on sockets stuck in `CLOSE_WAIT` forever: on a cold cache
+  `wazuh-repo : Wazuh apt repository` hung for 24 minutes (index files never left
+  `/var/lib/apt/lists/partial`) until the pipeline was switched off.
 
 `BW_LAB_PROM_PORT` / `BW_LAB_GRAFANA_PORT` matter only when 9090 or 3000 are
 already taken on the host — a host-side Prometheus, or another web service.

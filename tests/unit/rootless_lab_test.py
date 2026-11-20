@@ -120,8 +120,21 @@ for value, expected in ((True, "bootstrap.memory_lock: true"), (False, "bootstra
     if expected not in line:
         fails.append(f"opensearch.yml.j2 with _indexer_memory_lock={value}: {expected!r} missing")
 
+# 5. apt goes through apt-cacher-ng with one request per connection. apt pipelines
+#    5 requests by default, a pipeline the proxy abandoned mid-flight leaves
+#    apt's methods/http in CLOSE_WAIT, and the task waiting for them never
+#    returns (measured: 24 minutes, index stuck in /var/lib/apt/lists/partial).
+aptconf = open("tests/docker/images/ubuntu2204/Dockerfile").read()
+for knob in ('Acquire::http::Proxy "http://172.28.0.14:3142";',
+             'Acquire::http::Pipeline-Depth "0";',
+             'Acquire::Retries "5";'):
+    if knob not in aptconf:
+        fails.append(f"ubuntu2204 image: {knob} missing from the generated "
+                     "/etc/apt/apt.conf.d/01blackwall-aptcache")
+
 if fails:
     raise SystemExit("rootless-lab check failed:\n  " + "\n  ".join(fails))
 print(f"ROOTLESS LAB OK: realtime on by default / off in the lab ({LAB_VARS}); "
       f"scan {lab['wazuh_syscheck_frequency']}s; cgroup {node['cgroup']}; "
-      f"pids_limit {node['pids_limit']}; memory_lock decided by the role")
+      f"pids_limit {node['pids_limit']}; memory_lock decided by the role; "
+      "apt through the proxy without pipelining")
