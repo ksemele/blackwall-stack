@@ -8,6 +8,13 @@ wazuh_indexer_http_port: 9200
 # JVM heap for -Xms/-Xmx (e.g. "1g"); null keeps the package default
 wazuh_indexer_heap: null
 
+# bootstrap.memory_lock (mlockall). null = decide from this host: outside a
+# container always true (what the role shipped before), inside one only when the
+# runtime granted unlimited locked memory. Rootless podman grants the host user's
+# 8 MB, which is below any Wazuh heap, and OpenSearch then fails its bootstrap
+# check. See tasks/main.yml; true|false overrides the decision.
+wazuh_indexer_memory_lock: null
+
 # Certificates (paths on the controller — fetched by wazuh-certificates.yml)
 wazuh_certs_local_dir: "{{ playbook_dir }}/../../../tests/.wazuh-certs"
 

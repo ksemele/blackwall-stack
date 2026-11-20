@@ -40,10 +40,17 @@
         disable_excludes: wazuh
         state: present
 
-- name: Detect container environment (/.dockerenv)
+- name: Detect container environment
   ansible.builtin.stat:
-    path: /.dockerenv
-  register: _dockerenv
+    path: "{{ item }}"
+  loop:
+    - /.dockerenv
+    - /run/.containerenv
+  register: _container_markers
+
+- name: Note whether this host runs in a container
+  ansible.builtin.set_fact:
+    _in_container: "{{ _container_markers.results | selectattr('stat.exists') | list | length > 0 }}"
 
 # In containers the kernel value belongs to the Docker host; tolerate failure there only.
 - name: Set vm.max_map_count for the indexer
@@ -52,7 +59,7 @@
     value: "262144"
     sysctl_set: true
     state: present
-  ignore_errors: "{{ _dockerenv.stat.exists }}"
+  ignore_errors: "{{ _in_container }}"
 
 - name: Unpack cert bundle on master
   unarchive:
@@ -84,6 +91,29 @@
     - { src: "admin.pem",                                dest: "admin.pem" }
     - { src: "admin-key.pem",                            dest: "admin-key.pem" }
   notify: Restart wazuh-indexer
+
+# OpenSearch with `bootstrap.memory_lock: true` calls mlockall() and refuses to
+# start when it fails. No process can raise RLIMIT_MEMLOCK above the hard limit it
+# was started with. On a host that ceiling is systemd's own — 31 GB here, and
+# Wazuh's unit asks for infinity — so locking works: that is the behaviour this
+# role shipped before, and it is left alone. A container inherits the runtime's
+# ceiling instead: rootless podman hands out the host user's 8 MB even to a
+# privileged container (`--ulimit memlock=-1:-1` is answered with "Operation not
+# permitted"), and systemd clamps the unit's LimitMEMLOCK to 8388608. Below any
+# Wazuh heap. So inside a container memory is locked only when the runtime really
+# granted unlimited; override either way with wazuh_indexer_memory_lock=true|false.
+- name: Read the locked-memory ceiling of this host
+  ansible.builtin.command: grep '^Max locked memory' /proc/1/limits
+  register: _memlock_limit
+  changed_when: false
+  failed_when: false
+
+- name: Decide whether OpenSearch may lock memory here
+  ansible.builtin.set_fact:
+    _indexer_memory_lock: >-
+      {{ wazuh_indexer_memory_lock if wazuh_indexer_memory_lock is not none
+         else (not _in_container)
+           or (_memlock_limit.stdout | default('Max locked memory unlimited unlimited bytes', true)).split()[4] == 'unlimited' }}
 
 - name: Deploy opensearch.yml
   template:
