@@ -107,7 +107,12 @@ Realm fields, users and clients are the shapes in
     PKCE callback on a random loopback port needs. PKCE itself needs no client
     attribute: Keycloak advertises the methods it accepts in the discovery
     document, and `bw-check sso` asserts `code_challenge_methods_supported`
-    contains `S256`. This is the client blackwall's config names.
+    contains `S256`. `webOrigins: ["*"]` is the full wildcard: Keycloak documents
+    wildcard syntax for **redirect URIs** (`con-basic-settings.adoc`), not for web
+    origins, so no narrower pattern is verified here — and the IdP is published on
+    `127.0.0.1` only, with no cross-origin browser in the lab flow (blackwall is a
+    CLI, and the device-approval page is Keycloak's own origin). This is the client
+    blackwall's config names.
   - `blackwall-test` — confidential (`secret: blackwall-lab-test-secret`,
     lab-only) with `directAccessGrantsEnabled: true`, used only by
     `bw-check sso` to mint tokens without a browser. Not for blackwall itself.
