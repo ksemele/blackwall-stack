@@ -274,6 +274,7 @@ direnv allow
 |---|---|---|
 | `BW_TELEGRAM_BOT_TOKEN` | `telegram_bot_token` | voice, brain |
 | `BW_TELEGRAM_CHAT_ID` | `telegram_chat_id` | voice, brain |
+| `BW_WEBHOOK_URL` | `alerter_webhook_url` | voice (optional generic/Slack webhook channel) |
 | `BW_CLAUDE_API_KEY` | `claude_api_key` | brain |
 | `BW_CLAUDE_WORKSPACE_ID` | `claude_workspace_id` | brain (only for keys not scoped to a workspace) |
 
