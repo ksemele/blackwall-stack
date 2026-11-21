@@ -40,6 +40,17 @@ blockers: []
   responses now log their truncated body; "no channel configured" warning is
   once per run.
 
+### 2026-11-18 — unit check for the alert filters (#19)
+
+- `tests/unit/voice_filter_test.py` renders the alerter template with the role
+  defaults (plus `voice_max_level` 9) and calls `handle_line()` with synthetic
+  alerts: non-JSON lines and ignored rule IDs dropped, `severity_threshold` and
+  `voice_max_level` edges, dedup by alert ID (same run and after a restart), a
+  failed send retried 3 times then dropped. `send_telegram`, `save_sent_id`,
+  `current_max_level` and `time.sleep` are stubbed — no Telegram, no host.
+- Before this, only the formatter had a unit test; the filters were verified in
+  the lab only.
+
 ### 2026-10-28 — no alerts lost around rotation (#23)
 
 - The tail checks the path only at EOF of the open file: on a new inode it
