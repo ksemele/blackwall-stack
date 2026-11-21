@@ -1,0 +1,11 @@
+# Fang refresh health, journald/syslog line of the service (identifier
+# blackwall-fang-refresh, text from blackwall-fang-refresh itself): fetch failed
+# and the cache is older than max_cache_age, so the role loads an EMPTY blocklist.
+# 100207 and 100209 have no if_sid, so they sit at the top of the syslog tree: a
+# FAIL here means a stock syslog rule matched first and the group needs a parent.
+rule: 100207
+level: 7
+log_format: syslog
+location: /var/log/syslog
+---
+Nov 18 09:14:02 black-sentinel-03 blackwall-fang-refresh[2311]: ERROR: download failed: failed to download https://www.spamhaus.org/drop/drop_v4.json: HTTP Error 503: Service Unavailable; the cached data is 9 days old (limit 7 days): loading an EMPTY blocklist (fail open), mode and allowlist unchanged

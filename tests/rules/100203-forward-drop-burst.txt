@@ -1,0 +1,8 @@
+# Forward path: a burst of dropped forwarded packets (in the lab this is a host
+# reaching the sentinel through a path the sentinel's forward chain drops).
+rule: 100203
+level: 6
+log_format: syslog
+location: blackwall-fw
+---
+ossec: output: 'blackwall-fw': blackwall-fw: kind=forward_drop src=172.28.0.15 new=32 total=52 burst=yes

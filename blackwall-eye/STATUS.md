@@ -80,6 +80,16 @@ blockers: []
   `tests/unit/ossec_log_sources_test.py`; `verify-agent-events.yml` drives the
   failed-login event on every live agent, not only the RHEL one (#24).
 
+- 2026-11-18: `bw-check rules` (opt-in, `tests/bin/bw-check`) with fixtures in
+  `tests/rules/`: 15 cases, each one the log exactly as the manager reads it plus the
+  rule id and level it must reach, replayed through `PUT /logtest` against the deployed
+  ruleset — 100200 level 0 (burst=no, so no 100202), 100201-100204, 100205 (exporter
+  stderr), 100206/100208, 100207/100209 (Fang refresh ERROR/WARNING), 100210-100212, and
+  100100 via its `check_diff` pair (`100100-baseline.txt`, `seed: yes` → stock 530 level 0;
+  `100100-changed.txt` → 100100 level 3). `tests/unit/rules_fixtures_test.py` checks every
+  fixture against the rules and decoders templates without a lab. First test for
+  100203/100204/100205/100207, which no check reached before (#25).
+
 - 2026-11-03: `wazuh-certificates.yml` no longer mints a new CA when the
   controller lacks the bundle (fresh clone, git worktree) but the host already
   has certificates: the play fails with where to get the bundle; rotation needs

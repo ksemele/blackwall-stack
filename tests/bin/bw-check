@@ -94,6 +94,7 @@ Checks:
   sentinel   Wazuh server stack on black-sentinel-03 (opt-in: SKIP when not deployed)
   sentinel-agents  throwaway agent enrolls in the sentinel (opt-in, internet, ~2-3 min; not in 'all')
   fw-events  firewall drops become Wazuh alerts 100201/100202 (opt-in, ~1 min, up to ~3 min on failure; not in 'all')
+  rules      each tests/rules/*.txt fixture through the manager's logtest: the log as the manager reads it must reach the rule id/level in its header (opt-in, needs bw-lab up, ~1 min; not in 'all')
   fang       reputation blocklists on the sentinel: observe, enforce, junk list, restore (opt-in, ~3-5 min, re-provisions fang; not in 'all')
   vm         auditd role on a real RHEL kernel (Lima VM, bw-lab vm up): reload, restart, broken rule, immutable + reboot (opt-in, ~5-8 min; not in 'all')
 
@@ -610,6 +611,125 @@ check_sentinel_agents() {
   else
     bw_fail "probe cleanup incomplete:$left"
     printf '%s\n' "$SA_CLEAN_ERR" | tail -5 | sed 's/^/      /'
+  fi
+}
+
+# --- rules -------------------------------------------------------------------
+#
+# Fixture-driven logtest tests: tests/rules/<rule>-<case>.txt, one case per file.
+# The header says which rule id and level the manager must reach, the body after
+# '---' is the log exactly as the manager reads it. logtest runs the *deployed*
+# ruleset and decoders, so a wrong level, a decoder that no longer matches the
+# exporter's line, or a source value outside a rule's field pattern fails here —
+# none of it is visible to the indexer-only checks. Opt-in like fw-events: it
+# needs the lab up (bw-lab up), otherwise the whole check is skipped.
+
+# _rl_logtest_fixtures <fixtures-dir> <api-token>
+#
+# Feeds every fixture through PUT /logtest in one session (a new session reloads
+# the whole ruleset) and prints one "PASS|FAIL <fixture> <detail>" line per file.
+_rl_logtest_fixtures() {
+  python3 - "$1" "$2" <<'PY'
+import glob, json, ssl, sys, urllib.request
+
+fixtures_dir, api_token = sys.argv[1], sys.argv[2]
+ctx = ssl.create_default_context()
+ctx.check_hostname = False
+ctx.verify_mode = ssl.CERT_NONE
+
+
+def api(method, path, body=None):
+    data = None if body is None else json.dumps(body).encode()
+    req = urllib.request.Request(
+        "https://127.0.0.1:55000" + path, data=data, method=method,
+        headers={"Authorization": "Bearer " + api_token,
+                 "Content-Type": "application/json"})
+    with urllib.request.urlopen(req, timeout=90, context=ctx) as resp:
+        return json.load(resp)
+
+
+def parse(path):
+    """'#' comments, 'key: value' header, '---', then the log verbatim."""
+    with open(path, encoding="utf-8") as fh:
+        head, sep, body = fh.read().partition("\n---\n")
+    if not sep:
+        raise ValueError("no '---' between the header and the log")
+    fields = {}
+    for line in head.splitlines():
+        line = line.strip()
+        if line and not line.startswith("#"):
+            key, _, value = line.partition(":")
+            fields[key.strip()] = value.strip()
+    missing = [k for k in ("rule", "level", "log_format", "location") if not fields.get(k)]
+    if missing:
+        raise ValueError("missing " + ", ".join(missing))
+    return fields, body.rstrip("\n")
+
+
+session = None
+for path in sorted(glob.glob(f"{fixtures_dir}/*.txt")):
+    name = path.rsplit("/", 1)[-1]
+    try:
+        fields, log = parse(path)
+        body = {"event": log, "log_format": fields["log_format"],
+                "location": fields["location"]}
+        if fields.get("seed", "no") == "yes":
+            # check_diff compares with what the manager stored last time for this
+            # host: send the log once (result ignored) to make that state known.
+            api("PUT", "/logtest", body)
+        if session:
+            body["token"] = session
+        data = api("PUT", "/logtest", body).get("data") or {}
+        session = data.get("token") or session
+        rule = (data.get("output") or {}).get("rule")
+        want = f"rule {fields['rule']} level {fields['level']}"
+        if rule is None:
+            note = (data.get("messages") or [""])
+            print(f"FAIL {name} expected {want}; no rule matched "
+                  f"({str(note[-1])[:160]})")
+        elif str(rule.get("id")) != fields["rule"] or str(rule.get("level")) != fields["level"]:
+            print(f"FAIL {name} expected {want}, got rule {rule.get('id')} "
+                  f"level {rule.get('level')}")
+        else:
+            print(f"PASS {name} rule {rule.get('id')} level {rule.get('level')}")
+    except Exception as exc:                              # noqa: BLE001
+        print(f"FAIL {name} {exc}")
+
+if session:
+    try:
+        api("DELETE", f"/logtest/sessions/{session}")
+    except Exception:                                      # noqa: BLE001
+        pass                                              # it expires on its own
+PY
+}
+
+check_rules() {
+  bw_info "rules"
+
+  local dir="$BW_ROOT/tests/rules" token out line results=0
+  if ! ls "$dir"/*.txt >/dev/null 2>&1; then
+    bw_fail "no fixtures in tests/rules"
+    return
+  fi
+
+  token="$(curl -sk -m 5 -u "$BW_API_AUTH" -X POST \
+             'https://127.0.0.1:55000/security/user/authenticate?raw=true' 2>/dev/null)"
+  if [[ -z "$token" ]]; then
+    bw_skip "the manager API does not answer at https://127.0.0.1:55000 (run: bw-lab up)"
+    return
+  fi
+
+  out="$(_rl_logtest_fixtures "$dir" "$token" 2>&1)"
+  while IFS= read -r line; do
+    case "$line" in
+      PASS\ *) results=$((results + 1)); bw_pass "rules: ${line#PASS }" ;;
+      FAIL\ *) results=$((results + 1)); bw_fail "rules: ${line#FAIL }" ;;
+      *) printf '      %s\n' "$line" ;;
+    esac
+  done <<< "$out"
+
+  if ((results == 0)); then
+    bw_fail "logtest produced no result for the fixtures in tests/rules"
   fi
 }
 
@@ -1303,6 +1423,7 @@ main() {
     sentinel) check_sentinel ;;
     sentinel-agents) check_sentinel_agents ;;
     fw-events) check_fw_events ;;
+    rules) check_rules ;;
     fang) check_fang ;;
     vm) check_vm ;;
     -h|--help|help) usage; exit 0 ;;
