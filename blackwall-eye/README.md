@@ -7,7 +7,7 @@ Host monitoring core for the Blackwall security platform. Stage 1: Wazuh manager
 - Wazuh Manager + Agent (HIDS, FIM, log collection)
 - auditd (kernel-level syscall audit)
 - Ansible IaC — no manual steps
-- Target OS: Ubuntu 22.04 LTS / Debian 12 (primary), Rocky Linux 9 (secondary): agent, auditd and the whole server stack (indexer, manager + filebeat, dashboard); the agent reads system logs from journald on the RHEL family and on Debian 12+ (no rsyslog there), from `/var/log/auth.log` + `/var/log/syslog` on Ubuntu and Debian 11
+- Target OS: Ubuntu 22.04 LTS / Debian 12 (primary), Rocky Linux 9 (secondary): agent, auditd and the whole server stack (indexer, manager + filebeat, dashboard); the agent reads system logs from journald on the RHEL family and on Debian 12+ (no rsyslog there), from `/var/log/auth.log` + `/var/log/syslog` on Ubuntu and Debian 11; on EL9 OpenSSH 9.9 logs to journald under program `sshd-session` and the stock Wazuh `sshd` decoder still matches it (its `program_name` condition is a regex over the header program name, and `sshd` matches `sshd-session` as a substring) — a failed login still alerts as native rule 5710
 
 ## Test Environment
 
