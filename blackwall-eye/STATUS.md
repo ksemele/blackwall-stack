@@ -2,13 +2,60 @@
 module: blackwall-eye
 status: in_progress
 stage: 1
-last_updated: 2026-11-19
-last_task: "nftables role masks firewalld; nftables + cf-wall on an EL8 docker host (#48)"
+last_updated: 2026-11-21
+last_task: "bw-check wazuh / black-rocky-02: collector stall was the cause; stock sshd decoder covers sshd-session (#52)"
 next_task: "Prod inventory for the stack (backlog: Wazuh server stack prod readiness) — owner decides when"
 blockers: []
 ---
 
 ## Done
+
+- 2026-11-21: settled why `bw-check wazuh` intermittently missed the
+  `authentication_failed` alert from `black-rocky-02` (#52). Four consecutive
+  lab runs (head `072f7cd`, `BW_LAB_CGROUP=private`) each passed 8/8 and
+  produced native rule 5710 (`authentication_failed`/`invalid_login`) from
+  rocky's journald line `sshd-session[10292]: Invalid user nosuchuser from
+  172.28.0.10 port 35776` (OpenSSH `9.9p1-16.el9_9`, `sshd.service` enabled
+  with `sshd.socket` disabled — this combination is what puts the line under
+  the `sshd-session` identifier; indexer index
+  `wazuh-alerts-4.x-2026.11.21`). The `sshd-session` decoder hypothesis is
+  closed: Wazuh's pre-decoder extracts `program_name: 'sshd-session'` and the
+  stock `sshd` decoder matches it (its `program_name` condition is a regex
+  over the extracted program name — `sshd` matches `sshd-session` as a
+  substring) — `wazuh-logtest` on the manager decodes and rules that exact
+  line to 5710 deterministically, so no custom decoder mapping is needed. The
+  earlier failures were the journald-collector stall, not decoding: the
+  manager pushes every file of an agent's config group folder
+  (`user-manual/reference/centralized-configuration.rst:55,258-262`), and a
+  started agent receiving the updated `merged.mg` applies it — `wazuh-agentd`
+  keeps its connection while the other agent daemons restart, regardless of
+  `<auto_restart>`. On the lab manager the group is
+  `/var/ossec/etc/shared/docker/` — it holds only the RPM-bundled empty
+  `agent.conf` stub (this stack writes nothing into `/var/ossec/etc/shared/`)
+  and the `merged.mg` the manager builds from the group files; the stack
+  creates the group itself via `agent_groups` in the `wazuh-manager` role.
+  On systemd the apply runs as the unit's ExecReload
+  (`wazuh-agent.service` → `wazuh-control reload`); observed on rocky:
+  `wazuh-agentd: INFO: Agent is reloading due to shared configuration
+  changes.` 3 s after the agent started, `Reloading Wazuh agent...` in the
+  unit journal, `Reloaded` 9 s later. In the pre-#50 lab (real-time FIM
+  exhausting inotify instances, containers under `cgroup: host`) that same
+  reload timed out (`wazuh-agent.service: Reload operation timed out`) and
+  left `wazuh-logcollector` dead until a full agent restart. Both stall
+  conditions are already gone from the lab (#50:
+  `wazuh_fim_realtime: false`, the cgroup knob) and the agent-role handler has
+  always been a full `systemctl restart`, so no role change was needed; today's
+  provisioning reload completes in seconds and the journald collector survives
+  it. Residual risk stays on real hosts: `wazuh_fim_realtime: false` is set
+  only in `tests/inventory/group_vars/all.yml:34`, the role defaults keep
+  real-time FIM on (`wazuh-agent/defaults/main.yml:29`,
+  `wazuh-manager/defaults/main.yml:36`), and every shared-config push still
+  restarts the agent daemons there too — if an auth-event gap recurs on a real
+  host, look for `Reload operation timed out` under
+  `journalctl -u wazuh-agent` plus `Agent is reloading due to shared
+  configuration changes` in `/var/ossec/logs/ossec.log` around the gap:
+  other event types continue while journald events go missing, and a full
+  agent restart clears it.
 
 - 2026-11-19: the `nftables` role stops and masks firewalld where it is
   installed: RHEL's `firewalld.service` has `Conflicts=nftables.service`, so
