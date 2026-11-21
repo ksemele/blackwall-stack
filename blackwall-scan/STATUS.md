@@ -2,9 +2,9 @@
 module: blackwall-scan
 status: in_progress
 stage: 1
-last_updated: 2026-08-15
-last_task: "First scan analysed; example.com origin (203.0.113.10) closed — see hosts/example.com/"
-next_task: "Weed out naabu false positives (see notes); close the findings on 198.51.100.20; time-diff storage (ClickHouse) in phase 2"
+last_updated: 2026-11-18
+last_task: "Naabu false positives: confirmation pass added (confirm.py, ports.confirmed.jsonl) — see #26"
+next_task: "Close the findings on 198.51.100.20; time-diff storage (ClickHouse) in phase 2"
 blockers: []
 ---
 
@@ -19,6 +19,13 @@ called **blackwall-scan**.
 
 ## Done
 
+- 2026-11-18: Naabu false positives — confirmation pass (issue #26).
+  - `confirm.py` — after naabu, probes every reported `host:port` at the
+    application level (banner grab, then a plain HTTP GET) and splits the
+    pairs: `ports.confirmed.jsonl` (`method` + `evidence`) vs
+    `ports.unconfirmed.jsonl` (`reason`; `no-reply` = the NAT/ISP fake).
+    Raw `ports.jsonl` stays untouched. Knobs: `RUN_CONFIRM` (default 1),
+    `CONFIRM_TIMEOUT` (default 3). Unit check: `tests/unit/scan_confirm_test.py`.
 - 2026-08-15: Phase 1 MVP.
   - `Dockerfile` — multi-stage: a golang builder compiles the pd tools
     (subfinder, dnsx, asnmap, naabu, httpx, tlsx, nuclei), the debian-slim
@@ -75,6 +82,7 @@ Open:
   completeness but to filter out the home ISP's false positives (see above).
 - Cross-check `ports.jsonl` against `http.jsonl`/`tls.jsonl` before drawing
   conclusions; treat a port without httpx/tlsx confirmation as unconfirmed.
+  Since 2026-11-18 the confirm pass does this automatically (see Done above).
 - pd tool versions are `@latest` for now — pin them for reproducibility (config as code).
 - naabu uses a connect scan (`-s c`) — no NET_RAW cap needed; SYN is faster but
   requires `--cap-add=NET_ADMIN,NET_RAW`.

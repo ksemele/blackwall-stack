@@ -7,6 +7,7 @@
 #   ./run.sh                 # top-1000 ports, no nuclei
 #   RUN_NUCLEI=1 ./run.sh    # + exposure/misconfig/takeover checks
 #   PORTS="-p -" ./run.sh    # full 65535 TCP (slow)
+#   RUN_CONFIRM=0 ./run.sh   # skip the naabu confirmation pass
 #   ./run.sh --build         # force rebuild image
 #
 set -euo pipefail
@@ -33,6 +34,8 @@ docker run --rm \
   -e RUN_NUCLEI="${RUN_NUCLEI:-0}" \
   -e NUCLEI_TAGS="${NUCLEI_TAGS:-exposure,misconfig,takeover,default-login}" \
   -e RATE="${RATE:-1000}" \
+  -e RUN_CONFIRM="${RUN_CONFIRM:-1}" \
+  -e CONFIRM_TIMEOUT="${CONFIRM_TIMEOUT:-3}" \
   "$IMAGE"
 
 echo "[run] results in ./output/"
