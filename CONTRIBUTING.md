@@ -65,6 +65,7 @@ already has both, a bare system `python3` may not:
 ```bash
 PY="$(brew --prefix ansible)/libexec/bin/python"   # Homebrew Ansible; pipx: ~/.local/pipx/venvs/ansible/bin/python
 "$PY" tests/unit/voice_format_test.py
+"$PY" tests/unit/voice_filter_test.py
 "$PY" tests/unit/alerts_tail_test.py
 "$PY" tests/unit/fang_refresh_test.py
 python3 tests/unit/rules_lint_test.py              # stdlib only: any python3, no lab
