@@ -2,13 +2,35 @@
 module: blackwall-eye
 status: in_progress
 stage: 1
-last_updated: 2026-11-19
-last_task: "nftables role masks firewalld; nftables + cf-wall on an EL8 docker host (#48)"
+last_updated: 2026-11-21
+last_task: "bw-check wazuh / black-rocky-02: collector stall was the cause; stock sshd decoder covers sshd-session (#52)"
 next_task: "Prod inventory for the stack (backlog: Wazuh server stack prod readiness) — owner decides when"
 blockers: []
 ---
 
 ## Done
+
+- 2026-11-21: settled why `bw-check wazuh` intermittently missed the
+  `authentication_failed` alert from `black-rocky-02` (#52). Four consecutive
+  lab runs (head `072f7cd`, `BW_LAB_CGROUP=private`) each passed 8/8 and
+  produced native rule 5710 (`authentication_failed`/`invalid_login`) from
+  rocky's OpenSSH 9.9 journald line `sshd-session[10292]: Invalid user
+  nosuchuser from 172.28.0.10 port 35776` (indexer
+  `wazuh-alerts-4.x-2026.11.21`). The `sshd-session` decoder hypothesis is
+  closed: Wazuh's pre-decoder extracts `program_name: 'sshd-session'` and the
+  stock `sshd` decoder matches it as a prefix — `wazuh-logtest` on the manager
+  decodes and rules that exact line to 5710 deterministically, so no custom
+  decoder mapping is needed. The earlier failures were the journald-collector
+  stall, not decoding: the manager-pushed shared `agent.conf` makes a started
+  agent reload itself (`<auto_restart>`, wazuh docs
+  `user-manual/reference/ossec-conf/client.rst`), and in the pre-#50 lab
+  (real-time FIM exhausting inotify instances, containers under `cgroup: host`)
+  that reload timed out and left `wazuh-logcollector` dead until a full agent
+  restart. Both stall conditions are already gone from the lab (#50:
+  `wazuh_fim_realtime: false`, the cgroup knob) and the agent-role handler has
+  always been a full `systemctl restart`, so no role change was needed; today's
+  provisioning reload completes in seconds and the journald collector survives
+  it.
 
 - 2026-11-19: the `nftables` role stops and masks firewalld where it is
   installed: RHEL's `firewalld.service` has `Conflicts=nftables.service`, so
