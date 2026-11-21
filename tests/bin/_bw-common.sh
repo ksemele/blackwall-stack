@@ -31,8 +31,51 @@ BW_PROM_URL="http://localhost:${BW_LAB_PROM_PORT}"
 BW_DASHBOARD_URL="https://localhost:5601"
 BW_INDEXER_URL="https://127.0.0.1:9200"
 BW_INDEXER_AUTH="admin:Blackwall1!"
-# Wazuh manager REST API (wazuh_manager_api_password in tests/inventory/group_vars).
+# Wazuh manager REST API (wazuh_manager_api_user/password in group_vars).
 BW_API_AUTH="wazuh:wazuh"
+
+# --- SSO lab (bw-lab up --sso) -------------------------------------------------
+# The IdP is compose profile `sso`: a plain `bw-lab up` never starts it.
+# BW_SSO also drives bw_sso_enabled in tests/inventory/group_vars, so the
+# ansible roles provision the OIDC parts only for an SSO lab — both are exported
+# for that reason.
+BW_SSO="${BW_SSO:-0}"
+# Loopback port for the IdP. 8080/9090/3000 are taken on the shared lab host.
+BW_LAB_IDP_PORT="${BW_LAB_IDP_PORT:-18080}"
+export BW_SSO BW_LAB_IDP_PORT
+
+# Issuer as blackwall on the host sees it, and as the indexer sees it inside the
+# lab network. Keycloak publishes one issuer (the host one) for both — see
+# tests/docker/keycloak/README.md.
+BW_IDP_URL="http://127.0.0.1:${BW_LAB_IDP_PORT}"
+BW_IDP_NETWORK_URL="http://black-idp-00:8080"
+BW_IDP_REALM="blackwall-lab"
+BW_IDP_DISCOVERY="${BW_IDP_URL}/realms/${BW_IDP_REALM}/.well-known/openid-configuration"
+# Clients from tests/docker/keycloak/blackwall-lab-realm.json. `blackwall-cli` is public
+# (device code / auth code + PKCE) and is the client blackwall itself uses;
+# blackwall-test is confidential with direct access grants so bw-check can get
+# a token without a browser.
+BW_IDP_CLIENT="blackwall-cli"
+BW_IDP_TEST_CLIENT="blackwall-test"
+BW_IDP_TEST_CLIENT_SECRET="blackwall-lab-test-secret"   # lab-only
+# Lab users and their groups: alice in analysts, bob in read-only.
+BW_IDP_ANALYST_USER="alice"
+BW_IDP_ANALYST_PASSWORD="blackwall-lab"                 # lab-only
+BW_IDP_OUTSIDER_USER="bob"
+BW_IDP_OUTSIDER_PASSWORD="blackwall-lab"                # lab-only
+BW_IDP_ANALYST_GROUP="analysts"
+BW_IDP_OUTSIDER_GROUP="read-only"
+# Issuer as both the host and the lab network see it (the IdP's --hostname, see
+# tests/docker/keycloak/README.md); blackwall's auth.issuer and the indexer's
+# openid_connect_url must agree with this.
+BW_IDP_ISSUER="${BW_IDP_URL}/realms/${BW_IDP_REALM}"
+# Names provisioned by the ansible SSO tasks (group_vars/wazuh_managers.yml).
+BW_INDEXER_OIDC_AUTH_DOMAIN="openid_auth_domain"
+BW_INDEXER_OIDC_ROLE="blackwall_read"
+BW_API_URL="https://127.0.0.1:55000"
+BW_API_RUN_AS_USER="svc-blackwall"
+BW_API_RUN_AS_PASSWORD="Blackwall-Lab1!"        # lab-only
+BW_API_RUN_AS_RULE="blackwall_groups_analysts"
 
 if [[ -t 1 ]]; then
   BW_RED=$'\033[31m'; BW_GREEN=$'\033[32m'; BW_YELLOW=$'\033[33m'
@@ -56,7 +99,17 @@ bw_require_ansible() {
 }
 
 bw_compose() {
-  docker compose -f "$BW_COMPOSE" --profile "$BW_PROFILE" "$@"
+  if [[ "$BW_SSO" == "1" ]]; then
+    docker compose -f "$BW_COMPOSE" --profile "$BW_PROFILE" --profile sso "$@"
+  else
+    docker compose -f "$BW_COMPOSE" --profile "$BW_PROFILE" "$@"
+  fi
+}
+
+# bw_compose with every profile, so `down` also removes an IdP that was started
+# from another shell — BW_SSO lives in the shell that set it, not in compose.
+bw_compose_all_profiles() {
+  docker compose -f "$BW_COMPOSE" --profile "$BW_PROFILE" --profile sso "$@"
 }
 
 # bw_ansible <module-dir> <playbook-relative-path> [extra args...]

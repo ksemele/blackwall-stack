@@ -97,6 +97,7 @@ Checks:
   rules      each tests/rules/*.txt fixture through the manager's logtest: the log as the manager reads it must reach the rule id/level in its header (opt-in, needs bw-lab up, ~1 min; not in 'all')
   fang       reputation blocklists on the sentinel: observe, enforce, junk list, restore (opt-in, ~3-5 min, re-provisions fang; not in 'all')
   vm         auditd role on a real RHEL kernel (Lima VM, bw-lab vm up): reload, restart, broken rule, immutable + reboot (opt-in, ~5-8 min; not in 'all')
+  sso        OIDC identity provider: discovery and issuer consistency, tokens with the groups claim, indexer bearer search + group->role mapping, manager API run_as (opt-in: needs 'bw-lab up --sso' and BW_SSO=1 provisioning; not in 'all')
 
 Exit code: 0 when nothing failed, 1 otherwise.
 USAGE
@@ -1404,6 +1405,344 @@ _vm_step() {
   _vm_prov -e "$rules" ${prov[@]+"${prov[@]}"} && _vm_verify ${ver[@]+"${ver[@]}"}
 }
 
+# --- SSO (bw-lab up --sso) ----------------------------------------------------
+#
+# bw-check sso: the OIDC lab, opt-in like fang/vm. The IdP only exists when the
+# lab was started with --sso, so a missing black-idp-00 skips the whole group
+# instead of failing it.
+#
+# What has to hold, in the order blackwall (PR #23) uses it:
+#   1. Discovery: one issuer for the host and for the lab network, and the
+#      endpoints blackwall picks a login flow from (device grant, PKCE S256).
+#   2. ID tokens for the lab users carry the group claim the roles map on.
+#   3. The indexer authenticates a bearer ID token (openid_auth_domain before
+#      the shipped basic domain) and authorizes by group.
+#   4. Nothing regressed: garbage token and no token stay 401, HTTP basic works.
+#   5. The manager API: the service user's run_as with the analyst's claims can
+#      read agents and cannot read security entities.
+
+# _bw_http_code <url> [curl args...] — status code, 0 on transport failure: a
+# refused connection reads as a wrong code, not as silence.
+_bw_http_code() {
+  local url out
+  url="$1"
+  shift
+  out="$(curl -sk -m 15 -o /dev/null -w '%{http_code}' "$@" "$url" 2>/dev/null)" || out=000
+  printf '%s' "$out"
+}
+
+# _bw_expect_code <wanted codes, comma separated> <description> <url> [curl args...]
+_bw_expect_code() {
+  local want desc url code
+  want="$1"
+  desc="$2"
+  url="$3"
+  shift 3
+  code="$(_bw_http_code "$url" "$@")"
+  if [[ ",${want}," == *",${code},"* ]]; then
+    bw_pass "${desc} (${code})"
+  else
+    bw_fail "${desc}: code ${code}, wanted ${want}"
+  fi
+}
+
+# _bw_json_field <python expression over `d`> — one value out of JSON on stdin;
+# lists are joined with commas. Same no-jq style as bw_json_true.
+_bw_json_field() {
+  python3 -c '
+import json, sys
+d = json.load(sys.stdin)
+v = eval(sys.argv[1])
+print("" if v is None else (",".join(str(x) for x in v) if isinstance(v, list) else v))
+' "$1" 2>/dev/null
+}
+
+# _bw_jwt_claim <token> <claim> — claim out of a JWT payload: base64url-decode
+# the middle segment, no python packages beyond the standard library.
+_bw_jwt_claim() {
+  python3 - "$1" "$2" <<'PY'
+import base64, json, sys
+try:
+    seg = sys.argv[1].split(".")[1]
+    seg += "=" * (-len(seg) % 4)
+    val = json.loads(base64.urlsafe_b64decode(seg)).get(sys.argv[2])
+except (IndexError, ValueError):
+    val = None
+print("" if val is None else (",".join(str(x) for x in val) if isinstance(val, list) else val))
+PY
+}
+
+# _bw_id_token <user> <password> — ID token through the confidential lab client
+# (Keycloak direct access grants): same realm, issuer and groups claim as the
+# device-code session blackwall obtains, without a browser.
+_bw_id_token() {
+  curl -s -m 15 \
+    -u "$BW_IDP_TEST_CLIENT:$BW_IDP_TEST_CLIENT_SECRET" \
+    --data-urlencode "grant_type=password" \
+    --data-urlencode "username=$1" \
+    --data-urlencode "password=$2" \
+    --data-urlencode "scope=openid" \
+    "$BW_IDP_URL/realms/$BW_IDP_REALM/protocol/openid-connect/token" |
+    _bw_json_field "d.get('id_token', '')"
+}
+
+# _bw_run_as_token <user_name> <groups, comma separated> — manager API token for
+# an authorization context built from ID-token claims, posted the way blackwall
+# posts it: the body *is* the context (spec.yaml has no wrapper schema).
+_bw_run_as_token() {
+  local body
+  body="$(python3 -c '
+import json, sys
+print(json.dumps({"user_name": sys.argv[1], "groups": sys.argv[2].split(",")}))
+' "$1" "$2")"
+  curl -sk -m 15 -u "$BW_API_RUN_AS_USER:$BW_API_RUN_AS_PASSWORD" \
+    -H 'Content-Type: application/json' -X POST -d "$body" \
+    "$BW_API_URL/security/user/authenticate/run_as" |
+    _bw_json_field "d.get('data', {}).get('token', '')"
+}
+
+# _bw_api_token — Bearer token of the packaged API admin. The manager accepts
+# HTTP Basic only at /security/user/authenticate; every data call needs the
+# token it returns (?raw=true gives the token itself, no JSON envelope).
+_bw_api_token() {
+  curl -sk -m 15 -u "$BW_API_AUTH" -X POST \
+    "$BW_API_URL/security/user/authenticate?raw=true" 2>/dev/null
+}
+
+check_sso() {
+  bw_info "sso (oidc idp)"
+  bw_require_docker
+
+  if ! docker ps --format '{{.Names}}' 2>/dev/null | grep -qx black-idp-00; then
+    bw_skip "no black-idp-00 — start the lab with: tests/bin/bw-lab up --sso"
+    return
+  fi
+
+  # Keycloak needs ~20s to start and imports the realm before it listens.
+  local disc disc_lab
+  disc=""
+  local try
+  for try in 1 2 3 4 5 6; do
+    disc="$(curl -s -m 15 "$BW_IDP_DISCOVERY" 2>/dev/null)"
+    [[ -n "$disc" ]] && break
+    sleep 5
+  done
+  if [[ -z "$disc" ]]; then
+    bw_skip "IdP does not answer at $BW_IDP_DISCOVERY (realm import failed?)"
+    return
+  fi
+
+  # 1. Discovery, as blackwall reads it.
+  if bw_json_true "d.get('issuer') == '$BW_IDP_ISSUER'" <<<"$disc"; then
+    bw_pass "discovery issuer is $BW_IDP_ISSUER"
+  else
+    bw_fail "discovery issuer is '$(_bw_json_field "d.get('issuer')" <<<"$disc")', expected $BW_IDP_ISSUER"
+  fi
+  if bw_json_true "d.get('jwks_uri', '').startswith('$BW_IDP_URL')" <<<"$disc"; then
+    bw_pass "JWKS for a host client: $(_bw_json_field "d.get('jwks_uri')" <<<"$disc")"
+  else
+    bw_fail "JWKS URI is '$(_bw_json_field "d.get('jwks_uri')" <<<"$disc")', expected it on $BW_IDP_URL"
+  fi
+  if bw_json_true "'S256' in d.get('code_challenge_methods_supported', [])" <<<"$disc"; then
+    bw_pass "auth-code flow advertises PKCE S256"
+  else
+    bw_fail "no S256 in code_challenge_methods_supported"
+  fi
+  if bw_json_true "bool(d.get('device_authorization_endpoint'))" <<<"$disc"; then
+    bw_pass "discovery publishes the device-authorization endpoint (blackwall's login picks the flow from this)"
+  else
+    bw_fail "discovery has no device_authorization_endpoint"
+  fi
+
+  # The public client must actually answer a device grant, not only advertise
+  # the endpoint: that is blackwall's login.
+  local dev
+  dev="$(curl -s -m 15 -X POST -d "client_id=$BW_IDP_CLIENT" \
+           "$BW_IDP_URL/realms/$BW_IDP_REALM/protocol/openid-connect/auth/device" 2>/dev/null)"
+  if bw_json_true "'device_code' in d and 'user_code' in d and 'verification_uri' in d" <<<"$dev"; then
+    bw_pass "device grant for $BW_IDP_CLIENT answers (user_code $(_bw_json_field "d.get('user_code')" <<<"$dev"))"
+  else
+    bw_fail "device grant for $BW_IDP_CLIENT failed: $(head -c 200 <<<"$dev")"
+  fi
+
+  # The indexer fetches the same document from the lab network. Equal issuer,
+  # otherwise the tokens it validates would never match the tokens blackwall
+  # sends (--hostname + --hostname-backchannel-dynamic, see
+  # tests/docker/keycloak/README.md).
+  disc_lab="$(docker exec black-master-00 curl -s -m 15 \
+                "$BW_IDP_NETWORK_URL/realms/$BW_IDP_REALM/.well-known/openid-configuration" 2>/dev/null)"
+  if [[ -z "$disc_lab" ]]; then
+    bw_skip "could not read the IdP from inside black-master-00"
+  else
+    if bw_json_true "d.get('issuer') == '$BW_IDP_ISSUER'" <<<"$disc_lab"; then
+      bw_pass "the indexer's own view reports the same issuer ($BW_IDP_ISSUER)"
+    else
+      bw_fail "issuer inside the lab is '$(_bw_json_field "d.get('issuer')" <<<"$disc_lab")', expected $BW_IDP_ISSUER"
+    fi
+    if bw_json_true "'$BW_IDP_NETWORK_URL' in d.get('jwks_uri', '')" <<<"$disc_lab"; then
+      bw_pass "only the JWKS URL follows the caller: $(_bw_json_field "d.get('jwks_uri')" <<<"$disc_lab")"
+    else
+      bw_fail "JWKS URI inside the lab is '$(_bw_json_field "d.get('jwks_uri')" <<<"$disc_lab")', expected it on black-idp-00"
+    fi
+  fi
+
+  # 2. ID tokens and the claim the roles map on.
+  local tok_analyst tok_outsider groups_analyst groups_outsider
+  tok_analyst="$(_bw_id_token "$BW_IDP_ANALYST_USER" "$BW_IDP_ANALYST_PASSWORD")"
+  tok_outsider="$(_bw_id_token "$BW_IDP_OUTSIDER_USER" "$BW_IDP_OUTSIDER_PASSWORD")"
+  if [[ -z "$tok_analyst" || -z "$tok_outsider" ]]; then
+    bw_fail "no ID token for $BW_IDP_ANALYST_USER/$BW_IDP_OUTSIDER_USER (check the $BW_IDP_TEST_CLIENT client and the realm import)"
+    return
+  fi
+  if [[ "$(_bw_jwt_claim "$tok_analyst" iss)" == "$BW_IDP_ISSUER" ]]; then
+    bw_pass "ID token of $BW_IDP_ANALYST_USER: iss is the discovery issuer"
+  else
+    bw_fail "ID token of $BW_IDP_ANALYST_USER has iss '$(_bw_jwt_claim "$tok_analyst" iss)', expected $BW_IDP_ISSUER"
+  fi
+  groups_analyst="$(_bw_jwt_claim "$tok_analyst" groups)"
+  if [[ ",${groups_analyst}," == *",${BW_IDP_ANALYST_GROUP},"* ]]; then
+    bw_pass "ID token of $BW_IDP_ANALYST_USER carries group $BW_IDP_ANALYST_GROUP (groups: ${groups_analyst})"
+  else
+    bw_fail "ID token of $BW_IDP_ANALYST_USER has groups '${groups_analyst}', expected ${BW_IDP_ANALYST_GROUP}"
+  fi
+  groups_outsider="$(_bw_jwt_claim "$tok_outsider" groups)"
+  if [[ ",${groups_outsider}," == *",${BW_IDP_OUTSIDER_GROUP},"* && ",${groups_outsider}," != *",${BW_IDP_ANALYST_GROUP},"* ]]; then
+    bw_pass "ID token of $BW_IDP_OUTSIDER_USER carries only group $BW_IDP_OUTSIDER_GROUP (groups: ${groups_outsider})"
+  else
+    bw_fail "ID token of $BW_IDP_OUTSIDER_USER has groups '${groups_outsider}', expected only ${BW_IDP_OUTSIDER_GROUP}"
+  fi
+
+  # blackwall asks for openid + offline_access (internal/config DefaultAuthScopes
+  # — the refresh token is what makes the next run sign in silently), and
+  # Keycloak issues an offline token only to a user mapped to the realm-level
+  # offline_access role (keycloak/docs/documentation/server_admin/topics/
+  # sessions/offline.adoc:21). Measured in this lab with Keycloak 26.8.2: without
+  # that mapping the device login dies *after* the user approves the code, with
+  # not_allowed / "Offline tokens not allowed for the user or client".
+  local offline_grant
+  offline_grant="$(curl -s -m 15 -u "$BW_IDP_TEST_CLIENT:$BW_IDP_TEST_CLIENT_SECRET" \
+     -d "grant_type=password&username=$BW_IDP_ANALYST_USER&password=$BW_IDP_ANALYST_PASSWORD&scope=openid offline_access" \
+     "$BW_IDP_URL/realms/$BW_IDP_REALM/protocol/openid-connect/token" 2>/dev/null)"
+  if bw_json_true "bool(d.get('refresh_token'))" <<<"$offline_grant"; then
+    bw_pass "$BW_IDP_ANALYST_USER gets an offline token for scope 'openid offline_access'"
+  else
+    bw_fail "no offline token for $BW_IDP_ANALYST_USER: $(_bw_json_field "d.get('error_description')" <<<"$offline_grant") — the realm must map the offline_access realm role to the lab users"
+  fi
+
+  # 3-4. Indexer: who authenticates, and what the group maps to.
+  local sec_cfg
+  sec_cfg="$(curl -sk -m 15 -u "$BW_INDEXER_AUTH" \
+               "$BW_INDEXER_URL/_plugins/_security/api/securityconfig" 2>/dev/null)"
+  if bw_json_true "d['config']['dynamic'].get('authc', {}).get('$BW_INDEXER_OIDC_AUTH_DOMAIN', {}).get('http_enabled') is True" <<<"$sec_cfg"; then
+    bw_pass "indexer has $BW_INDEXER_OIDC_AUTH_DOMAIN enabled"
+    if bw_json_true "d['config']['dynamic']['authc']['$BW_INDEXER_OIDC_AUTH_DOMAIN']['order'] < d['config']['dynamic']['authc'].get('basic_internal_auth_domain', {}).get('order', 0)" <<<"$sec_cfg"; then
+      bw_pass "bearer tokens authenticate before HTTP basic (order $(_bw_json_field "d['config']['dynamic']['authc']['$BW_INDEXER_OIDC_AUTH_DOMAIN']['order']" <<<"$sec_cfg") vs $(_bw_json_field "d['config']['dynamic']['authc']['basic_internal_auth_domain']['order']" <<<"$sec_cfg"))"
+    else
+      bw_fail "$BW_INDEXER_OIDC_AUTH_DOMAIN is not ordered before basic_internal_auth_domain"
+    fi
+  else
+    bw_fail "indexer has no $BW_INDEXER_OIDC_AUTH_DOMAIN (provision the lab with BW_SSO=1: bw-lab provision eye)"
+  fi
+
+  # authinfo is what OpenSearch says about the authenticated identity: subject
+  # key -> user, group claim -> backend role -> mapped role. No index needed.
+  local authinfo_analyst authinfo_outsider
+  authinfo_analyst="$(curl -sk -m 15 -H "Authorization: Bearer $tok_analyst" \
+                        "$BW_INDEXER_URL/_plugins/_security/authinfo" 2>/dev/null)"
+  authinfo_outsider="$(curl -sk -m 15 -H "Authorization: Bearer $tok_outsider" \
+                         "$BW_INDEXER_URL/_plugins/_security/authinfo" 2>/dev/null)"
+  if bw_json_true "d.get('user_name') == '$BW_IDP_ANALYST_USER'" <<<"$authinfo_analyst"; then
+    bw_pass "indexer maps the subject claim to the user $BW_IDP_ANALYST_USER"
+  else
+    bw_fail "indexer sees user '$(_bw_json_field "d.get('user_name')" <<<"$authinfo_analyst")' for $BW_IDP_ANALYST_USER's token"
+  fi
+  if bw_json_true "'$BW_INDEXER_OIDC_ROLE' in d.get('roles', [])" <<<"$authinfo_analyst"; then
+    bw_pass "group $BW_IDP_ANALYST_GROUP maps to role $BW_INDEXER_OIDC_ROLE (roles: $(_bw_json_field "d.get('roles', [])" <<<"$authinfo_analyst"))"
+  else
+    bw_fail "no role $BW_INDEXER_OIDC_ROLE for $BW_IDP_ANALYST_USER (roles: $(_bw_json_field "d.get('roles', [])" <<<"$authinfo_analyst"))"
+  fi
+  if bw_json_true "'$BW_INDEXER_OIDC_ROLE' not in d.get('roles', [])" <<<"$authinfo_outsider"; then
+    bw_pass "group $BW_IDP_OUTSIDER_GROUP maps to no role (roles: $(_bw_json_field "d.get('roles', [])" <<<"$authinfo_outsider"))"
+  else
+    bw_fail "$BW_IDP_OUTSIDER_USER (group $BW_IDP_OUTSIDER_GROUP) got role $BW_INDEXER_OIDC_ROLE"
+  fi
+
+  local alerts
+  alerts="$(curl -sk -m 15 -u "$BW_INDEXER_AUTH" \
+              "$BW_INDEXER_URL/_cat/indices/wazuh-alerts-*?h=index" 2>/dev/null | head -1)"
+  if [[ -n "$alerts" ]]; then
+    _bw_expect_code "200" "bearer ID token of $BW_IDP_ANALYST_USER searches $alerts" \
+      "$BW_INDEXER_URL/$alerts/_search?size=1" -H "Authorization: Bearer $tok_analyst"
+    _bw_expect_code "403" "bearer ID token of $BW_IDP_OUTSIDER_USER is denied on $alerts" \
+      "$BW_INDEXER_URL/$alerts/_search?size=1" -H "Authorization: Bearer $tok_outsider"
+  else
+    bw_skip "no wazuh-alerts-* index yet (bw-lab provision fixtures) — checking a shipped index instead"
+    _bw_expect_code "403" "… not even for $BW_IDP_OUTSIDER_USER on .opendistro_security" \
+      "$BW_INDEXER_URL/.opendistro_security/_search?size=1" -H "Authorization: Bearer $tok_outsider"
+    _bw_expect_code "403" "the mapped role is narrow: $BW_IDP_ANALYST_USER is denied on .opendistro_security" \
+      "$BW_INDEXER_URL/.opendistro_security/_search?size=1" -H "Authorization: Bearer $tok_analyst"
+  fi
+
+  _bw_expect_code "401" "a garbage bearer token is rejected" \
+    "$BW_INDEXER_URL/_search?size=1" -H "Authorization: Bearer not-a-jwt"
+  _bw_expect_code "401" "a request without Authorization is rejected" \
+    "$BW_INDEXER_URL/_search?size=1"
+  _bw_expect_code "200" "HTTP basic still works with $BW_INDEXER_OIDC_AUTH_DOMAIN present" \
+    "$BW_INDEXER_URL/" -u "$BW_INDEXER_AUTH"
+
+  # 5. Manager API: identity from claims, permissions from the RBAC rule.
+  #    Wazuh runs RBAC in white-list mode (api/api/configuration.py "rbac_mode":
+  #    "white") and a call the token has no policy for answers 200 with an empty
+  #    item list, not 403 (measured in this lab). So the assertion is on the item
+  #    counts: the analyst context matches rule $BW_API_RUN_AS_RULE and reads the
+  #    same agents the admin reads; an unmapped group reads none.
+  local agents_admin agents_analyst agents_outsider sec_users tok_admin tok_run_as tok_no_role
+  tok_admin="$(_bw_api_token)"
+  agents_admin=""
+  if [[ -n "$tok_admin" ]]; then
+    agents_admin="$(curl -sk -m 15 -H "Authorization: Bearer $tok_admin" "$BW_API_URL/agents?limit=1" |
+                      _bw_json_field "d['data']['total_affected_items']")"
+  else
+    bw_fail "the manager API rejected the login of $BW_API_AUTH (no token to compare against)"
+  fi
+
+  tok_run_as="$(_bw_run_as_token "$BW_IDP_ANALYST_USER" "$BW_IDP_ANALYST_GROUP")"
+  if [[ -z "$tok_run_as" ]]; then
+    bw_fail "run_as with $BW_IDP_ANALYST_USER's claims got no token (check user $BW_API_RUN_AS_USER: allow_run_as, and rule $BW_API_RUN_AS_RULE)"
+  elif [[ "${agents_admin:-0}" == "0" ]]; then
+    bw_skip "no agents registered in the lab (bw-lab provision eye) — the agent-read grant cannot be shown"
+  else
+    bw_pass "run_as accepted the authorization context of $BW_IDP_ANALYST_USER"
+    agents_analyst="$(curl -sk -m 15 -H "Authorization: Bearer $tok_run_as" "$BW_API_URL/agents" |
+                        _bw_json_field "d['data']['total_affected_items']")"
+    if [[ "${agents_analyst:-0}" == "$agents_admin" && "$agents_analyst" != "0" ]]; then
+      bw_pass "rule $BW_API_RUN_AS_RULE granted the role: $agents_analyst/$agents_admin agents readable with groups=[$BW_IDP_ANALYST_GROUP]"
+    else
+      bw_fail "groups=[$BW_IDP_ANALYST_GROUP] reads $agents_analyst agents, the admin reads $agents_admin"
+    fi
+    sec_users="$(curl -sk -m 15 -H "Authorization: Bearer $tok_run_as" "$BW_API_URL/security/users" |
+                   _bw_json_field "d['data']['total_affected_items']")"
+    if [[ "${sec_users:-0}" == "0" ]]; then
+      bw_pass "the run_as role is narrow: 0 of the manager's users readable with it"
+    else
+      bw_fail "the run_as role reaches $sec_users API users — it should only grant agent:read"
+    fi
+  fi
+
+  tok_no_role="$(_bw_run_as_token "$BW_IDP_OUTSIDER_USER" "$BW_IDP_OUTSIDER_GROUP")"
+  if [[ -z "$tok_no_role" ]]; then
+    bw_pass "run_as gave $BW_IDP_OUTSIDER_USER no token: no RBAC rule matches groups=[$BW_IDP_OUTSIDER_GROUP]"
+  else
+    agents_outsider="$(curl -sk -m 15 -H "Authorization: Bearer $tok_no_role" "$BW_API_URL/agents" |
+                         _bw_json_field "d['data']['total_affected_items']")"
+    if [[ "${agents_outsider:-0}" == "0" ]]; then
+      bw_pass "groups=[$BW_IDP_OUTSIDER_GROUP] matches no rule: 0 agents readable"
+    else
+      bw_fail "groups=[$BW_IDP_OUTSIDER_GROUP] still reads $agents_outsider agents — RBAC is not deciding anything"
+    fi
+  fi
+}
+
 main() {
   case "${1:-all}" in
     all)
@@ -1426,6 +1765,7 @@ main() {
     rules) check_rules ;;
     fang) check_fang ;;
     vm) check_vm ;;
+    sso) check_sso ;;
     -h|--help|help) usage; exit 0 ;;
     *) printf 'unknown check: %s\n\n' "$1" >&2; usage >&2; exit 2 ;;
   esac

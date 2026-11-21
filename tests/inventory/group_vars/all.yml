@@ -2,6 +2,15 @@
 # Marks the lab: enables the destructive parts of verify-nftables.yml.
 bw_lab: true
 
+# SSO lab: `bw-lab up --sso` exports BW_SSO=1 for the provisioning it runs, and
+# `bw-lab provision <target>` reads it from the environment. Everything OIDC in
+# the roles is behind this flag, so a lab without --sso is provisioned exactly
+# as before.
+bw_sso_enabled: "{{ lookup('env', 'BW_SSO') == '1' }}"
+# Loopback port bw-lab publishes the IdP on (BW_LAB_IDP_PORT in tests/bin/_bw-common.sh).
+bw_idp_host_port: "{{ lookup('env', 'BW_LAB_IDP_PORT') | default('18080', true) }}"
+bw_idp_realm: blackwall-lab
+
 # Lab-only: fetch Wazuh packages through the apt cache (black-aptcache-00).
 # packages.wazuh.com is HTTPS-only, and apt-cacher-ng cannot cache through a
 # CONNECT tunnel; the cache remaps this http:// URL to the https:// upstream
